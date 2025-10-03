@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prakiraan Cuaca BMKG</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+
+</head>
+<body>
+  <h1>Prakiraan Cuaca BMKG</h1>
+  <div id="map" ></div>
+
+  <div id="lokasi"></div>
+  <div id="cuaca"></div>
+
+  <script>
+    const apiUrl = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=31.71.01.1001";
+
+    async function ambilData() {
+  try {
+    const res = await fetch(apiUrl);
+    if (!res.ok) throw new Error("Gagal mengambil data dari API");
+    const data = await res.json();
+
+    // --- Render Lokasi ---
+    const lokasiDiv = document.getElementById("lokasi");
+    if (data.lokasi) {
+      lokasiDiv.innerHTML = `
+        <h2>Desa/Kelurahan: ${data.lokasi.desa || "N/A"}</h2>
+        <p>
+          Kecamatan: ${data.lokasi.kecamatan || "N/A"}<br>
+          Kota/Kab: ${data.lokasi.kotkab || "N/A"}<br>
+          Provinsi: ${data.lokasi.provinsi || "N/A"}<br>
+          Koordinat: Lat: ${data.lokasi.lat || "N/A"}, Lon: ${data.lokasi.lon || "N/A"}<br>
+          Timezone: ${data.lokasi.timezone || "N/A"}
+        </p>
+      `;
+    }
+
+    // --- Render Map ---
+    if (data.lokasi && data.lokasi.lat && data.lokasi.lon) {
+      const lat = parseFloat(data.lokasi.lat);
+      const lon = parseFloat(data.lokasi.lon);
+
+      // Inisialisasi map
+      // Inisialisasi map
+  const bounds = [
+    [-5.45, 119.15], // kiri bawah
+    [-4.80, 119.75]  // kanan atas
+  ];
+
+  // Inisialisasi map
+  const map = L.map('map', {
+    center: [-5.15, 119.5],
+    zoom: 10,          // default tampil agak zoom out
+    minZoom: 10,       // user tidak bisa zoom keluar lebih kecil dari ini
+    maxBounds: bounds, // tetap dibatasi area
+  });
+
+  // Tambah tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+
+  // Marker contoh
+  L.marker([-5.1477, 119.4327]).addTo(map).bindTooltip("Makassar", { permanent: false, direction: "top" });
+  L.marker([-5.333, 119.46]).addTo(map).bindTooltip("Gowa", { permanent: false, direction: "top" });
+  L.marker([-4.978, 119.578]).addTo(map).bindTooltip("Maros", { permanent: false, direction: "top" });
+
+    }
+
+    // --- Render Prakiraan Cuaca (kode kamu sebelumnya) ---
+    // ...
+  } catch (err) {
+    document.body.innerHTML += `<p style="color:red;">ERROR: ${err.message}</p>`;
+    console.error(err);
+  }
+}
+
+ambilData();
+
+
+  </script>
+</body>
+</html>
