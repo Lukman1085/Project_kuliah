@@ -3,4 +3,4 @@
 Anggota:
 - Dzaky
 - Lukman
-- Salman
+- Salman Dzaky
