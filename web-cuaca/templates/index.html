@@ -3,97 +3,183 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Prakiraan Cuaca BMKG</title>
+  <title>Peta Cuaca dan Gempa Interaktif</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+  <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
+
   <style>
     html, body {
       height: 100%;
       margin: 0;
+      padding: 0;
     }
     #map {
       width: 100%;
       height: 100%;
     }
+    #koordinat-info {
+      position: fixed; /* atau absolute jika di dalam kontainer peta */
+      bottom: 10px;
+      left: 10px;
+      background-color: rgba(255, 255, 255, 0.8); /* Latar belakang putih semi-transparan */
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      z-index: 1000; /* Memastikan tampil di atas peta */
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
   </style>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-
 </head>
 <body>
-  <h1>Prakiraan Cuaca BMKG</h1>
-  <div id="map" ></div>
-
-  <div id="lokasi"></div>
-  <div id="cuaca"></div>
-
+  <div id="map"></div>
+  <div id="koordinat-info"></div>
   <script>
-    const apiUrl = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=31.71.01.1001";
+  // Definisikan batas koordinat untuk Indonesia saja
+  var southWest = L.latLng(-11.3, 94.7);
+  var northEast = L.latLng(5.7, 141.3);
+  var bounds = L.latLngBounds(southWest, northEast);
 
-    async function ambilData() {
-  try {
-    const res = await fetch(apiUrl);
-    if (!res.ok) throw new Error("Gagal mengambil data dari API");
-    const data = await res.json();
-
-    // --- Render Lokasi ---
-    const lokasiDiv = document.getElementById("lokasi");
-    if (data.lokasi) {
-      lokasiDiv.innerHTML = `
-        <h2>Desa/Kelurahan: ${data.lokasi.desa || "N/A"}</h2>
-        <p>
-          Kecamatan: ${data.lokasi.kecamatan || "N/A"}<br>
-          Kota/Kab: ${data.lokasi.kotkab || "N/A"}<br>
-          Provinsi: ${data.lokasi.provinsi || "N/A"}<br>
-          Koordinat: Lat: ${data.lokasi.lat || "N/A"}, Lon: ${data.lokasi.lon || "N/A"}<br>
-          Timezone: ${data.lokasi.timezone || "N/A"}
-        </p>
-      `;
-    }
-
-    // --- Render Map ---
-    if (data.lokasi && data.lokasi.lat && data.lokasi.lon) {
-      const lat = parseFloat(data.lokasi.lat);
-      const lon = parseFloat(data.lokasi.lon);
-
-      // Inisialisasi map
-      // Inisialisasi map
-  const bounds = [
-    [-5.45, 119.15], // kiri bawah
-    [-4.80, 119.75]  // kanan atas
-  ];
-
-  // Inisialisasi map
-  const map = L.map('map', {
-    center: [-5.15, 119.5],
-    zoom: 10,          // default tampil agak zoom out
-    minZoom: 10,       // user tidak bisa zoom keluar lebih kecil dari ini
+  // Inisialisasi peta, berpusat di Indonesia, dan batasi hanya Indonesia
+  var map = L.map('map', {
+    minZoom: 5,        // Batas zoom minimum di satu Indonesia
+    maxZoom: 12,       // Batas zoom maks di area kecamatan
     maxBounds: bounds, // tetap dibatasi area
+    maxBoundsViscosity: 1.0 // mencegah peta keluar dari batas
+  }).setView([-2.5489, 118.0149], 5); // Pusat di Indonesia
+
+  // Ambil elemen div untuk info koordinat
+  var infoKoordinat = document.getElementById('koordinat-info');
+  infoKoordinat.innerHTML = 'Geser kursor di atas peta';
+
+  // Tambahkan event listener untuk menampilkan koordinat saat mouse bergerak di atas peta
+  map.on('mousemove', function(e) {
+    //format teks dan tampilkan dalam div
+    var lat = e.latlng.lat.toFixed(5);
+    var lng = e.latlng.lng.toFixed(5);
+    infoKoordinat.innerHTML = 
+      'Latitude: ' + lat + 
+      ' | Longitude: ' + lng;
+  });
+
+  // Tambahkan event listener saat mouse keluar dari peta
+  map.on('mouseout', function() {
+    infoKoordinat.innerHTML = 'Geser kursor di atas peta';
   });
 
   // Tambah tile layer
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
+  // Definisikan URL ke Vector Tile Server Lokal
+  var vectorTileUrl = 'http://localhost:5000/tiles/{z}/{x}/{y}.pbf';
 
-  // Marker contoh
-  L.marker([-5.1477, 119.4327]).addTo(map).bindTooltip("Makassar", { permanent: false, direction: "top" });
-  L.marker([-5.333, 119.46]).addTo(map).bindTooltip("Gowa", { permanent: false, direction: "top" });
-  L.marker([-4.978, 119.578]).addTo(map).bindTooltip("Maros", { permanent: false, direction: "top" });
+  // Definisikan gaya (styling) untuk setiap layer administratif
+  var vectorTileOptions = {
+    vectorTileLayerStyles: {
+      // Layer Provinsi: Selalu terlihat
+      'batas_provinsi': function(properties, zoom) {
+        if (zoom <= 7) {
+          return {
+          fill: true,
+          fillColor: '#ff7800', // Oranye
+          fillOpacity: 1,
+          stroke: true,
+          color: '#8B4513',
+          weight: 1.5,
+          };
+        }
+        else {
+          return { stroke: false, fill: false };
+        }
+      },
+      
+      // Layer Kabupaten/Kota: Hanya terlihat di zoom 7 ke atas
+      'batas_kabupatenkota': function(properties, zoom) {
+        if (zoom >= 8 && zoom <= 10) {
+          return {
+            fill: true,
+            fillColor: '#3388ff', // Biru
+            fillOpacity: 1,
+            stroke: true,
+            color: '#003366',
+            weight: 1,                           
+          };
+        } else {
+          // Sembunyikan layer jika zoom < 8 atau > 10
+          return { stroke: false, fill: false };
+        }
+      },
 
-    }
+      // Layer Kecamatan: Hanya terlihat di zoom 10 ke atas
+      'batas_kecamatandistrik': function(properties, zoom) {
+        if (zoom >= 11 && zoom <= 13) {
+          return {
+            fill: true,
+            fillColor: '#44B500', // Hijau
+            fillOpacity: 1,
+            stroke: true,
+            color: '#276600',
+            weight: 0.8,
+          };
+        } else {
+          // Sembunyikan layer jika zoom < 10
+          return { stroke: false, fill: false };
+        }
+      }
+    },
+    interactive: true // Mengizinkan interaksi seperti klik
+  };
 
-    // --- Render Prakiraan Cuaca (kode kamu sebelumnya) ---
-    // ...
-  } catch (err) {
-    document.body.innerHTML += `<p style="color:red;">ERROR: ${err.message}</p>`;
-    console.error(err);
-  }
-}
+  // Buat layer VectorGrid dan tambahkan ke peta
+  var vectorGridLayer = L.vectorGrid.protobuf(vectorTileUrl, vectorTileOptions)
+    .on('click', function(e) {
+      // Hentikan event agar tidak 'merembes' ke peta di bawahnya jika perlu
+      L.DomEvent.stop(e);
 
-ambilData();
+      // Fungsi untuk menampilkan popup saat area diklik
+      var properties = e.layer.properties;
+      // Aktifkan ini untuk melihat semua properti yang tersedia di console browser (F12)
+      // console.log("Properti wilayah yang diklik:", properties); 
 
-
+      // Pastikan nama properti (WADMPR, dll) sesuai dengan data Anda
+      let tingkatWilayah = 'Tidak tersedia';
+      let namaWilayah = 'Data tidak tersedia';
+      // Pastikan 'properties' dan 'TIPADM' ada sebelum dicek
+      if (properties && properties.TIPADM) {
+        // Menggunakan switch lebih rapi untuk banyak kondisi
+        // Mengubah nilai ke Number() untuk memastikan perbandingan dengan angka berhasil
+        switch (Number(properties.TIPADM)) {
+          case 3:
+            tingkatWilayah = 'Kecamatan';
+            namaWilayah = properties.WADMKC || 'Kecamatan tidak bernama';
+            break;
+          case 2:
+            tingkatWilayah = 'Kabupaten/Kota';
+            namaWilayah = properties.WADMKK || 'Kab/Kota tidak bernama';
+            break;
+          case 1:
+            tingkatWilayah = 'Provinsi';
+            namaWilayah = properties.WADMPR || 'Provinsi tidak bernama';
+            break;
+          default:
+            tingkatWilayah = 'Tipe administrasi tidak dikenali';
+            namaWilayah = 'Nama wilayah tidak dikenali';
+        }
+      }
+      
+      // Tampilkan popup di lokasi klik dengan nama wilayah
+      L.popup()
+        .setLatLng(e.latlng)
+        .setContent('<strong>' + tingkatWilayah + ':</strong> ' + namaWilayah)
+        .openOn(map);
+      })
+      .addTo(map);
   </script>
 </body>
 </html>
