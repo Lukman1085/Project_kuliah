@@ -8,31 +8,10 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 
+  <script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
   <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
 
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-    #map {
-      width: 100%;
-      height: 100%;
-    }
-    #koordinat-info {
-      position: fixed; /* atau absolute jika di dalam kontainer peta */
-      bottom: 10px;
-      left: 10px;
-      background-color: rgba(255, 255, 255, 0.8); /* Latar belakang putih semi-transparan */
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      z-index: 1000; /* Memastikan tampil di atas peta */
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
-    }
-  </style>
+  <link rel="stylesheet" href="static/styles.css">
 </head>
 <body>
   <div id="map"></div>
@@ -40,13 +19,13 @@
   <script>
   // Definisikan batas koordinat untuk Indonesia saja
   var southWest = L.latLng(-11.3, 94.7);
-  var northEast = L.latLng(5.7, 141.3);
+  var northEast = L.latLng(6.3, 141.3);
   var bounds = L.latLngBounds(southWest, northEast);
 
   // Inisialisasi peta, berpusat di Indonesia, dan batasi hanya Indonesia
   var map = L.map('map', {
     minZoom: 5,        // Batas zoom minimum di satu Indonesia
-    maxZoom: 12,       // Batas zoom maks di area kecamatan
+    maxZoom: 14,       // Batas zoom maks di area kecamatan
     maxBounds: bounds, // tetap dibatasi area
     maxBoundsViscosity: 1.0 // mencegah peta keluar dari batas
   }).setView([-2.5489, 118.0149], 5); // Pusat di Indonesia
@@ -70,10 +49,10 @@
     infoKoordinat.innerHTML = 'Geser kursor di atas peta';
   });
 
-  // Tambah tile layer
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Tambah tile layer tanpa label sebagai dasar peta
+  L.tileLayer.provider('CartoDB.PositronNoLabels', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
   }).addTo(map);
 
   // Definisikan URL ke Vector Tile Server Lokal
@@ -88,7 +67,7 @@
           return {
           fill: true,
           fillColor: '#ff7800', // Oranye
-          fillOpacity: 1,
+          fillOpacity: 0,
           stroke: true,
           color: '#8B4513',
           weight: 1.5,
@@ -99,13 +78,13 @@
         }
       },
       
-      // Layer Kabupaten/Kota: Hanya terlihat di zoom 7 ke atas
+      // Layer Kabupaten/Kota: Hanya terlihat di zoom 8 ke atas
       'batas_kabupatenkota': function(properties, zoom) {
         if (zoom >= 8 && zoom <= 10) {
           return {
             fill: true,
             fillColor: '#3388ff', // Biru
-            fillOpacity: 1,
+            fillOpacity: 0,
             stroke: true,
             color: '#003366',
             weight: 1,                           
@@ -116,19 +95,19 @@
         }
       },
 
-      // Layer Kecamatan: Hanya terlihat di zoom 10 ke atas
+      // Layer Kecamatan: Hanya terlihat di zoom 11 ke atas
       'batas_kecamatandistrik': function(properties, zoom) {
-        if (zoom >= 11 && zoom <= 13) {
+        if (zoom >= 11 && zoom <= 14) {
           return {
             fill: true,
             fillColor: '#44B500', // Hijau
-            fillOpacity: 1,
+            fillOpacity: 0,
             stroke: true,
             color: '#276600',
             weight: 0.8,
           };
         } else {
-          // Sembunyikan layer jika zoom < 10
+          // Sembunyikan layer jika zoom < 11
           return { stroke: false, fill: false };
         }
       }
@@ -156,7 +135,7 @@
         // Mengubah nilai ke Number() untuk memastikan perbandingan dengan angka berhasil
         switch (Number(properties.TIPADM)) {
           case 3:
-            tingkatWilayah = 'Kecamatan';
+            tingkatWilayah = 'Kecamatan/Distrik';
             namaWilayah = properties.WADMKC || 'Kecamatan tidak bernama';
             break;
           case 2:
@@ -176,10 +155,20 @@
       // Tampilkan popup di lokasi klik dengan nama wilayah
       L.popup()
         .setLatLng(e.latlng)
-        .setContent('<strong>' + tingkatWilayah + ':</strong> ' + namaWilayah)
+        .setContent('<p><strong>' + tingkatWilayah + ':</strong> ' + namaWilayah + '</p>'
+          + '<p><strong>Cuaca:</strong> ' + 'Cerah (Placeholder)' + '</p>'
+          + '<p><strong>Suhu:</strong> ' + '30°C (Placeholder)' + '</p>'
+          + '<p><strong>Kelembaban:</strong> ' + '70% (Placeholder)' + '</p>'
+        )
         .openOn(map);
       })
       .addTo(map);
+
+    // Tambah layer label (hanya teks) di atas semua layer lain
+    L.tileLayer.provider('CartoDB.PositronOnlyLabels', {
+        maxZoom: 19,
+        pane: 'overlayPane'
+    }).addTo(map);
   </script>
 </body>
 </html>
