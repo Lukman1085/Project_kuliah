@@ -1,10 +1,18 @@
 import os
 import sys
 import sqlite3
-from flask import Flask, Response, render_template
+from flask import Flask, Response, render_template, request, jsonify
 from flask_cors import CORS
+import geopandas as gpd
+from shapely.geometry import box
+import time
+import random # Untuk simulasi data cuaca
 
-# tippecanoe -o peta_indonesia.mbtiles --force   --named-layer='{"name": "batas_provinsi", "file": "batas_provinsi.geojson", "minzoom": 4, "maxzoom": 7}'   --named-layer='{"name": "batas_kabupatenkota", "file": "batas_kabupatenkota.geojson", "minzoom": 8, "maxzoom": 10}'   --named-layer='{"name": "batas_kecamatandistrik", "file": "batas_kecamatandistrik.geojson", "minzoom": 11, "maxzoom": 13}'
+# Latitude: y(point_on_surface($geometry))
+# Longitude: x(point_on_surface($geometry))
+# tippecanoe -o peta_indonesia.mbtiles --force   --named-layer='{"name": "batas_provinsi", "file": "batas_provinsi.geojson", "minzoom": 5, "maxzoom": 7}'   --named-layer='{"name": "batas_kabupatenkota", "file": "batas_kabupatenkota.geojson", "minzoom": 8, "maxzoom": 10}'   --named-layer='{"name": "batas_kecamatandistrik", "file": "batas_kecamatandistrik.geojson", "minzoom": 11, "maxzoom": 14}'
+
+# tippecanoe -o peta_indonesia.mbtiles -f -z14 -Z5 --simplification=5 --detect-shared-borders    --named-layer='{"name": "batas_provinsi", "file": "batas_provinsi.geojson", "minzoom": 5, "maxzoom": 8}'    --named-layer='{"name": "batas_kabupatenkota", "file": "batas_kabupatenkota.geojson", "minzoom": 8, "maxzoom": 11}'    --named-layer='{"name": "batas_kecamatandistrik", "file": "batas_kecamatandistrik.geojson", "minzoom": 11, "maxzoom": 14}'
 
 # Inisialisasi Flask
 app = Flask(__name__)
@@ -14,6 +22,143 @@ CORS(app) # Aktifkan CORS untuk semua rute
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Koneksi ke file MBTiles
 MBTILES_FILE = os.path.join(BASE_DIR, 'peta_indonesia.mbtiles')
+
+# ================== BAGIAN API PENGAMBIL DATA CUACA ==================
+
+# --- 1. Muat data GeoJSON ke memori saat server dimulai ---
+print("Memuat data geospasial untuk API...")
+# Gunakan file GeoJSON yang sudah bersih (hanya atribut penting)
+# Pastikan path filenya benar
+provinsi_gdf = gpd.read_file(os.path.join(BASE_DIR, "batas_provinsi.geojson")).to_crs(epsg=4326)
+kabupaten_gdf = gpd.read_file(os.path.join(BASE_DIR, "batas_kabupatenkota.geojson")).to_crs(epsg=4326)
+kecamatan_gdf = gpd.read_file(os.path.join(BASE_DIR, "batas_kecamatandistrik.geojson")).to_crs(epsg=4326)
+print("Data geospasial berhasil dimuat.")
+
+# --- 2. Siapkan Cache Sederhana ---
+WEATHER_CACHE = {}
+CACHE_TTL = 900  # Waktu kedaluwarsa cache: 15 menit (dalam detik)
+
+# ENDPOINT KHUSUS UNTUK DATA PROVINSI
+@app.route('/api/provinsi-info')
+def get_provinsi_info():
+    """Mengirimkan informasi dasar untuk semua provinsi."""
+    try:
+        provinsi_info = []
+        # GANTI 'KDPPUM' dengan nama kolom ID unik provinsi Anda
+        # GANTI 'WADMPR' dengan nama kolom nama provinsi Anda
+        id_column = 'KDPPUM'
+        name_column = 'WADMPR'
+
+        # Pastikan data tidak ada yang null
+        clean_provinsi_gdf = provinsi_gdf.dropna(subset=[id_column, name_column, 'latitude', 'longitude'])
+
+        for index, row in clean_provinsi_gdf.iterrows():
+            provinsi_info.append({
+                "id": row[id_column],
+                "nama": row[name_column],
+                "lat": row['latitude'],
+                "lon": row['longitude']
+            })
+        return jsonify(provinsi_info)
+    except Exception as e:
+        print(f"Error in /api/provinsi-info: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+# --- 3. Endpoint API Cerdas yang Baru ---
+@app.route('/api/data-cuaca')
+def get_data_cuaca():
+    try:
+        bbox_str = request.args.get('bbox')
+        zoom = int(request.args.get('zoom', 9))  # Default zoom 9 jika tidak diberikan
+
+        if not bbox_str:
+            return jsonify({"error": "bbox parameter is required"}), 400
+
+        xmin, ymin, xmax, ymax = [float(coord) for coord in bbox_str.split(',')]
+        bbox_polygon = box(xmin, ymin, xmax, ymax)
+
+        target_gdf = None
+        id_column = None
+        name_column = None
+
+        # Tentukan data mana yang akan dicari berdasarkan zoom
+        if 9 <= zoom <= 10:
+            target_gdf = kabupaten_gdf
+            # GANTI 'KDPKAB' DENGAN NAMA KOLOM ID UNIK KABUPATEN ANDA
+            id_column = 'KDPKAB'
+            name_column = 'WADMKK' 
+        elif zoom >= 11:
+            target_gdf = kecamatan_gdf
+            # GANTI 'WADMKC' DENGAN NAMA KOLOM ID UNIK KECAMATAN ANDA
+            id_column = 'KDCPUM'
+            name_column = 'WADMKC'
+        else:
+            # Tidak mengambil data cuaca untuk level provinsi
+            return jsonify({})
+
+        # Query spasial untuk menemukan poligon yang beririsan dengan Bbox
+        poligon_terlihat = target_gdf[target_gdf.intersects(bbox_polygon)]
+
+        # Pastikan tidak ada nilai NaN pada kolom ID
+        poligon_terlihat = poligon_terlihat.dropna(subset=[id_column])
+        
+        # Ambil data centroid (titik tengah) untuk menempatkan marker
+        # dan ID unik untuk setiap poligon yang terlihat
+        wilayah_info = []
+        for index, row in poligon_terlihat.iterrows():
+            wilayah_info.append({
+                "id": row[id_column],
+                "nama": row[name_column],
+                "lat": row['latitude'],
+                "lon": row['longitude']
+            })
+
+        # --- Logika Caching ---
+        final_data = {}
+        ids_to_fetch = []
+        current_time = time.time()
+
+        for info in wilayah_info:
+            wilayah_id = info["id"]
+            if wilayah_id in WEATHER_CACHE and (current_time - WEATHER_CACHE[wilayah_id]['timestamp'] < CACHE_TTL):
+                final_data[wilayah_id] = WEATHER_CACHE[wilayah_id]['data']
+                # Tambahkan koordinat karena kita butuh di frontend
+                final_data[wilayah_id]['lat'] = info['lat']
+                final_data[wilayah_id]['lon'] = info['lon']
+            else:
+                ids_to_fetch.append(info)
+        
+        if ids_to_fetch:
+            # Panggil API eksternal HANYA untuk ID yang tidak ada di cache
+            new_weather_data = call_external_weather_api(ids_to_fetch)
+            for wilayah_id, data in new_weather_data.items():
+                WEATHER_CACHE[wilayah_id] = {"data": data, "timestamp": current_time}
+                final_data[wilayah_id] = data
+        
+        return jsonify(final_data)
+
+    except Exception as e:
+        print(f"Error in /api/data-cuaca: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+def call_external_weather_api(wilayah_infos):
+    # FUNGSI SIMULASI: Ganti ini dengan panggilan ke API cuaca asli Anda
+    mock_data = {}
+    for info in wilayah_infos:
+        suhu = random.randint(25, 32)
+        kelembapan = random.randint(60, 90)
+        mock_data[info['id']] = {
+            "suhu": suhu,
+            "cuaca": "Cerah" if suhu > 28 else "Berawan",
+            "nama": info['nama'],
+            "lat": info['lat'],
+            "lon": info['lon'],
+            "kelembapan": kelembapan,
+            "terasa": suhu - (kelembapan / 100) * (suhu - 14.5)  # Perhitungan sederhana
+        }
+    return mock_data
+
+# ================== KODE BARU BERAKHIR DI SINI ==================
 
 # Pemeriksaan penting! Cek apakah file mbtiles benar-benar ada sebelum menjalankan server
 # if not os.path.exists(MBTILES_FILE):

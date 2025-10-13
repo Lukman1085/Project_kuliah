@@ -26,3 +26,42 @@ html, body {
     background-color: #f0f0f0;
     border-radius: 5px;
 }
+
+/* Wadah utama untuk label cuaca kustom */
+.weather-label {
+    display: flex; /* Mengatur ikon dan teks berdampingan */
+    align-items: center; /* Menyelaraskan ikon dan teks secara vertikal */
+    padding: 3px 8px;
+    background-color: rgba(255, 255, 255, 0.85); /* Latar belakang putih semi-transparan */
+    border: 1px solid #555;
+    border-radius: 5px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    color: #333;
+    white-space: nowrap; /* Mencegah nama wilayah turun ke baris baru */
+    width: max-content; /* Lebar menyesuaikan konten */
+    height: max-content; /* Tinggi menyesuaikan konten */
+}
+
+/* Lingkaran kecil penanda suhu di dalam label */
+.weather-label .weather-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%; /* Membuatnya menjadi lingkaran sempurna */
+    border: 1px solid #000;
+    margin-right: 6px; /* Memberi jarak antara lingkaran dan teks */
+}
+
+/* Teks nama wilayah di dalam label */
+.weather-label .weather-text {
+    line-height: 1;
+}
+
+/* Menghilangkan gaya default Leaflet dari divIcon agar tidak mengganggu */
+.leaflet-div-icon {
+    background: none;
+    border: none;
+}
