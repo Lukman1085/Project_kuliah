@@ -17,158 +17,283 @@
   <div id="map"></div>
   <div id="koordinat-info"></div>
   <script>
-  // Definisikan batas koordinat untuk Indonesia saja
-  var southWest = L.latLng(-11.3, 94.7);
-  var northEast = L.latLng(6.3, 141.3);
-  var bounds = L.latLngBounds(southWest, northEast);
+    document.addEventListener('DOMContentLoaded', function() {
+      // Definisikan batas koordinat untuk Indonesia saja
+      var southWest = L.latLng(-11.3, 94.7);
+      var northEast = L.latLng(6.3, 141.3);
+      var bounds = L.latLngBounds(southWest, northEast);
 
-  // Inisialisasi peta, berpusat di Indonesia, dan batasi hanya Indonesia
-  var map = L.map('map', {
-    minZoom: 5,        // Batas zoom minimum di satu Indonesia
-    maxZoom: 14,       // Batas zoom maks di area kecamatan
-    maxBounds: bounds, // tetap dibatasi area
-    maxBoundsViscosity: 1.0 // mencegah peta keluar dari batas
-  }).setView([-2.5489, 118.0149], 5); // Pusat di Indonesia
+      // Inisialisasi peta, berpusat di Indonesia, dan batasi hanya Indonesia
+      var map = L.map('map', {
+        minZoom: 5,        // Batas zoom minimum di satu Indonesia
+        maxZoom: 14,       // Batas zoom maks di area kecamatan
+        maxBounds: bounds, // tetap dibatasi area
+        maxBoundsViscosity: 1.0 // mencegah peta keluar dari batas
+      }).setView([-2.5489, 118.0149], 5); // Pusat di Indonesia
 
-  // Ambil elemen div untuk info koordinat
-  var infoKoordinat = document.getElementById('koordinat-info');
-  infoKoordinat.innerHTML = 'Geser kursor di atas peta';
-
-  // Tambahkan event listener untuk menampilkan koordinat saat mouse bergerak di atas peta
-  map.on('mousemove', function(e) {
-    //format teks dan tampilkan dalam div
-    var lat = e.latlng.lat.toFixed(5);
-    var lng = e.latlng.lng.toFixed(5);
-    infoKoordinat.innerHTML = 
-      'Latitude: ' + lat + 
-      ' | Longitude: ' + lng;
-  });
-
-  // Tambahkan event listener saat mouse keluar dari peta
-  map.on('mouseout', function() {
-    infoKoordinat.innerHTML = 'Geser kursor di atas peta';
-  });
-
-  // Tambah tile layer tanpa label sebagai dasar peta
-  L.tileLayer.provider('CartoDB.PositronNoLabels', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  }).addTo(map);
-
-  // Definisikan URL ke Vector Tile Server Lokal
-  var vectorTileUrl = 'http://localhost:5000/tiles/{z}/{x}/{y}.pbf';
-
-  // Definisikan gaya (styling) untuk setiap layer administratif
-  var vectorTileOptions = {
-    vectorTileLayerStyles: {
-      // Layer Provinsi: Selalu terlihat
-      'batas_provinsi': function(properties, zoom) {
-        if (zoom <= 7) {
-          return {
-          fill: true,
-          fillColor: '#ff7800', // Oranye
-          fillOpacity: 0,
-          stroke: true,
-          color: '#8B4513',
-          weight: 1.5,
-          };
-        }
-        else {
-          return { stroke: false, fill: false };
-        }
-      },
-      
-      // Layer Kabupaten/Kota: Hanya terlihat di zoom 8 ke atas
-      'batas_kabupatenkota': function(properties, zoom) {
-        if (zoom >= 8 && zoom <= 10) {
-          return {
-            fill: true,
-            fillColor: '#3388ff', // Biru
-            fillOpacity: 0,
-            stroke: true,
-            color: '#003366',
-            weight: 1,                           
-          };
-        } else {
-          // Sembunyikan layer jika zoom < 8 atau > 10
-          return { stroke: false, fill: false };
-        }
-      },
-
-      // Layer Kecamatan: Hanya terlihat di zoom 11 ke atas
-      'batas_kecamatandistrik': function(properties, zoom) {
-        if (zoom >= 11 && zoom <= 14) {
-          return {
-            fill: true,
-            fillColor: '#44B500', // Hijau
-            fillOpacity: 0,
-            stroke: true,
-            color: '#276600',
-            weight: 0.8,
-          };
-        } else {
-          // Sembunyikan layer jika zoom < 11
-          return { stroke: false, fill: false };
-        }
-      }
-    },
-    interactive: true // Mengizinkan interaksi seperti klik
-  };
-
-  // Buat layer VectorGrid dan tambahkan ke peta
-  var vectorGridLayer = L.vectorGrid.protobuf(vectorTileUrl, vectorTileOptions)
-    .on('click', function(e) {
-      // Hentikan event agar tidak 'merembes' ke peta di bawahnya jika perlu
-      L.DomEvent.stop(e);
-
-      // Fungsi untuk menampilkan popup saat area diklik
-      var properties = e.layer.properties;
-      // Aktifkan ini untuk melihat semua properti yang tersedia di console browser (F12)
-      // console.log("Properti wilayah yang diklik:", properties); 
-
-      // Pastikan nama properti (WADMPR, dll) sesuai dengan data Anda
-      let tingkatWilayah = 'Tidak tersedia';
-      let namaWilayah = 'Data tidak tersedia';
-      // Pastikan 'properties' dan 'TIPADM' ada sebelum dicek
-      if (properties && properties.TIPADM) {
-        // Menggunakan switch lebih rapi untuk banyak kondisi
-        // Mengubah nilai ke Number() untuk memastikan perbandingan dengan angka berhasil
-        switch (Number(properties.TIPADM)) {
-          case 3:
-            tingkatWilayah = 'Kecamatan/Distrik';
-            namaWilayah = properties.WADMKC || 'Kecamatan tidak bernama';
-            break;
-          case 2:
-            tingkatWilayah = 'Kabupaten/Kota';
-            namaWilayah = properties.WADMKK || 'Kab/Kota tidak bernama';
-            break;
-          case 1:
-            tingkatWilayah = 'Provinsi';
-            namaWilayah = properties.WADMPR || 'Provinsi tidak bernama';
-            break;
-          default:
-            tingkatWilayah = 'Tipe administrasi tidak dikenali';
-            namaWilayah = 'Nama wilayah tidak dikenali';
-        }
-      }
-      
-      // Tampilkan popup di lokasi klik dengan nama wilayah
-      L.popup()
-        .setLatLng(e.latlng)
-        .setContent('<p><strong>' + tingkatWilayah + ':</strong> ' + namaWilayah + '</p>'
-          + '<p><strong>Cuaca:</strong> ' + 'Cerah (Placeholder)' + '</p>'
-          + '<p><strong>Suhu:</strong> ' + '30°C (Placeholder)' + '</p>'
-          + '<p><strong>Kelembaban:</strong> ' + '70% (Placeholder)' + '</p>'
-        )
-        .openOn(map);
-      })
-      .addTo(map);
-
-    // Tambah layer label (hanya teks) di atas semua layer lain
-    L.tileLayer.provider('CartoDB.PositronOnlyLabels', {
+      // Tambah tile layer tanpa label sebagai dasar peta
+      L.tileLayer.provider('CartoDB.PositronNoLabels', {
         maxZoom: 19,
-        pane: 'overlayPane'
-    }).addTo(map);
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      }).addTo(map);
+
+      // Definisikan URL ke Vector Tile Server Lokal
+      var vectorTileUrl = 'http://localhost:5000/tiles/{z}/{x}/{y}.pbf';
+
+      // Definisikan gaya (styling) untuk setiap layer administratif
+      var vectorTileOptions = {
+        vectorTileLayerStyles: {
+          // Layer Provinsi: Selalu terlihat
+          'batas_provinsi': function(properties, zoom) {
+            if (zoom >=5 && zoom <= 8.99) {
+              return {
+              fill: true,
+              fillColor: '#ff7800', // Oranye
+              fillOpacity: 0,
+              stroke: true,
+              color: '#8B4513',
+              weight: 1.5,
+              };
+            }
+            else {
+              return { stroke: false, fill: false };
+            }
+          },
+          
+          // Layer Kabupaten/Kota: Hanya terlihat di zoom 8 ke atas
+          'batas_kabupatenkota': function(properties, zoom) {
+            if (zoom >= 9 && zoom <= 10.99) {
+              return {
+                fill: true,
+                fillColor: '#3388ff', // Biru
+                fillOpacity: 0,
+                stroke: true,
+                color: '#003366',
+                weight: 1,                           
+              };
+            } else {
+              // Sembunyikan layer jika zoom < 8 atau > 10
+              return { stroke: false, fill: false };
+            }
+          },
+
+          // Layer Kecamatan: Hanya terlihat di zoom 11 ke atas
+          'batas_kecamatandistrik': function(properties, zoom) {
+            if (zoom >= 11 && zoom <= 14) {
+              return {
+                fill: true,
+                fillColor: '#44B500', // Hijau
+                fillOpacity: 0,
+                stroke: true,
+                color: '#276600',
+                weight: 0.8,
+              };
+            } else {
+              // Sembunyikan layer jika zoom < 11
+              return { stroke: false, fill: false };
+            }
+          }
+        },
+        interactive: true // Mengizinkan interaksi seperti klik
+      };
+
+      // Buat layer VectorGrid dan tambahkan ke peta
+      var vectorGridLayer = L.vectorGrid.protobuf(vectorTileUrl, vectorTileOptions)
+        .on('click', function(e) {
+          // Hentikan event agar tidak 'merembes' ke peta di bawahnya jika perlu
+          L.DomEvent.stop(e);
+
+          // Fungsi untuk menampilkan popup saat area diklik
+          var properties = e.layer.properties;
+          // Aktifkan ini untuk melihat semua properti yang tersedia di console browser (F12)
+          console.log("Properti wilayah yang diklik:", properties); 
+
+          // Pastikan nama properti (WADMPR, dll) sesuai dengan data Anda
+          let tingkatWilayah = 'Tidak tersedia';
+          let namaWilayah = 'Data tidak tersedia';
+
+          // Pastikan 'properties' dan 'TIPADM' ada sebelum dicek
+          if (properties && properties.TIPADM) {
+            // Menggunakan switch lebih rapi untuk banyak kondisi
+            // Mengubah nilai ke Number() untuk memastikan perbandingan dengan angka berhasil
+            switch (Number(properties.TIPADM)) {
+              case 3:
+                tingkatWilayah = 'Kecamatan/Distrik';
+                namaWilayah = properties.WADMKC || 'Kecamatan tidak bernama';
+                break;
+              case 2:
+                tingkatWilayah = 'Kabupaten/Kota';
+                namaWilayah = properties.WADMKK || 'Kab/Kota tidak bernama';
+                break;
+              case 1:
+                tingkatWilayah = 'Provinsi';
+                namaWilayah = properties.WADMPR || 'Provinsi tidak bernama';
+                break;
+              default:
+                tingkatWilayah = 'Tipe administrasi tidak dikenali';
+                namaWilayah = 'Nama wilayah tidak dikenali';
+            }
+          }
+          
+          // Tampilkan popup di lokasi klik dengan nama wilayah
+          L.popup()
+            .setLatLng(e.latlng)
+            .setContent('<p><strong>' + tingkatWilayah + ':</strong> ' + namaWilayah + '</p>'
+              + '<p><strong>Cuaca:</strong> ' + 'Cerah (Placeholder)' + '</p>'
+              + '<p><strong>Suhu:</strong> ' + '30°C (Placeholder)' + '</p>'
+              + '<p><strong>Kelembapan:</strong> ' + '70% (Placeholder)' + '</p>'
+            )
+            .openOn(map);
+          })
+          .addTo(map);
+
+        // Tambah layer label (hanya teks) di atas semua layer lain
+        L.tileLayer.provider('CartoDB.PositronOnlyLabels', {
+            maxZoom: 19,
+            pane: 'overlayPane'
+        }).addTo(map);
+
+        // ================== LOGIKA PANGGILAN API CUACA ==================
+        // Buat layer group untuk menampung marker provinsi
+        var provinsiLayer = L.layerGroup().addTo(map);
+
+        function tampilkanMarkerProvinsi() {
+          // Panggil endpoint yang sederhana
+          fetch(`http://localhost:5000/api/provinsi-info`)
+              .then(response => response.json())
+              .then(provinsiData => {
+                  provinsiLayer.clearLayers();
+                  
+                  // Tampilkan marker hanya di zoom level provinsi
+                  if (map.getZoom() <= 8.99) {
+                      // DAPATKAN BATAS VIEWPORT SAAT INI
+                      const bounds = map.getBounds();
+
+                      provinsiData.forEach(provinsi => {
+                          // Hanya buat marker jika lokasinya ada di dalam viewport
+                          if (bounds.contains([provinsi.lat, provinsi.lon])) {
+                              const iconHTML = `<div class="weather-label">
+                                                  <span class="weather-text">${provinsi.nama}</span>
+                                                </div>`;
+
+                              const customIcon = L.divIcon({
+                                  className: 'custom-div-icon',
+                                  html: iconHTML,
+                                  iconAnchor: [8, 8],
+                              });
+
+                              L.marker([provinsi.lat, provinsi.lon], { icon: customIcon })
+                                  .bindPopup(`<b>Provinsi:</b><br>${provinsi.nama}`)
+                                  .addTo(provinsiLayer);
+                          }
+                      });
+                  }
+              })
+              .catch(error => console.error('Gagal mengambil info provinsi:', error));
+      }
+
+      // fungsi berjalan setelah 'moveend'
+      // 'moveend' mencakup 'zoomend' dan 'dragend'
+      map.on('moveend', tampilkanMarkerProvinsi);
+      tampilkanMarkerProvinsi(); // Panggil pertama kali
+
+        // Buat layer group untuk menampung marker data cuaca
+        var weatherLayer = L.layerGroup().addTo(map);
+        let controller; // Untuk membatalkan permintaan
+
+        // Fungsi helper untuk Debounce
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+
+        function perbaruiDataCuaca() {
+            if (controller) controller.abort();
+            controller = new AbortController();
+            const signal = controller.signal;
+
+            const bounds = map.getBounds();
+            const bbox = bounds.toBBoxString();
+            const zoom = map.getZoom();
+
+            // Kosongkan layer data lama sebelum mengambil yang baru
+            weatherLayer.clearLayers();
+
+            // Hanya panggil API jika zoom level sesuai (misal: level kabupaten ke atas)
+            if (zoom < 9) {
+                return;
+            }
+
+            // Panggil backend ANDA
+            fetch(`http://localhost:5000/api/data-cuaca?bbox=${bbox}&zoom=${zoom}`, { signal })
+                .then(response => response.json())
+                .then(dataCuaca => {
+                    for (const wilayah_id in dataCuaca) {
+                        const data = dataCuaca[wilayah_id];
+                        
+                        // Tentukan warna berdasarkan suhu
+                        let warnaSuhu = '#fde725'; // Kuning (dingin)
+                        if (data.suhu > 28) warnaSuhu = '#f57f20'; // Oranye
+                        if (data.suhu > 30) warnaSuhu = '#d43f3a'; // Merah (panas)
+
+                        // Buat marker untuk setiap data
+                        const iconHTML = `
+                            <div class="weather-label">
+                                <span class="weather-dot" style="background-color: ${warnaSuhu};"></span>
+                                <span class="weather-text">${data.nama}</span>
+                            </div>
+                        `;
+
+                        // BUAT CUSTOM ICON MENGGUNAKAN L.divIcon
+                        const customIcon = L.divIcon({
+                            className: 'custom-div-icon', // Kelas ini penting untuk menonaktifkan gaya default
+                            html: iconHTML,
+                            iconAnchor: [8, 8], // Anchor di pojok kiri atas, bisa disesuaikan
+                        });
+
+                        // BUAT MARKER BARU DENGAN ICON KUSTOM
+                        L.marker([data.lat, data.lon], { icon: customIcon })
+                            .bindPopup(`<b>${data.nama}</b>
+                                <br>Suhu: ${data.suhu}°C
+                                <br>Cuaca: ${data.cuaca}
+                                <br>Kelembaban: ${data.kelembapan}%
+                                <br>Terasa Seperti: ${data.terasa.toFixed(1)}°C`)
+                            .addTo(weatherLayer);
+                    }
+                })
+                .catch(error => {
+                    if (error.name !== 'AbortError') {
+                        console.error('Gagal mengambil data cuaca:', error);
+                    }
+                });
+        }
+
+        const perbaruiDataCuacaDebounced = debounce(perbaruiDataCuaca, 500);
+        map.on('moveend', perbaruiDataCuacaDebounced);
+        perbaruiDataCuacaDebounced(); // Panggil pertama kali
+      
+        // Ambil elemen div untuk info koordinat
+      var infoKoordinat = document.getElementById('koordinat-info');
+      infoKoordinat.innerHTML = 'Geser kursor di atas peta';
+
+      // Tambahkan event listener untuk menampilkan koordinat saat mouse bergerak di atas peta
+      map.on('mousemove', function(e) {
+        //format teks dan tampilkan dalam div
+        var lat = e.latlng.lat.toFixed(5);
+        var lng = e.latlng.lng.toFixed(5);
+        infoKoordinat.innerHTML = 
+          'Latitude: ' + lat + 
+          ' | Longitude: ' + lng;
+      });
+
+      // Tambahkan event listener saat mouse keluar dari peta
+      map.on('mouseout', function() {
+        infoKoordinat.innerHTML = 'Geser kursor di atas peta';
+      });
+    });
   </script>
 </body>
 </html>
