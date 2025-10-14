@@ -7,6 +7,7 @@ import geopandas as gpd
 from shapely.geometry import box
 import time
 import random # Untuk simulasi data cuaca
+import pandas as pd
 
 # Latitude: y(point_on_surface($geometry))
 # Longitude: x(point_on_surface($geometry))
@@ -36,7 +37,7 @@ print("Data geospasial berhasil dimuat.")
 
 # --- 2. Siapkan Cache Sederhana ---
 WEATHER_CACHE = {}
-CACHE_TTL = 900  # Waktu kedaluwarsa cache: 15 menit (dalam detik)
+CACHE_TTL = 1800  # Waktu kedaluwarsa cache: 15 menit (dalam detik)
 
 # ENDPOINT KHUSUS UNTUK DATA PROVINSI
 @app.route('/api/provinsi-info')
@@ -82,12 +83,12 @@ def get_data_cuaca():
         name_column = None
 
         # Tentukan data mana yang akan dicari berdasarkan zoom
-        if 9 <= zoom <= 10:
+        if 8 <= zoom <= 10:
             target_gdf = kabupaten_gdf
             # GANTI 'KDPKAB' DENGAN NAMA KOLOM ID UNIK KABUPATEN ANDA
             id_column = 'KDPKAB'
             name_column = 'WADMKK' 
-        elif zoom >= 11:
+        elif 11 <= zoom <= 14:
             target_gdf = kecamatan_gdf
             # GANTI 'WADMKC' DENGAN NAMA KOLOM ID UNIK KECAMATAN ANDA
             id_column = 'KDCPUM'
@@ -123,6 +124,7 @@ def get_data_cuaca():
             if wilayah_id in WEATHER_CACHE and (current_time - WEATHER_CACHE[wilayah_id]['timestamp'] < CACHE_TTL):
                 final_data[wilayah_id] = WEATHER_CACHE[wilayah_id]['data']
                 # Tambahkan koordinat karena kita butuh di frontend
+                final_data[wilayah_id]['nama'] = info['nama']
                 final_data[wilayah_id]['lat'] = info['lat']
                 final_data[wilayah_id]['lon'] = info['lon']
             else:
@@ -139,6 +141,60 @@ def get_data_cuaca():
 
     except Exception as e:
         print(f"Error in /api/data-cuaca: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    
+# ENDPOINT UNTUK KLIK KLASTER
+@app.route('/api/data-by-ids')
+def get_data_by_ids():
+    """Mengambil data cuaca berdasarkan daftar ID spesifik."""
+    try:
+        ids_str = request.args.get('ids')
+        if not ids_str:
+            return jsonify({"error": "ids parameter is required"}), 400
+
+        list_of_ids = ids_str.split(',')
+        
+        # Gabungkan data kabupaten dan kecamatan untuk pencarian ID yang efisien
+        # Kita rename kolom ID agar seragam untuk sementara
+        kab_renamed = kabupaten_gdf.rename(columns={'KDPKAB': 'id', 'WADMKK': 'nama'})
+        kec_renamed = kecamatan_gdf.rename(columns={'KDCPUM': 'id', 'WADMKC': 'nama'})
+        all_gdf = pd.concat([
+            kab_renamed[['id', 'nama', 'latitude', 'longitude']],
+            kec_renamed[['id', 'nama', 'latitude', 'longitude']]
+        ])
+        
+        # Cari semua baris yang ID-nya ada di dalam daftar yang diminta
+        relevant_rows = all_gdf[all_gdf['id'].isin(list_of_ids)]
+
+        # --- Logika Caching dan Panggilan API (Sama seperti sebelumnya) ---
+        final_data = {}
+        ids_to_fetch_info = []
+        current_time = time.time()
+        
+        for index, row in relevant_rows.iterrows():
+            wilayah_id = row['id']
+            if wilayah_id in WEATHER_CACHE and (current_time - WEATHER_CACHE[wilayah_id]['timestamp'] < CACHE_TTL):
+                # Data ada di cache dan masih valid
+                final_data[wilayah_id] = WEATHER_CACHE[wilayah_id]['data']
+                final_data[wilayah_id]['nama'] = row['nama']
+                final_data[wilayah_id]['lat'] = row['latitude']
+                final_data[wilayah_id]['lon'] = row['longitude']
+            else:
+                ids_to_fetch_info.append({
+                    "id": wilayah_id, "nama": row['nama'],
+                    "lat": row['latitude'], "lon": row['longitude']
+                })
+
+        if ids_to_fetch_info:
+            new_weather_data = call_external_weather_api(ids_to_fetch_info)
+            for wilayah_id, data in new_weather_data.items():
+                WEATHER_CACHE[wilayah_id] = {"data": data, "timestamp": current_time}
+                final_data[wilayah_id] = data
+        
+        return jsonify(final_data)
+
+    except Exception as e:
+        print(f"Error in /api/data-by-ids: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
 def call_external_weather_api(wilayah_infos):
@@ -158,7 +214,7 @@ def call_external_weather_api(wilayah_infos):
         }
     return mock_data
 
-# ================== KODE BARU BERAKHIR DI SINI ==================
+# ================== AKHIR API PENGAMBIL DATA CUACA ==================
 
 # Pemeriksaan penting! Cek apakah file mbtiles benar-benar ada sebelum menjalankan server
 # if not os.path.exists(MBTILES_FILE):
