@@ -60,6 +60,55 @@ html, body {
     line-height: 1;
 }
 
+/* Styling untuk kotak popup klaster */
+.cluster-box {
+    max-height: 250px; /* Batasi tinggi kotak */
+    overflow-y: auto; /* Tambahkan scrollbar jika kontennya banyak */
+    padding: 5px;
+}
+.cluster-item {
+    display: block; /* Membuat setiap item mengambil baris penuh */
+    align-items: center;
+    padding: 2px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 12px;
+}
+.cluster-item:last-child {
+    border-bottom: none;
+}
+
+.cluster-popup-content {
+    margin: 0;
+    padding: 0;
+}
+
+.back-to-list-button {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    margin-top: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    cursor: pointer;
+    text-align: center;
+    font-size: 12px;
+}
+.back-to-list-button:hover {
+    background-color: #e8e8e8;
+}
+
+/* Tambahkan ini untuk membuat semua item interaktif terlihat bisa diklik */
+.interactive-item {
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.interactive-item:hover {
+    background-color: #f0f0f0; /* Efek highlight saat di-hover */
+}
+
 /* Menghilangkan gaya default Leaflet dari divIcon agar tidak mengganggu */
 .leaflet-div-icon {
     background: none;
