@@ -2,5 +2,7 @@ venv/
 
 __pycache__/
 *.pyc
+*.pem
+personal_notes.md
 
 .env

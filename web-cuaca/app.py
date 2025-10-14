@@ -9,12 +9,6 @@ import time
 import random # Untuk simulasi data cuaca
 import pandas as pd
 
-# Latitude: y(point_on_surface($geometry))
-# Longitude: x(point_on_surface($geometry))
-# tippecanoe -o peta_indonesia.mbtiles --force   --named-layer='{"name": "batas_provinsi", "file": "batas_provinsi.geojson", "minzoom": 5, "maxzoom": 7}'   --named-layer='{"name": "batas_kabupatenkota", "file": "batas_kabupatenkota.geojson", "minzoom": 8, "maxzoom": 10}'   --named-layer='{"name": "batas_kecamatandistrik", "file": "batas_kecamatandistrik.geojson", "minzoom": 11, "maxzoom": 14}'
-
-# tippecanoe -o peta_indonesia.mbtiles -f -z14 -Z5 --simplification=5 --detect-shared-borders    --named-layer='{"name": "batas_provinsi", "file": "batas_provinsi.geojson", "minzoom": 5, "maxzoom": 8}'    --named-layer='{"name": "batas_kabupatenkota", "file": "batas_kabupatenkota.geojson", "minzoom": 8, "maxzoom": 11}'    --named-layer='{"name": "batas_kecamatandistrik", "file": "batas_kecamatandistrik.geojson", "minzoom": 11, "maxzoom": 14}'
-
 # Inisialisasi Flask
 app = Flask(__name__)
 CORS(app) # Aktifkan CORS untuk semua rute
@@ -267,5 +261,17 @@ def get_tile(z, x, y):
             db.close()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
-    # app.run(debug=True)
+    # Tentukan path ke file sertifikat
+    cert_path = './localhost+3.pem'
+    key_path = './localhost+3-key.pem'
+
+    # Cek apakah kedua file sertifikat ada
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        # Jika ada, jalankan server dengan HTTPS (untuk development lokal)
+        print("Menjalankan server dalam mode HTTPS...")
+        context = (cert_path, key_path)
+        app.run(host='0.0.0.0', port=5000, debug=False, ssl_context=context)
+    else:
+        # Jika tidak ada, jalankan server HTTP biasa (untuk lingkungan lain)
+        print("Sertifikat SSL tidak ditemukan. Menjalankan server dalam mode HTTP...")
+        app.run(host='0.0.0.0', port=5000, debug=False)

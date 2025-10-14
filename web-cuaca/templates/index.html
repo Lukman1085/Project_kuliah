@@ -47,6 +47,21 @@
   <div id="map"></div>
   <div id="koordinat-info"></div>
   <script>
+    // --- URL API Dinamis & Portabel ---
+
+    // 1. Dapatkan protokol (http: atau https:) secara otomatis
+    const protocol = window.location.protocol;
+
+    // 2. Dapatkan hostname (localhost atau 192.x.x.x) secara otomatis
+    const hostname = window.location.hostname; 
+
+    // 3. Tentukan port server Anda
+    const port = '5000';
+
+    // 4. Gabungkan semuanya. Ini akan menghasilkan http://... atau https://...
+    // tergantung bagaimana halaman diakses.
+    const baseUrl = `${protocol}//${hostname}:${port}`;
+
     document.addEventListener('DOMContentLoaded', function() {
       // Definisikan batas koordinat untuk Indonesia saja
       var southWest = L.latLng(-11.3, 94.7);
@@ -68,7 +83,7 @@
       }).addTo(map);
 
       // Definisikan URL ke Vector Tile Server Lokal
-      var vectorTileUrl = 'http://localhost:5000/tiles/{z}/{x}/{y}.pbf';
+      var vectorTileUrl = `${baseUrl}/tiles/{z}/{x}/{y}.pbf`;
 
       // Definisikan gaya (styling) untuk setiap layer administratif
       var vectorTileOptions = {
@@ -127,12 +142,74 @@
         let clusterRequestController;
         let currentClusterPopup = null;
         let isPanningToDetail = false;
+        let currentMarkersMap = new Map(); // "Otak" yang melacak semua marker di peta
 
         // --- Fungsi Helper ---
         const debounce = (func, delay) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), delay); }; };
         const getColorForSuhu = (suhu) => { if (suhu > 30) return '#d43f3a'; if (suhu > 28) return '#f57f20'; return '#fde725'; };
 
         // --- Alur Kerja 1: Pembaruan Peta Umum ---
+
+        // ================== LOGIKA PEMBARUAN PETA OPTIMIS ==================
+
+        // --- Helper Functions untuk mengelola marker ---
+        function createWeatherMarker(id, data) {
+            const warnaSuhu = getColorForSuhu(data.suhu);
+            const iconHTML = `<div class="weather-label"><span class="weather-dot" style="background-color: ${warnaSuhu};"></span><span class="weather-text">${data.nama}</span></div>`;
+            const icon = L.divIcon({ className: 'custom-div-icon', html: iconHTML, iconAnchor: [8, 8] });
+            const marker = L.marker([data.lat, data.lon], { icon: icon });
+            marker.options.markerType = 'weather';
+            marker.options.wilayahId = id;
+            
+            const popupContent = `<b>${data.nama}</b><br>Suhu: ${data.suhu.toFixed(1)}°C<br>Cuaca: ${data.cuaca}<br>Kelembapan: ${data.kelembapan}%<br>Terasa Seperti: ${data.terasa.toFixed(1)}°C`;
+            marker.bindPopup(popupContent);
+            
+            markerClusterGroup.addLayer(marker);
+            currentMarkersMap.set(id, marker);
+        }
+
+        function updateWeatherMarker(marker, data) {
+            // 1. Perbarui Ikon (jika ada perubahan visual)
+            const warnaSuhu = getColorForSuhu(data.suhu);
+            const newIconHTML = `<div class="weather-label"><span class="weather-dot" style="background-color: ${warnaSuhu};"></span><span class="weather-text">${data.nama}</span></div>`;
+            const newIcon = L.divIcon({ className: 'custom-div-icon', html: newIconHTML, iconAnchor: [8, 8] });
+            marker.setIcon(newIcon);
+
+            // 2. Perbarui Konten Popup
+            const newPopupContent = `<b>${data.nama}</b><br>Suhu: ${data.suhu.toFixed(1)}°C<br>Cuaca: ${data.cuaca}<br>Kelembapan: ${data.kelembapan}%<br>Terasa Seperti: ${data.terasa.toFixed(1)}°C`;
+            marker.setPopupContent(newPopupContent);
+
+            // 3. Jika popup sedang terbuka, perbarui isinya secara real-time
+            if (marker.isPopupOpen()) {
+                marker.getPopup().setContent(newPopupContent);
+            }
+        }
+
+        function createProvinsiMarker(id, data) {
+            const iconHTML = `<div class="weather-label"><span class="weather-text">${data.nama}</span></div>`;
+            const icon = L.divIcon({ className: 'custom-div-icon', html: iconHTML, iconAnchor: [8, 8] });
+            const marker = L.marker([data.lat, data.lon], { icon: icon });
+            marker.options.markerType = 'provinsi';
+            marker.options.wilayahId = id;
+            marker.bindPopup(`<b>Provinsi:</b><br>${data.nama}`);
+            
+            markerClusterGroup.addLayer(marker);
+            currentMarkersMap.set(id, marker);
+        }
+
+        // Untuk provinsi, tidak ada data dinamis (suhu, dll.) yang perlu di-update.
+        // Jadi kita hanya perlu fungsi create dan remove.
+
+        function removeMarker(id) {
+            const marker = currentMarkersMap.get(id);
+            if (marker) {
+                markerClusterGroup.removeLayer(marker);
+                currentMarkersMap.delete(id);
+            }
+        }
+
+
+        // --- Fungsi Utama Pembaruan Peta ---
         function perbaruiPeta() {
             if (isPanningToDetail) return;
             if (weatherController) weatherController.abort();
@@ -141,46 +218,65 @@
             const bounds = map.getBounds();
             const bbox = bounds.toBBoxString();
             const zoom = map.getZoom();
-            markerClusterGroup.clearLayers();
+
+            // HAPUS PEMBERSIHAN TOTAL. JANGAN GUNAKAN clearLayers() LAGI.
+            // markerClusterGroup.clearLayers(); 
+
             if (currentClusterPopup) {
                 currentClusterPopup.remove();
                 currentClusterPopup = null;
             }
+
             if (zoom <= 7.99) {
-                fetch(`http://localhost:5000/api/provinsi-info`, { signal })
+                fetch(`${baseUrl}/api/provinsi-info`, { signal })
                     .then(response => response.json())
                     .then(provinsiData => {
-                        const markers = [];
-                        provinsiData.forEach(provinsi => {
-                            if (bounds.contains([provinsi.lat, provinsi.lon])) {
-                                const iconHTML = `<div class="weather-label"><span class="weather-text">${provinsi.nama}</span></div>`;
-                                const icon = L.divIcon({ className: 'custom-div-icon', html: iconHTML, iconAnchor: [8, 8] });
-                                const marker = L.marker([provinsi.lat, provinsi.lon], { icon: icon });
-                                marker.options.markerType = 'provinsi';
-                                marker.options.wilayahId = provinsi.id;
-                                marker.bindPopup(`<b>Provinsi:</b><br>${provinsi.nama}`);
-                                markers.push(marker);
+                        // Konversi array ke format objek agar konsisten
+                        const dataObj = provinsiData.reduce((obj, item) => {
+                            obj[item.id] = item;
+                            return obj;
+                        }, {});
+
+                        const newIds = new Set(Object.keys(dataObj));
+
+                        // 1. Tambah/Perbarui Marker yang Terlihat
+                        for (const id of newIds) {
+                            if (!currentMarkersMap.has(id)) {
+                                createProvinsiMarker(id, dataObj[id]);
                             }
-                        });
-                        markerClusterGroup.addLayers(markers);
+                        }
+
+                        // 2. Hapus Marker yang Tidak Lagi Terlihat
+                        for (const id of currentMarkersMap.keys()) {
+                            if (!newIds.has(id)) {
+                                removeMarker(id);
+                            }
+                        }
                     }).catch(e => { if (e.name !== 'AbortError') console.error('Gagal ambil data provinsi:', e); });
             } else {
-                fetch(`http://localhost:5000/api/data-cuaca?bbox=${bbox}&zoom=${zoom}`, { signal })
+                fetch(`${baseUrl}/api/data-cuaca?bbox=${bbox}&zoom=${zoom}`, { signal })
                     .then(response => response.json())
                     .then(dataCuaca => {
-                        const markers = [];
-                        for (const wilayah_id in dataCuaca) {
-                            const data = dataCuaca[wilayah_id];
-                            const warnaSuhu = getColorForSuhu(data.suhu);
-                            const iconHTML = `<div class="weather-label"><span class="weather-dot" style="background-color: ${warnaSuhu};"></span><span class="weather-text">${data.nama}</span></div>`;
-                            const icon = L.divIcon({ className: 'custom-div-icon', html: iconHTML, iconAnchor: [8, 8] });
-                            const marker = L.marker([data.lat, data.lon], { icon: icon });
-                            marker.options.markerType = 'weather';
-                            marker.options.wilayahId = wilayah_id;
-                            marker.bindPopup(`<b>${data.nama}</b><br>Suhu: ${data.suhu.toFixed(1)}°C<br>Cuaca: ${data.cuaca}<br>Kelembapan: ${data.kelembapan}%<br>Terasa Seperti: ${data.terasa.toFixed(1)}°C`);
-                            markers.push(marker);
+                        const newIds = new Set(Object.keys(dataCuaca));
+
+                        // 1. Tambah/Perbarui Marker yang Terlihat
+                        for (const id of newIds) {
+                            const wilayahData = dataCuaca[id];
+                            if (currentMarkersMap.has(id)) {
+                                // Marker sudah ada -> UPDATE
+                                updateWeatherMarker(currentMarkersMap.get(id), wilayahData);
+                            } else {
+                                // Marker belum ada -> CREATE
+                                createWeatherMarker(id, wilayahData);
+                            }
                         }
-                        markerClusterGroup.addLayers(markers);
+
+                        // 2. Hapus Marker yang Tidak Lagi Terlihat
+                        for (const id of currentMarkersMap.keys()) {
+                            if (!newIds.has(id)) {
+                                removeMarker(id);
+                            }
+                        }
                     }).catch(e => { if (e.name !== 'AbortError') console.error('Gagal ambil data cuaca:', e); });
             }
         }
@@ -260,7 +356,7 @@
             const loadingPopup = L.popup().setLatLng(clusterLatLng).setContent('Memuat data...').openOn(map);
             clusterRequestController = new AbortController();
 
-            fetch(`http://localhost:5000/api/data-by-ids?ids=${idsToFetch.join(',')}`, { signal: clusterRequestController.signal })
+            fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`, { signal: clusterRequestController.signal })
                 .then(response => response.json())
                 .then(dataDetailCuaca => {
                     loadingPopup.remove();
