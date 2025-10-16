@@ -73,7 +73,8 @@
         minZoom: 5,        // Batas zoom minimum di satu Indonesia
         maxZoom: 14,       // Batas zoom maks di area kecamatan
         maxBounds: bounds, // tetap dibatasi area
-        maxBoundsViscosity: 1.0 // mencegah peta keluar dari batas
+        maxBoundsViscosity: 1.0, // mencegah peta keluar dari batas
+        preferCanvas: true // Gunakan canvas untuk rendering yang lebih baik
       }).setView([-2.5489, 118.0149], 5); // Pusat di Indonesia
 
       // Tambah tile layer tanpa label sebagai dasar peta

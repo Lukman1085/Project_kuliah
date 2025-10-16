@@ -8,10 +8,12 @@ from shapely.geometry import box
 import time
 import random # Untuk simulasi data cuaca
 import pandas as pd
+from flask_compress import Compress
 
 # Inisialisasi Flask
 app = Flask(__name__)
 CORS(app) # Aktifkan CORS untuk semua rute
+Compress(app)  # Aktifkan kompresi respons
 
 # Dapatkan path absolut ke file MBTiles
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,6 +30,16 @@ provinsi_gdf = gpd.read_file(os.path.join(BASE_DIR, "batas_provinsi.geojson")).t
 kabupaten_gdf = gpd.read_file(os.path.join(BASE_DIR, "batas_kabupatenkota.geojson")).to_crs(epsg=4326)
 kecamatan_gdf = gpd.read_file(os.path.join(BASE_DIR, "batas_kecamatandistrik.geojson")).to_crs(epsg=4326)
 print("Data geospasial berhasil dimuat.")
+print("Melakukan pra-kalkulasi data pencarian...")
+# Gabungkan data kabupaten dan kecamatan untuk pencarian ID yang efisien
+# Kita rename kolom ID agar seragam untuk sementara
+kab_renamed = kabupaten_gdf.rename(columns={'KDPKAB': 'id', 'WADMKK': 'nama'})
+kec_renamed = kecamatan_gdf.rename(columns={'KDCPUM': 'id', 'WADMKC': 'nama'})
+all_gdf = pd.concat([
+    kab_renamed[['id', 'nama', 'latitude', 'longitude']],
+    kec_renamed[['id', 'nama', 'latitude', 'longitude']]
+])
+print("Pra-kalkulasi selesai.")
 
 # --- 2. Siapkan Cache Sederhana ---
 WEATHER_CACHE = {}
@@ -147,15 +159,6 @@ def get_data_by_ids():
             return jsonify({"error": "ids parameter is required"}), 400
 
         list_of_ids = ids_str.split(',')
-        
-        # Gabungkan data kabupaten dan kecamatan untuk pencarian ID yang efisien
-        # Kita rename kolom ID agar seragam untuk sementara
-        kab_renamed = kabupaten_gdf.rename(columns={'KDPKAB': 'id', 'WADMKK': 'nama'})
-        kec_renamed = kecamatan_gdf.rename(columns={'KDCPUM': 'id', 'WADMKC': 'nama'})
-        all_gdf = pd.concat([
-            kab_renamed[['id', 'nama', 'latitude', 'longitude']],
-            kec_renamed[['id', 'nama', 'latitude', 'longitude']]
-        ])
         
         # Cari semua baris yang ID-nya ada di dalam daftar yang diminta
         relevant_rows = all_gdf[all_gdf['id'].isin(list_of_ids)]

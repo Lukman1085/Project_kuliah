@@ -13,3 +13,4 @@ shapely
 geopandas
 pandas
 numpy
+Flask-Compress
