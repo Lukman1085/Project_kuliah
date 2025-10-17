@@ -92,7 +92,7 @@ def get_data_cuaca():
 
         # Query spasial menggunakan ST_Intersects
         query = text(f"""
-            SELECT "{id_column}" as id, "{name_column}" as nama, latitude, longitude
+            SELECT "{id_column}" as id, "{name_column}" as nama, latitude as lat, longitude as lon
             FROM {table_name}
             WHERE ST_Intersects(geometry, ST_GeomFromEWKT(:bbox_wkt))
             AND "{id_column}" IS NOT NULL;
@@ -112,8 +112,8 @@ def get_data_cuaca():
                 final_data[wilayah_id] = WEATHER_CACHE[wilayah_id]['data']
                 # Selalu tambahkan info geo dari query, karena cache hanya simpan data cuaca
                 final_data[wilayah_id]['nama'] = info['nama']
-                final_data[wilayah_id]['lat'] = info['latitude']
-                final_data[wilayah_id]['lon'] = info['longitude']
+                final_data[wilayah_id]['lat'] = info['lat']
+                final_data[wilayah_id]['lon'] = info['lon']
             else:
                 ids_to_fetch.append(info)
         
@@ -145,11 +145,11 @@ def get_data_by_ids():
 
         # Query untuk mencari di kedua tabel (kabupaten dan kecamatan)
         query = text(f"""
-            SELECT id, nama, latitude, longitude FROM (
-                SELECT "KDPKAB" as id, "WADMKK" as nama, latitude, longitude FROM batas_kabupatenkota
+            SELECT id, nama, lat, lon FROM (
+                SELECT "KDPKAB" as id, "WADMKK" as nama, latitude as lat, longitude as lon FROM batas_kabupatenkota
                 WHERE "KDPKAB" IN {ids_tuple_str}
                 UNION ALL
-                SELECT "KDCPUM" as id, "WADMKC" as nama, latitude, longitude FROM batas_kecamatandistrik
+                SELECT "KDCPUM" as id, "WADMKC" as nama, latitude as lat, longitude as lon FROM batas_kecamatandistrik
                 WHERE "KDCPUM" IN {ids_tuple_str}
             ) as combined_results;
         """)
@@ -168,8 +168,8 @@ def get_data_by_ids():
                 final_data[wilayah_id] = WEATHER_CACHE[wilayah_id]['data']
                 # Selalu tambahkan info geo dari query
                 final_data[wilayah_id]['nama'] = row['nama']
-                final_data[wilayah_id]['lat'] = row['latitude']
-                final_data[wilayah_id]['lon'] = row['longitude']
+                final_data[wilayah_id]['lat'] = row['lat']
+                final_data[wilayah_id]['lon'] = row['lon']
             else:
                 ids_to_fetch_info.append(row)
 
@@ -197,8 +197,8 @@ def call_external_weather_api(wilayah_infos):
             "suhu": suhu,
             "cuaca": "Cerah" if suhu > 28 else "Berawan",
             "nama": info['nama'],
-            "lat": info['latitude'],
-            "lon": info['longitude'],
+            "lat": info['lat'],
+            "lon": info['lon'],
             "kelembapan": kelembapan,
             "terasa": suhu - (kelembapan / 100) * (suhu - 14.5)  # Perhitungan sederhana
         }
