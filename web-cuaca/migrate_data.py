@@ -37,13 +37,13 @@ def migrate_geojson_to_postgis(filepath, table_name, engine):
         logging.error(f"Gagal memigrasikan {filepath} ke tabel {table_name}: {e}")
         raise
 
-def migrate_csv_to_postgres(filepath, table_name, engine):
+def migrate_csv_to_postgres(filepath, table_name, engine, dtype=None):
     """
     Membaca file CSV dan memigrasikannya ke tabel PostgreSQL.
     """
     try:
         logging.info(f"Membaca file CSV: {filepath}...")
-        df = pd.read_csv(filepath)
+        df = pd.read_csv(filepath, dtype=dtype)
         
         logging.info(f"Memigrasikan data ke tabel '{table_name}'...")
         # Menggunakan to_sql dari Pandas
@@ -80,10 +80,32 @@ def main():
             else:
                 logging.warning(f"File {filepath} tidak ditemukan, dilewati.")
 
+        # Definisi tipe data eksplisit untuk kolom-kolom di CSV yang berpotensi memiliki mixed dtypes
+        # Kolom kode sebaiknya diperlakukan sebagai string (str) untuk menghindari kehilangan angka nol di depan
+        # atau masalah mixed-type yang diidentifikasi oleh Pandas.
+        csv_dtypes = {
+            'OBJECTID': 'int64',
+            'KDBBPS': 'str',
+            'KDCBPS': 'str',
+            'KDCPUM': 'str',
+            'KDEBPS': 'str',     
+            'KDEPUM': 'str',
+            'KDPBPS': 'str',     
+            'KDPKAB': 'str',     
+            'KDPPUM': 'str',
+            'WIADKC': 'str',
+            'WIADKK': 'str',
+            'WIADPR': 'str',
+            'WIADKD': 'str',
+            'UUPP': 'str',
+            'layer': 'str',
+            'label': 'str'
+        }
+
         # Migrasi file CSV
         csv_filepath = os.path.join(os.path.dirname(__file__), "wilayah_administratif_indonesia.csv")
         if os.path.exists(csv_filepath):
-            migrate_csv_to_postgres(csv_filepath, "wilayah_administratif", engine)
+            migrate_csv_to_postgres(csv_filepath, "wilayah_administratif", engine, dtype=csv_dtypes)
         else:
             logging.warning(f"File {csv_filepath} tidak ditemukan, dilewati.")
             

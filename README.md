@@ -27,7 +27,7 @@ Ikuti langkah-langkah ini untuk menyiapkan dan menjalankan aplikasi di lingkunga
 ### 1. Kloning Repositori
 
 ```bash
-git clone <URL_REPOSITORI_ANDA>
+git clone https://github.com/Lukman1085/Project_kuliah.git
 cd Project_kuliah/web-cuaca
 ```
 
@@ -48,7 +48,7 @@ source venv/bin/activate
 
 ### 3. Siapkan File Konfigurasi
 
-Proyek ini menggunakan file `.env` untuk mengelola variabel lingkungan seperti kredensial database. Salin file contoh jika ada, atau buat file baru bernama `.env` di dalam direktori `web-cuaca` dengan isi sebagai berikut:
+Proyek ini menggunakan file `.env` untuk mengelola variabel lingkungan seperti kredensial database. Salin file `.env.example` lalu hilangkan `.example` dibelakangnya, atau buat file baru bernama `.env` di dalam direktori `web-cuaca` dengan isi sebagai berikut:
 
 ```env
 POSTGRES_USER=user
@@ -56,6 +56,9 @@ POSTGRES_PASSWORD=password
 POSTGRES_DB=weather_db
 DATABASE_URL="postgresql://user:password@localhost:5432/weather_db"
 ```
+
+Ganti nilai untuk meningkatkan keamanan.
+
 **Penting**: Jangan pernah memasukkan file `.env` ini ke dalam sistem kontrol versi (Git). File `.gitignore` sudah seharusnya dikonfigurasi untuk mengabaikannya.
 
 ### 4. Jalankan Database
@@ -66,6 +69,8 @@ Aplikasi ini memerlukan database PostGIS yang berjalan. Gunakan Docker Compose u
 docker-compose up -d
 ```
 Perintah ini akan mengunduh image PostGIS (jika belum ada) dan menjalankan kontainer database di latar belakang. Data akan disimpan dalam volume Docker bernama `postgis_data` sehingga tidak akan hilang saat kontainer dimatikan.
+
+*PENTING:* Tunggu sekitar 15-30 detik agar database siap.
 
 ### 5. Instal Dependensi Python
 
@@ -84,15 +89,41 @@ python migrate_data.py
 ```
 Skrip ini akan membuat tabel-tabel yang diperlukan (`batas_provinsi`, `batas_kabupatenkota`, `batas_kecamatandistrik`, `wilayah_administratif`) dan mengisinya dengan data. Proses ini hanya perlu dilakukan sekali saat penyiapan awal.
 
+**Penting**: Jika terjadi masalah pada langkah 4 atau 6, jalankan perintah berikut di root (web-cuaca).
+```bash
+docker-compose down -v
+``` 
+Ini akan mematikan kontainer dan menghapus volume yang berkaitan.
+
+Kemudian ulangi langkah 4 dan 6.
+
 ### 7. Jalankan Aplikasi Web
 
 Terakhir, jalankan server aplikasi Flask.
+
+*PASTIKAN BAHWA KONTAINER DOCKER BERJALAN DI BELAKANG LAYAR!*
 
 ```bash
 python app.py
 ```
 
 Server akan berjalan, dan Anda dapat mengakses aplikasi di browser Anda. Biasanya, aplikasi akan tersedia di `https://localhost:5000` (jika sertifikat SSL ditemukan) atau `http://localhost:5000`.
+
+### 8. Tindakan Pos-Migrasi
+
+Jika ingin mematikan server PostgreSQL, jalankan:
+```bash
+docker-compose down
+```
+
+Jika ingin menyalakannya lagi, jalankan:
+```bash
+docker-compose up
+```
+
+Sewaktu-waktu file GeoJSON dan CSV akan diedit, jalankan `python migrate_data.py` untuk mengimpor data baru ke database. Ini akan menimpa tabel yang ada di dalam database dengan yang baru.
+
+Pastikan container docker sedang berjalan sebelum melakukan update.
 
 ## Struktur Proyek
 
@@ -118,3 +149,10 @@ web-cuaca/
 ├── *.csv                   # Data administratif sumber (sebelum migrasi)
 └── *.mbtiles               # Data vector tiles untuk peta dasar
 ```
+
+#### Lainnya
+Proyek ini dibuat untuk memenuhi penugasan mata kuliah.
+Anggota:
+- Dzaky
+- Lukman
+- Salman
