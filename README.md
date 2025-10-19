@@ -150,8 +150,8 @@ web-cuaca/
 └── *.mbtiles               # Data vector tiles untuk peta dasar
 ```
 
-#### Lainnya
-Proyek ini dibuat untuk memenuhi penugasan mata kuliah.
+## Lainnya
+### Proyek ini dibuat untuk memenuhi penugasan mata kuliah.
 Anggota:
 - Dzaky
 - Lukman
