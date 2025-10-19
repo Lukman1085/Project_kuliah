@@ -1,405 +1,434 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Peta Cuaca dan Gempa Interaktif</title>
-
-  <!-- Leaflet CSS dan JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-
-  <!-- Untuk marker clustering -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
-  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-
-  <!-- Untuk style peta -->
-  <script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
-  <!-- Untuk vector tile -->
-  <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
-
-  <link rel="stylesheet" href="static/styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peta Cuaca Interaktif</title>
+    
+    <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
+    <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
+    
+    <link rel="stylesheet" href="static/styles.css">
+    <style>
+        /* Tambahkan style sederhana untuk popup daftar klaster */
+        .cluster-popup-content { max-height: 240px; overflow-y: auto; font-family: sans-serif; font-size: 13px; }
+        .cluster-item { padding: 4px; cursor: pointer; }
+        .cluster-item:hover { background-color: #f0f0f0; }
+        .maplibregl-popup-content { font-family: sans-serif; font-size: 14px; }
+    </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="koordinat-info"></div>
-  <!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Peta Cuaca dan Gempa Interaktif</title>
+    <div id="map"></div>
+    <div id="koordinat-info"></div>
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        const protocol = window.location.protocol;
+        const hostname = window.location.hostname;
+        const port = '5000';
+        const baseUrl = `${protocol}//${hostname}:${port}`;
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
-  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-
-  <script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
-  <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
-
-  <link rel="stylesheet" href="static/styles.css">
-</head>
-<body>
-  <div id="map"></div>
-  <div id="koordinat-info"></div>
-  <script>
-    // --- URL API Dinamis & Portabel ---
-
-    // 1. Dapatkan protokol (http: atau https:) secara otomatis
-    const protocol = window.location.protocol;
-
-    // 2. Dapatkan hostname (localhost atau 192.x.x.x) secara otomatis
-    const hostname = window.location.hostname; 
-
-    // 3. Tentukan port server Anda
-    const port = '5000';
-
-    // 4. Gabungkan semuanya. Ini akan menghasilkan http://... atau https://...
-    // tergantung bagaimana halaman diakses.
-    const baseUrl = `${protocol}//${hostname}:${port}`;
-
-    document.addEventListener('DOMContentLoaded', function() {
-      // Definisikan batas koordinat untuk Indonesia saja
-      var southWest = L.latLng(-11.3, 94.7);
-      var northEast = L.latLng(6.3, 141.3);
-      var bounds = L.latLngBounds(southWest, northEast);
-
-      // Inisialisasi peta, berpusat di Indonesia, dan batasi hanya Indonesia
-      var map = L.map('map', {
-        minZoom: 5,        // Batas zoom minimum di satu Indonesia
-        maxZoom: 14,       // Batas zoom maks di area kecamatan
-        maxBounds: bounds, // tetap dibatasi area
-        maxBoundsViscosity: 1.0 // mencegah peta keluar dari batas
-      }).setView([-2.5489, 118.0149], 5); // Pusat di Indonesia
-
-      // Tambah tile layer tanpa label sebagai dasar peta
-      L.tileLayer.provider('CartoDB.PositronNoLabels', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-      }).addTo(map);
-
-      // Definisikan URL ke Vector Tile Server Lokal
-      var vectorTileUrl = `${baseUrl}/tiles/{z}/{x}/{y}.pbf`;
-
-      // Definisikan gaya (styling) untuk setiap layer administratif
-      var vectorTileOptions = {
-        vectorTileLayerStyles: {
-          'batas_provinsi': function(properties, zoom) {
-            if (zoom >=5 && zoom <= 7.99) { return { fill: true, fillColor: '#ff7800', fillOpacity: 0, stroke: true, color: '#8B4513', weight: 1.5, }; }
-            else { return { stroke: false, fill: false }; }
-          },
-          'batas_kabupatenkota': function(properties, zoom) {
-            if (zoom >= 8 && zoom <= 10.99) { return { fill: true, fillColor: '#3388ff', fillOpacity: 0, stroke: true, color: '#003366', weight: 1, }; }
-            else { return { stroke: false, fill: false }; }
-          },
-          'batas_kecamatandistrik': function(properties, zoom) {
-            if (zoom >= 11 && zoom <= 14) { return { fill: true, fillColor: '#44B500', fillOpacity: 0, stroke: true, color: '#276600', weight: 0.8, }; }
-            else { return { stroke: false, fill: false }; }
-          }
-        },
-        interactive: true // Mengizinkan interaksi seperti klik
-      };
-
-      // Buat layer VectorGrid dan tambahkan ke peta
-      var vectorGridLayer = L.vectorGrid.protobuf(vectorTileUrl, vectorTileOptions)
-        .on('click', function(e) {
-          // ... (logika popup poligon Anda tetap sama) ...
-          L.DomEvent.stop(e);
-          var properties = e.layer.properties;
-          console.log("Properti wilayah yang diklik:", properties);
-          let tingkatWilayah = 'Tidak tersedia';
-          let namaWilayah = 'Data tidak tersedia';
-          if (properties && properties.TIPADM) {
-            switch (Number(properties.TIPADM)) {
-              case 3: tingkatWilayah = 'Kecamatan/Distrik'; namaWilayah = properties.WADMKC || 'Kecamatan tidak bernama'; break;
-              case 2: tingkatWilayah = 'Kabupaten/Kota'; namaWilayah = properties.WADMKK || 'Kab/Kota tidak bernama'; break;
-              case 1: tingkatWilayah = 'Provinsi'; namaWilayah = properties.WADMPR || 'Provinsi tidak bernama'; break;
-              default: tingkatWilayah = 'Tipe administrasi tidak dikenali'; namaWilayah = 'Nama wilayah tidak dikenali';
-            }
-          }
-          L.popup().setLatLng(e.latlng).setContent('<b>' + tingkatWilayah + ': </b>'
-                                                  + namaWilayah 
-                                                  + '<br><b>Suhu:</b> Placeholder°C' 
-                                                  + '<br><b>Cuaca:</b> Placeholder' 
-                                                  + '<br><b>Kelembapan:</b> Placeholder%'
-                                                  + '<br><b>Terasa Seperti:</b> Placeholder°C'
-                                                ).openOn(map);
-          })
-          .addTo(map);
-
-        // Tambah layer label (hanya teks) di atas semua layer lain
-        L.tileLayer.provider('CartoDB.PositronOnlyLabels', { maxZoom: 19, pane: 'overlayPane' }).addTo(map);
-
-        // ================== LOGIKA PANGGILAN API & KLASTERISASI BARU ==================
-
-        // --- Inisialisasi ---
-        const markerClusterGroup = L.markerClusterGroup({ spiderfyOnMaxZoom: false, showCoverageOnHover: false, zoomToBoundsOnClick: false }).addTo(map);
-        let weatherController;
-        let clusterRequestController;
-        let currentClusterPopup = null;
-        let isPanningToDetail = false;
-        let currentMarkersMap = new Map(); // "Otak" yang melacak semua marker di peta
-
-        // --- Fungsi Helper ---
-        const debounce = (func, delay) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), delay); }; };
-        const getColorForSuhu = (suhu) => { if (suhu > 30) return '#d43f3a'; if (suhu > 28) return '#f57f20'; return '#fde725'; };
-
-        // --- Alur Kerja 1: Pembaruan Peta Umum ---
-
-        // ================== LOGIKA PEMBARUAN PETA OPTIMIS ==================
-
-        // --- Helper Functions untuk mengelola marker ---
-        function createWeatherMarker(id, data) {
-            const warnaSuhu = getColorForSuhu(data.suhu);
-            const iconHTML = `<div class="weather-label"><span class="weather-dot" style="background-color: ${warnaSuhu};"></span><span class="weather-text">${data.nama}</span></div>`;
-            const icon = L.divIcon({ className: 'custom-div-icon', html: iconHTML, iconAnchor: [8, 8] });
-            const marker = L.marker([data.lat, data.lon], { icon: icon });
-            marker.options.markerType = 'weather';
-            marker.options.wilayahId = id;
-            
-            const popupContent = `<b>${data.nama}</b><br>Suhu: ${data.suhu.toFixed(1)}°C<br>Cuaca: ${data.cuaca}<br>Kelembapan: ${data.kelembapan}%<br>Terasa Seperti: ${data.terasa.toFixed(1)}°C`;
-            marker.bindPopup(popupContent);
-            
-            markerClusterGroup.addLayer(marker);
-            currentMarkersMap.set(id, marker);
-        }
-
-        function updateWeatherMarker(marker, data) {
-            // 1. Perbarui Ikon (jika ada perubahan visual)
-            const warnaSuhu = getColorForSuhu(data.suhu);
-            const newIconHTML = `<div class="weather-label"><span class="weather-dot" style="background-color: ${warnaSuhu};"></span><span class="weather-text">${data.nama}</span></div>`;
-            const newIcon = L.divIcon({ className: 'custom-div-icon', html: newIconHTML, iconAnchor: [8, 8] });
-            marker.setIcon(newIcon);
-
-            // 2. Perbarui Konten Popup
-            const newPopupContent = `<b>${data.nama}</b><br>Suhu: ${data.suhu.toFixed(1)}°C<br>Cuaca: ${data.cuaca}<br>Kelembapan: ${data.kelembapan}%<br>Terasa Seperti: ${data.terasa.toFixed(1)}°C`;
-            marker.setPopupContent(newPopupContent);
-
-            // 3. Jika popup sedang terbuka, perbarui isinya secara real-time
-            if (marker.isPopupOpen()) {
-                marker.getPopup().setContent(newPopupContent);
-            }
-        }
-
-        function createProvinsiMarker(id, data) {
-            const iconHTML = `<div class="weather-label"><span class="weather-text">${data.nama}</span></div>`;
-            const icon = L.divIcon({ className: 'custom-div-icon', html: iconHTML, iconAnchor: [8, 8] });
-            const marker = L.marker([data.lat, data.lon], { icon: icon });
-            marker.options.markerType = 'provinsi';
-            marker.options.wilayahId = id;
-            marker.bindPopup(`<b>Provinsi:</b><br>${data.nama}`);
-            
-            markerClusterGroup.addLayer(marker);
-            currentMarkersMap.set(id, marker);
-        }
-
-        // Untuk provinsi, tidak ada data dinamis (suhu, dll.) yang perlu di-update.
-        // Jadi kita hanya perlu fungsi create dan remove.
-
-        function removeMarker(id) {
-            const marker = currentMarkersMap.get(id);
-            if (marker) {
-                markerClusterGroup.removeLayer(marker);
-                currentMarkersMap.delete(id);
-            }
-        }
-
-
-        // --- Fungsi Utama Pembaruan Peta ---
-        function perbaruiPeta() {
-            if (isPanningToDetail) return;
-            if (weatherController) weatherController.abort();
-            weatherController = new AbortController();
-            const signal = weatherController.signal;
-            const bounds = map.getBounds();
-            const bbox = bounds.toBBoxString();
-            const zoom = map.getZoom();
-
-            // HAPUS PEMBERSIHAN TOTAL. JANGAN GUNAKAN clearLayers() LAGI.
-            // markerClusterGroup.clearLayers(); 
-
-            if (currentClusterPopup) {
-                currentClusterPopup.remove();
-                currentClusterPopup = null;
-            }
-
-            if (zoom <= 7.99) {
-                fetch(`${baseUrl}/api/provinsi-info`, { signal })
-                    .then(response => response.json())
-                    .then(provinsiData => {
-                        // Konversi array ke format objek agar konsisten
-                        const dataObj = provinsiData.reduce((obj, item) => {
-                            obj[item.id] = item;
-                            return obj;
-                        }, {});
-
-                        const newIds = new Set(Object.keys(dataObj));
-
-                        // 1. Tambah/Perbarui Marker yang Terlihat
-                        for (const id of newIds) {
-                            if (!currentMarkersMap.has(id)) {
-                                createProvinsiMarker(id, dataObj[id]);
-                            }
+        document.addEventListener('DOMContentLoaded', function() {
+            const map = new maplibregl.Map({
+                container: 'map',
+                style: {
+                    version: 8,
+                    glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+                    sources: {
+                        'cartodb-positron-nolabels': {
+                            type: 'raster',
+                            tiles: ['https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png'],
+                            tileSize: 256,
+                            attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+                        },
+                        'batas-wilayah-vector': {
+                            type: 'vector',
+                            tiles: [`${baseUrl}/tiles/{z}/{x}/{y}.pbf`],
+                            minzoom: 5,
+                            maxzoom: 14
+                        },
+                        'data-cuaca-source': {
+                            type: 'geojson',
+                            data: { type: 'FeatureCollection', features: [] },
+                            cluster: true,
+                            clusterMaxZoom: 13,
+                            clusterRadius: 80
+                        },
+                        'provinsi-source': {
+                            type: 'geojson',
+                            data: { type: 'FeatureCollection', features: [] }
                         }
+                    },
+                    layers: [
+                        { id: 'cartodb-positron-layer', type: 'raster', source: 'cartodb-positron-nolabels' },
+                        { id: 'batas-provinsi-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_provinsi', minzoom: 5, maxzoom: 7.99, paint: { 'line-color': '#8B4513', 'line-width': 1.5 }},
+                        { id: 'batas-kabupaten-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_kabupatenkota', minzoom: 8, maxzoom: 10.99, paint: { 'line-color': '#003366', 'line-width': 1 }},
+                        { id: 'batas-kecamatan-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_kecamatandistrik', minzoom: 11, maxzoom: 14, paint: { 'line-color': '#276600', 'line-width': 0.8 }},
 
-                        // 2. Hapus Marker yang Tidak Lagi Terlihat
-                        for (const id of currentMarkersMap.keys()) {
-                            if (!newIds.has(id)) {
-                                removeMarker(id);
-                            }
-                        }
-                    }).catch(e => { if (e.name !== 'AbortError') console.error('Gagal ambil data provinsi:', e); });
-            } else {
-                fetch(`${baseUrl}/api/data-cuaca?bbox=${bbox}&zoom=${zoom}`, { signal })
-                    .then(response => response.json())
-                    .then(dataCuaca => {
-                        const newIds = new Set(Object.keys(dataCuaca));
+                        { id: 'provinsi-point-circle', type: 'circle', source: 'provinsi-source',
+                          paint: { 'circle-radius': 8, 'circle-color': 'rgba(255, 255, 255, 0.5)', 'circle-stroke-color': '#000000', 'circle-stroke-width': 1.5 }},
+                        { id: 'provinsi-point-label', type: 'symbol', source: 'provinsi-source',
+                          layout: { 'text-field': ['get', 'nama'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-anchor': 'left', 'text-offset': [1, 0] },
+                          paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1.5, 'text-halo-blur': 1 }},
 
-                        // 1. Tambah/Perbarui Marker yang Terlihat
-                        for (const id of newIds) {
-                            const wilayahData = dataCuaca[id];
-                            if (currentMarkersMap.has(id)) {
-                                // Marker sudah ada -> UPDATE
-                                updateWeatherMarker(currentMarkersMap.get(id), wilayahData);
-                            } else {
-                                // Marker belum ada -> CREATE
-                                createWeatherMarker(id, wilayahData);
-                            }
-                        }
+                        { id: 'cluster-background-layer', type: 'circle', source: 'data-cuaca-source', filter: ['has', 'point_count'],
+                          paint: { 'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 30, 25],
+                                   'circle-color': ['step', ['get', 'point_count'], '#51bbd6', 10, '#f1f075', 30, '#f28cb1'],
+                                   'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' }},
+                        { id: 'cluster-count-layer', type: 'symbol', source: 'data-cuaca-source', filter: ['has', 'point_count'],
+                          layout: { 'text-field': '{point_count_abbreviated}', 'text-font': ['Noto Sans Regular'], 'text-size': 12 }},
 
-                        // 2. Hapus Marker yang Tidak Lagi Terlihat
-                        for (const id of currentMarkersMap.keys()) {
-                            if (!newIds.has(id)) {
-                                removeMarker(id);
-                            }
-                        }
-                    }).catch(e => { if (e.name !== 'AbortError') console.error('Gagal ambil data cuaca:', e); });
-            }
-        }
-        const perbaruiPetaDebounced = debounce(perbaruiPeta, 500);
-        map.on('moveend', perbaruiPetaDebounced);
-        perbaruiPetaDebounced();
-
-        // --- Alur Kerja 2: Inspeksi Klaster (Klik Instan) ---
-        markerClusterGroup.on('clusterclick', function (e) {
-        console.log('[DEBUG] Event clusterclick terpicu!'); // LOG 1
-
-        if (isPanningToDetail) return;
-        e.originalEvent.preventDefault();
-        e.originalEvent.stopPropagation();
-
-        if (currentClusterPopup) currentClusterPopup.remove();
-        if (clusterRequestController) clusterRequestController.abort();
-
-        const childMarkers = e.layer.getAllChildMarkers();
-        const clusterLatLng = e.layer.getLatLng();
-        const clusterBox = document.createElement('div');
-        clusterBox.className = 'cluster-box';
-
-        const handleItemClick = (marker) => {
-            // 1. Ekstrak semua informasi yang kita butuhkan dari marker LAMA.
-            const targetLatLng = marker.getLatLng();
-            const popupContent = marker.getPopup().getContent(); // Ambil konten HTML-nya
-
-            if (currentClusterPopup) {
-                currentClusterPopup.remove();
-                currentClusterPopup = null;
-            }
-
-            // Matikan listener umum untuk mencegah pembaruan peta otomatis.
-            map.off('moveend', perbaruiPetaDebounced);
-
-            map.once('moveend', function () {
-                // 2. JANGAN gunakan marker.openPopup().
-                // Sebagai gantinya, buat popup BARU yang independen.
-                L.popup({
-                    maxWidth: 400,
-                    closeButton: true
-                })
-                .setLatLng(targetLatLng) // Di lokasi yang kita inginkan
-                .setContent(popupContent) // Dengan konten yang kita simpan tadi
-                .openOn(map); // Buka langsung di peta
-
-                // Aktifkan kembali listener umum setelah semuanya selesai.
-                setTimeout(() => {
-                    map.on('moveend', perbaruiPetaDebounced);
-                }, 100);
+                        { id: 'unclustered-point-layer', type: 'circle', source: 'data-cuaca-source', filter: ['!', ['has', 'point_count']],
+                          paint: {
+                              // Jika suhu belum ada, tampilkan abu-abu. Jika ada, gunakan palet suhu.
+                              'circle-color': [
+                                  'case',
+                                  ['has', 'suhu'],
+                                  ['step', ['get', 'suhu'],
+                                      '#fde725', 28, '#f57f20', 30, '#d43f3a'
+                                  ],
+                                  '#9e9e9e'
+                              ],
+                              'circle-radius': 6,
+                              'circle-stroke-width': 1,
+                              'circle-stroke-color': '#fff'
+                          }},
+                        { id: 'unclustered-point-label', type: 'symbol', source: 'data-cuaca-source', filter: ['!', ['has', 'point_count']],
+                          layout: { 'text-field': ['get', 'nama'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-anchor': 'top', 'text-offset': [0, 0.8] },
+                          paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1 }}
+                    ]
+                },
+                center: [118.0149, -2.5489], zoom: 4.5, minZoom: 5, maxZoom: 14,
+                maxBounds: [[94.7, -11.3], [141.3, 6.3]]
             });
 
-            // 3. Mulai proses panning seperti biasa.
-            map.panTo(targetLatLng);
-        };
-        
-        const markerType = childMarkers[0].options.markerType;
+            map.on('load', () => {
+                map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
+                map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels' });
 
-        if (markerType === 'provinsi') {
-            childMarkers.forEach(marker => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'cluster-item interactive-item';
-                const namaProvinsi = marker.getPopup().getContent().split('<br>')[1];
-                itemDiv.innerHTML = `<div class="weather-label"><span class="weather-text">${namaProvinsi}</span></div>`;
-                itemDiv.addEventListener('click', () => handleItemClick(marker));
-                clusterBox.appendChild(itemDiv);
-            });
+                map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 
-            currentClusterPopup = L.popup({ maxWidth: 400, closeButton: true })
-                .setLatLng(clusterLatLng)
-                .setContent(clusterBox)
-                .openOn(map);
+                const debounce = (func, delay) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), delay); }; };
 
-        } else if (markerType === 'weather') {
-            const idsToFetch = childMarkers.map(marker => marker.options.wilayahId);
-            const loadingPopup = L.popup().setLatLng(clusterLatLng).setContent('Memuat data...').openOn(map);
-            clusterRequestController = new AbortController();
+                // ====== State & helper untuk kontrol data ======
+                const cuacaSource = () => map.getSource('data-cuaca-source');
+                const provinsiSource = () => map.getSource('provinsi-source');
 
-            fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`, { signal: clusterRequestController.signal })
-                .then(response => response.json())
-                .then(dataDetailCuaca => {
-                    loadingPopup.remove();
-                    
-                    for (const id in dataDetailCuaca) {
-                        const data = dataDetailCuaca[id];
-                        const originalMarker = childMarkers.find(m => m.options.wilayahId == id);
-                        if (!originalMarker) continue;
+                // Cache cuaca di sisi klien: id -> {suhu, cuaca, kelembapan, terasa}
+                const clientWeatherCache = new Map();
+                // FeatureCollection aktif saat ini
+                let currentFeatureCollection = { type: 'FeatureCollection', features: [] };
+                // Untuk hindari request ganda yang sama
+                const inflightIds = new Set();
 
-                        const itemDiv = document.createElement('div');
-                        itemDiv.className = 'cluster-item interactive-item';
-                        const warnaSuhu = getColorForSuhu(data.suhu);
-                        itemDiv.innerHTML = `<div class="weather-label"><span class="weather-dot" style="background-color: ${warnaSuhu};"></span><span class="weather-text">${data.nama}</span></div>`;
-                        itemDiv.addEventListener('click', () => handleItemClick(originalMarker));
-                        clusterBox.appendChild(itemDiv);
+                function setSourceDataFromState() {
+                    const src = cuacaSource();
+                    if (src) src.setData(currentFeatureCollection);
+                }
+
+                function buildFeaturesFromGeoOnly(geoList) {
+                    // geoList adalah array dari backend only_geo: [{id, nama, lat, lon}, ...]
+                    const features = geoList.map(g => {
+                        const cached = clientWeatherCache.get(g.id);
+                        const baseProps = { id: g.id, tipe: 'cuaca', nama: g.nama || 'N/A' };
+                        const weatherProps = cached ? {
+                            suhu: parseFloat((cached.suhu || 0).toFixed(1)),
+                            cuaca: cached.cuaca || 'N/A',
+                            kelembapan: cached.kelembapan || 0,
+                            terasa: parseFloat((cached.terasa || 0).toFixed(1))
+                        } : {};
+                        return {
+                            type: 'Feature',
+                            id: g.id, // penting untuk cluster leaves id
+                            geometry: { type: 'Point', coordinates: [g.lon, g.lat] },
+                            properties: { ...baseProps, ...weatherProps }
+                        };
+                    });
+                    return features;
+                }
+
+                function mergeWeatherIntoState(dataMap) {
+                    // dataMap berbentuk { id: {id, nama, lat, lon, suhu, cuaca, kelembapan, terasa}, ... }
+                    const byId = new Map(currentFeatureCollection.features.map(f => [f.id, f]));
+                    for (const id in dataMap) {
+                        const d = dataMap[id];
+                        // simpan di cache klien
+                        clientWeatherCache.set(id, {
+                            suhu: d.suhu, cuaca: d.cuaca, kelembapan: d.kelembapan, terasa: d.terasa
+                        });
+                        // update feature jika ada di koleksi saat ini
+                        if (byId.has(id)) {
+                            const feat = byId.get(id);
+                            feat.properties.suhu = parseFloat((d.suhu || 0).toFixed(1));
+                            feat.properties.cuaca = d.cuaca || 'N/A';
+                            feat.properties.kelembapan = d.kelembapan || 0;
+                            feat.properties.terasa = parseFloat((d.terasa || 0).toFixed(1));
+                        }
+                    }
+                    setSourceDataFromState();
+                }
+
+                function getUnclusteredIdsNeedingWeather() {
+                    const rendered = map.queryRenderedFeatures({ layers: ['unclustered-point-layer'] }) || [];
+                    const ids = [];
+                    for (const f of rendered) {
+                        // console.log('Processing feature: ', f); // Logging fitur yang diproses
+                        const fid = /*f.id ??*/ f.properties?.id;  // Pastikan memperoleh ID dari property yang tepat
+                        if (!fid) continue; // Lanjut jika ID tidak ada
+                        // console.log('ID Retrieved: ', fid); // Logging ID yang diekstraksi
+
+                        const hasSuhu = typeof f.properties?.suhu !== 'undefined';
+                        if (!hasSuhu && !inflightIds.has(fid)) {
+                            ids.push(fid); // Tambahkan hanya jika suhu belum ada
+                        }
+                    }
+                    return Array.from(new Set(ids)); // Hapus duplikat dengan Set
+                }
+
+
+                async function fetchWeatherForIds(ids) {
+                    if (!ids || ids.length === 0) return;
+                    ids.forEach(id => inflightIds.add(id));
+                    // console.log('Fetched IDs:', ids); // Debugging di sisi frontend
+
+                    try {
+                        const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${ids.join(',')}`);
+                        if (!resp.ok) throw new Error('Respons jaringan tidak baik');
+                        const data = await resp.json();
+                        mergeWeatherIntoState(data);
+                    } catch (e) {
+                        console.error('Gagal mengambil data cuaca untuk IDs:', ids, e);
+                    } finally {
+                        ids.forEach(id => inflightIds.delete(id));
+                    }
+                }
+
+
+                function scheduleFetchForUnclustered() {
+                    // Jalankan setelah rendering idle agar status cluster sudah final
+                    map.once('idle', () => {
+                        const ids = getUnclusteredIdsNeedingWeather();
+                        if (ids.length) {
+                            // Bisa di-batch jika diperlukan, di sini langsung sekali panggil
+                            fetchWeatherForIds(ids);
+                        }
+                    });
+                }
+
+                let dataController;
+                async function perbaruiPeta() {
+                    if (dataController) dataController.abort();
+                    dataController = new AbortController();
+                    const signal = dataController.signal;
+                    const zoom = map.getZoom();
+
+                    if (zoom <= 7.99) {
+                        // Tampilkan provinsi, kosongkan marker cuaca
+                        cuacaSource().setData({ type: 'FeatureCollection', features: [] });
+                        fetch(`${baseUrl}/api/provinsi-info`, { signal })
+                            .then(response => response.json())
+                            .then(provinsiData => {
+                                const features = provinsiData.map(p => ({
+                                    type: 'Feature',
+                                    geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
+                                    properties: { id: p.id, nama: p.nama }
+                                }));
+                                provinsiSource().setData({ type: 'FeatureCollection', features: features });
+                            })
+                            .catch(e => { if (e.name !== 'AbortError') console.error('Gagal ambil data provinsi:', e); });
+                    } else {
+                        // Kosongkan provinsi, tampilkan marker (geo only), cuaca hanya untuk unclustered
+                        provinsiSource().setData({ type: 'FeatureCollection', features: [] });
+
+                        const bounds = map.getBounds();
+                        const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+
+                        // Ambil data GEO SAJA (tanpa cuaca)
+                        try {
+                            const resp = await fetch(`${baseUrl}/api/data-cuaca?bbox=${bbox}&zoom=${zoom}&only_geo=1`, { signal });
+                            const geoOnly = await resp.json();
+                            if (!geoOnly || geoOnly.error) {
+                                console.error("API Error (geo only):", geoOnly);
+                                return;
+                            }
+                            // Bangun features, sisipkan cuaca dari cache klien bila sudah ada
+                            currentFeatureCollection = { type: 'FeatureCollection', features: buildFeaturesFromGeoOnly(geoOnly) };
+                            setSourceDataFromState();
+
+                            // Setelah data terpasang dan cluster selesai dihitung, ambil cuaca untuk yang unclustered saja
+                            scheduleFetchForUnclustered();
+                        } catch (e) {
+                            if (e.name !== 'AbortError') console.error('Gagal ambil geo only data:', e);
+                        }
+                    }
+                }
+
+                const perbaruiPetaDebounced = debounce(perbaruiPeta, 700);
+                map.on('moveend', perbaruiPetaDebounced);
+                perbaruiPeta();
+
+                // Popup handling
+                let currentPopup = null;
+                const closeCurrentPopup = () => { if (currentPopup) { currentPopup.remove(); currentPopup = null; } };
+
+                const allInteractiveLayers = [
+                    'cluster-background-layer', 'cluster-count-layer',
+                    'unclustered-point-layer', 'provinsi-point-circle'
+                ];
+
+                map.on('click', (e) => {
+                    const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
+                    if (!features.length) {
+                        closeCurrentPopup();
+                        return;
                     }
 
-                    currentClusterPopup = L.popup({ maxWidth: 400, closeButton: true })
-                        .setLatLng(clusterLatLng)
-                        .setContent(clusterBox)
-                        .openOn(map);
-                })
-                .catch(error => {
-                    if (error.name !== 'AbortError') {
-                        loadingPopup.setContent('Gagal memuat data.');
+                    closeCurrentPopup();
+                    const feature = features[0];
+                    const layerId = feature.layer.id;
+                    const props = feature.properties;
+
+                    // Klik klaster: ambil daun (leaves) dan panggil API by IDs saat itu juga
+                    if (layerId === 'cluster-background-layer' || layerId === 'cluster-count-layer') {
+                        const clusterId = props.cluster_id;
+                        const source = cuacaSource();
+
+                        source.getClusterLeaves(clusterId, Infinity, 0, (err, leaves) => {
+                            if (err) {
+                                console.error("Gagal mendapatkan leaves dari klaster:", err);
+                                return;
+                            }
+
+                            // Popup "Memuat data..."
+                            const loadingPopupHTML = 'Memuat data...';
+                            closeCurrentPopup();
+                            currentPopup = new maplibregl.Popup({ maxWidth: '260px' })
+                                .setLngLat(feature.geometry.coordinates)
+                                .setHTML(loadingPopupHTML)
+                                .addTo(map);
+
+                            // Ambil semua ID dari marker di dalam klaster
+                            const idsToFetch = leaves.map(leaf => /*leaf.id ??*/ leaf.properties?.id).filter(Boolean);
+
+                            fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`)
+                                .then(response => {
+                                    if (!response.ok) throw new Error('Respons jaringan tidak baik');
+                                    return response.json();
+                                })
+                                .then(dataDetailCuaca => {
+                                    // Update cache klien + update feature pada peta
+                                    mergeWeatherIntoState(dataDetailCuaca);
+
+                                    // Bangun konten final popup
+                                    const popupContent = document.createElement('div');
+                                    popupContent.className = 'cluster-popup-content';
+                                    popupContent.innerHTML = `<b>${leaves.length} Lokasi:</b><hr style="margin: 4px 0;">`;
+
+                                    // Gunakan data terbaru
+                                    for (const id in dataDetailCuaca) {
+                                        const data = dataDetailCuaca[id];
+                                        const item = document.createElement('div');
+                                        item.className = 'cluster-item';
+                                        item.innerText = data.nama || 'Nama Tidak Tersedia';
+
+                                        item.onclick = () => {
+                                            closeCurrentPopup();
+                                            const detailPopupHTML = `
+                                                <div>
+                                                    <b>${data.nama}</b><br>
+                                                    Suhu: ${data.suhu.toFixed(1)}°C<br>
+                                                    Cuaca: ${data.cuaca}<br>
+                                                    Kelembapan: ${data.kelembapan}%<br>
+                                                    Terasa Seperti: ${data.terasa.toFixed(1)}°C<br>
+                                                    <button id="center-map-btn" style="margin-top: 8px; cursor: pointer;">Pusatkan Peta</button>
+                                                </div>
+                                            `;
+                                            currentPopup = new maplibregl.Popup()
+                                                .setLngLat([data.lon, data.lat])
+                                                .setHTML(detailPopupHTML)
+                                                .addTo(map);
+
+                                            document.getElementById('center-map-btn').addEventListener('click', () => {
+                                                map.easeTo({ center: [data.lon, data.lat], zoom: 12 });
+                                            });
+                                        };
+                                        popupContent.appendChild(item);
+                                    }
+
+                                    if (currentPopup) currentPopup.setDOMContent(popupContent);
+                                })
+                                .catch(error => {
+                                    console.error('Gagal mengambil data detail klaster:', error);
+                                    if (currentPopup) currentPopup.setHTML('Gagal memuat data.');
+                                });
+                        });
+                        return;
+                    }
+
+                    // Klik marker unclustered
+                    if (layerId === 'unclustered-point-layer') {
+                        const coordinates = feature.geometry.coordinates;
+                        const suhu = typeof props.suhu !== 'undefined' ? props.suhu : '...';
+                        const cuaca = props.cuaca || '...';
+                        const kelembapan = typeof props.kelembapan !== 'undefined' ? props.kelembapan : '...';
+                        const terasa = typeof props.terasa !== 'undefined' ? props.terasa : '...';
+
+                        const popupHTML = `<b>${props.nama}</b><br>
+                            Suhu: ${suhu}°C<br>
+                            Cuaca: ${cuaca}<br>
+                            Kelembapan: ${kelembapan}%<br>
+                            Terasa Seperti: ${terasa}°C<br>
+                            <button id="center-map-btn" style="margin-top: 8px; cursor: pointer;">Pusatkan Peta</button>`;
+                        currentPopup = new maplibregl.Popup().setLngLat(feature.geometry.coordinates).setHTML(popupHTML).addTo(map);
+                        document.getElementById('center-map-btn').addEventListener('click', () => {
+                            map.easeTo({ center: coordinates, zoom: 12 });
+                        });
+
+                        // Jika belum punya cuaca (abu-abu), coba muat cuacanya untuk marker ini saja
+                        if (typeof props.suhu === 'undefined') {
+                            const id = /*feature.id ??*/ props.id;
+                            if (id && !inflightIds.has(id)) {
+                                fetchWeatherForIds([id]);
+                            }
+                        }
+                        return;
+                    }
+
+                    // Klik marker provinsi
+                    if (layerId === 'provinsi-point-circle') {
+                        const coordinates = feature.geometry.coordinates;
+                        const popupHTML = `<b>Provinsi:</b><br>${props.nama}<br>
+                            <button id="center-map-btn" style="margin-top: 8px; cursor: pointer;">Pusatkan Peta</button>`;
+                        currentPopup = new maplibregl.Popup()
+                            .setLngLat(feature.geometry.coordinates)
+                            .setHTML(popupHTML)
+                            .addTo(map);
+                        document.getElementById('center-map-btn').addEventListener('click', () => {
+                            map.easeTo({ center: coordinates, zoom: 12 });
+                        });
+                        return;
                     }
                 });
-        }
-    });
-      
-        // Ambil elemen div untuk info koordinat
-        var infoKoordinat = document.getElementById('koordinat-info');
-        // ... (sisa kode info koordinat Anda tidak berubah) ...
-        infoKoordinat.innerHTML = 'Geser kursor di atas peta';
-        map.on('mousemove', function(e) {
-          var lat = e.latlng.lat.toFixed(5);
-          var lng = e.latlng.lng.toFixed(5);
-          infoKoordinat.innerHTML = 'Latitude: ' + lat + ' | Longitude: ' + lng;
+
+                // Hover pointer
+                map.on('mousemove', (e) => {
+                    const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
+                    map.getCanvas().style.cursor = features.length ? 'pointer' : '';
+                });
+
+                // Info koordinat
+                const infoKoordinat = document.getElementById('koordinat-info');
+                infoKoordinat.innerHTML = 'Geser kursor di atas peta';
+                map.on('mousemove', (e) => { infoKoordinat.innerHTML = `Latitude: ${e.lngLat.lat.toFixed(5)} | Longitude: ${e.lngLat.lng.toFixed(5)}`; });
+                map.on('mouseout', () => { infoKoordinat.innerHTML = 'Geser kursor di atas peta'; });
+
+                // Ketika map selesai render setelah panning/zooming (selain moveend), coba lagi muat untuk unclustered
+                // Misal cluster berubah karena zoom, sehingga ada marker baru yang jadi unclustered
+                map.on('idle', () => {
+                    const zoom = map.getZoom();
+                    if (zoom > 7.99) scheduleFetchForUnclustered();
+                });
+            });
         });
-        map.on('mouseout', function() {
-          infoKoordinat.innerHTML = 'Geser kursor di atas peta';
-        });
-    });
-  </script>
+    </script>
 </body>
 </html>

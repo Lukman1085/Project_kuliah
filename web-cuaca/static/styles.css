@@ -1,116 +1,12 @@
-html, body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-}
-#map {
-    width: 100%;
-    height: 100%;
-}
+body { margin: 0; padding: 0; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; }
 #koordinat-info {
-    position: fixed; /* atau absolute jika di dalam kontainer peta */
-    bottom: 10px;
-    left: 10px;
-    background-color: rgba(255, 255, 255, 0.8); /* Latar belakang putih semi-transparan */
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    z-index: 1000; /* Memastikan tampil di atas peta */
-    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    position: absolute; bottom: 10px; left: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 5px 10px; border-radius: 3px;
+    font-family: sans-serif; font-size: 12px; z-index: 1;
 }
-.leaflet-control-zoom {
-    position: fixed;
-    bottom: 80px;
-    right: 10px;
-    background-color: #f0f0f0;
-    border-radius: 5px;
-}
-
-/* Wadah utama untuk label cuaca kustom */
-.weather-label {
-    display: flex; /* Mengatur ikon dan teks berdampingan */
-    align-items: center; /* Menyelaraskan ikon dan teks secara vertikal */
-    padding: 3px 8px;
-    background-color: rgba(255, 255, 255, 0.85); /* Latar belakang putih semi-transparan */
-    border: 1px solid #555;
-    border-radius: 5px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-    font-family: Arial, sans-serif;
-    font-size: 12px;
-    font-weight: bold;
-    color: #333;
-    white-space: nowrap; /* Mencegah nama wilayah turun ke baris baru */
-    width: max-content; /* Lebar menyesuaikan konten */
-    height: max-content; /* Tinggi menyesuaikan konten */
-}
-
-/* Lingkaran kecil penanda suhu di dalam label */
-.weather-label .weather-dot {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%; /* Membuatnya menjadi lingkaran sempurna */
-    border: 1px solid #000;
-    margin-right: 6px; /* Memberi jarak antara lingkaran dan teks */
-}
-
-/* Teks nama wilayah di dalam label */
-.weather-label .weather-text {
-    line-height: 1;
-}
-
-/* Styling untuk kotak popup klaster */
-.cluster-box {
-    max-height: 250px; /* Batasi tinggi kotak */
-    overflow-y: auto; /* Tambahkan scrollbar jika kontennya banyak */
-    padding: 5px;
-}
-.cluster-item {
-    display: block; /* Membuat setiap item mengambil baris penuh */
-    align-items: center;
-    padding: 2px 0;
-    border-bottom: 1px solid #eee;
-    font-size: 12px;
-}
-.cluster-item:last-child {
-    border-bottom: none;
-}
-
-.cluster-popup-content {
-    margin: 0;
-    padding: 0;
-}
-
-.back-to-list-button {
-    display: block;
-    width: 100%;
-    padding: 6px;
-    margin-top: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: #f8f8f8;
-    cursor: pointer;
-    text-align: center;
-    font-size: 12px;
-}
-.back-to-list-button:hover {
-    background-color: #e8e8e8;
-}
-
-/* Tambahkan ini untuk membuat semua item interaktif terlihat bisa diklik */
-.interactive-item {
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-}
-
-.interactive-item:hover {
-    background-color: #f0f0f0; /* Efek highlight saat di-hover */
-}
-
-/* Menghilangkan gaya default Leaflet dari divIcon agar tidak mengganggu */
-.leaflet-div-icon {
-    background: none;
-    border: none;
-}
+.cluster-popup-content { max-height: 200px; overflow-y: auto; }
+.cluster-item { padding: 4px; cursor: pointer; }
+.cluster-item:hover { background-color: #f0f0f0; }
+.maplibregl-popup-content { font-family: sans-serif; font-size: 14px; }
