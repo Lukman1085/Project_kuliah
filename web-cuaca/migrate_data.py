@@ -74,7 +74,7 @@ def main():
         
         # Migrasi semua file GeoJSON
         for filename, tablename in geojson_files.items():
-            filepath = os.path.join(os.path.dirname(__file__), filename)
+            filepath = os.path.join(os.path.dirname(__file__), 'static', filename)
             if os.path.exists(filepath):
                 migrate_geojson_to_postgis(filepath, tablename, engine)
             else:
@@ -103,7 +103,7 @@ def main():
         }
 
         # Migrasi file CSV
-        csv_filepath = os.path.join(os.path.dirname(__file__), "wilayah_administratif_indonesia.csv")
+        csv_filepath = os.path.join(os.path.dirname(__file__), 'static', "wilayah_administratif_indonesia.csv")
         if os.path.exists(csv_filepath):
             migrate_csv_to_postgres(csv_filepath, "wilayah_administratif", engine, dtype=csv_dtypes)
         else:
