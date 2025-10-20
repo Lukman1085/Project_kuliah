@@ -9,13 +9,7 @@
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     
     <link rel="stylesheet" href="static/styles.css">
-    <style>
-        /* Tambahkan style sederhana untuk popup daftar klaster */
-        .cluster-popup-content { max-height: 240px; overflow-y: auto; font-family: sans-serif; font-size: 13px; }
-        .cluster-item { padding: 4px; cursor: pointer; }
-        .cluster-item:hover { background-color: #f0f0f0; }
-        .maplibregl-popup-content { font-family: sans-serif; font-size: 14px; }
-    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css">
 </head>
 <body>
     <div id="map"></div>
@@ -131,10 +125,16 @@
                         const cached = clientWeatherCache.get(g.id);
                         const baseProps = { id: g.id, tipe: 'cuaca', nama: g.nama || 'N/A' };
                         const weatherProps = cached ? {
-                            suhu: parseFloat((cached.suhu || 0).toFixed(1)),
+                            waktu: cached.waktu || null,
                             cuaca: cached.cuaca || 'N/A',
+                            kelas_ikon: cached.kelas_ikon || 'wi wi-na',
+                            suhu: parseFloat((cached.suhu || 0).toFixed(1)),
                             kelembapan: cached.kelembapan || 0,
-                            terasa: parseFloat((cached.terasa || 0).toFixed(1))
+                            terasa: parseFloat((cached.terasa || 0).toFixed(1)),
+                            siangmalam: cached.siangmalam || 0,
+                            prob_presipitasi: cached.prob_presipitasi || 0,
+                            kecepatan_angin_10m: parseFloat((cached.kecepatan_angin_10m || 0).toFixed(1)),
+                            arah_angin_10m: cached.arah_angin_10m || 0
                         } : {};
                         return {
                             type: 'Feature',
@@ -153,15 +153,21 @@
                         const d = dataMap[id];
                         // simpan di cache klien
                         clientWeatherCache.set(id, {
-                            suhu: d.suhu, cuaca: d.cuaca, kelembapan: d.kelembapan, terasa: d.terasa
+                            waktu: d.waktu, cuaca: d.cuaca, kelas_ikon: d.kelas_ikon, suhu: d.suhu, kelembapan: d.kelembapan, terasa: d.terasa, siangmalam: d.siangmalam, prob_presipitasi: d.prob_presipitasi, kecepatan_angin_10m: d.kecepatan_angin_10m, arah_angin_10m: d.arah_angin_10m
                         });
                         // update feature jika ada di koleksi saat ini
                         if (byId.has(id)) {
                             const feat = byId.get(id);
-                            feat.properties.suhu = parseFloat((d.suhu || 0).toFixed(1));
+                            feat.properties.waktu = d.waktu || null;
                             feat.properties.cuaca = d.cuaca || 'N/A';
+                            feat.properties.kelas_ikon = d.kelas_ikon || 'wi wi-na';
+                            feat.properties.suhu = parseFloat((d.suhu || 0).toFixed(1));
                             feat.properties.kelembapan = d.kelembapan || 0;
                             feat.properties.terasa = parseFloat((d.terasa || 0).toFixed(1));
+                            feat.properties.siangmalam = d.siangmalam || 0;
+                            feat.properties.prob_presipitasi = d.prob_presipitasi || 0;
+                            feat.properties.kecepatan_angin_10m = parseFloat((d.kecepatan_angin_10m || 0).toFixed(1));
+                            feat.properties.arah_angin_10m = d.arah_angin_10m || 0;
                         }
                     }
                     setSourceDataFromState();
@@ -194,6 +200,7 @@
                         const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${ids.join(',')}`);
                         if (!resp.ok) throw new Error('Respons jaringan tidak baik');
                         const data = await resp.json();
+                        // console.log('Received weather data for IDs:', ids, data); // Debugging di sisi frontend
                         mergeWeatherIntoState(data);
                     } catch (e) {
                         console.error('Gagal mengambil data cuaca untuk IDs:', ids, e);
@@ -333,13 +340,20 @@
                                         item.onclick = () => {
                                             closeCurrentPopup();
                                             const detailPopupHTML = `
-                                                <div>
-                                                    <b>${data.nama}</b><br>
-                                                    Suhu: ${data.suhu.toFixed(1)}°C<br>
-                                                    Cuaca: ${data.cuaca}<br>
-                                                    Kelembapan: ${data.kelembapan}%<br>
-                                                    Terasa Seperti: ${data.terasa.toFixed(1)}°C<br>
-                                                    <button id="center-map-btn" style="margin-top: 8px; cursor: pointer;">Pusatkan Peta</button>
+                                                <div style="font-family: sans-serif; font-size: 14px;">
+                                                    <b style="font-size: 16px;">${data.nama}</b>
+                                                    
+                                                    <div style="display: flex; align-items: center; margin: 8px 0;">
+                                                        <i class="${data.kelas_ikon}" style="font-size: 1.2em; margin-right: 10px;"></i>
+                                                        <span style="font-size: 1.2em;">${data.cuaca}</span>
+                                                    </div>
+
+                                                    <div>Suhu: <b>${data.suhu.toFixed(1)}°C</b> (Terasa ${data.terasa.toFixed(1)}°C)</div>
+                                                    <div>Kelembapan: <b>${data.kelembapan}%</b></div>
+                                                    <div>Peluang Hujan: <b>${data.prob_presipitasi}%</b></div>
+                                                    <div>Angin: <b>${data.kecepatan_angin_10m.toFixed(1)} m/s</b> dari ${data.arah_angin_10m}°</div>
+                                                    
+                                                    <button id="center-map-btn" style="margin-top: 10px; cursor: pointer; width: 100%;">Pusatkan Peta</button>
                                                 </div>
                                             `;
                                             currentPopup = new maplibregl.Popup()
@@ -367,17 +381,34 @@
                     // Klik marker unclustered
                     if (layerId === 'unclustered-point-layer') {
                         const coordinates = feature.geometry.coordinates;
-                        const suhu = typeof props.suhu !== 'undefined' ? props.suhu : '...';
+                        const waktu = props.waktu || '...';
                         const cuaca = props.cuaca || '...';
+                        const kelas_ikon = props.kelas_ikon || 'wi wi-na';
+                        const suhu = typeof props.suhu !== 'undefined' ? props.suhu : '...';                        
                         const kelembapan = typeof props.kelembapan !== 'undefined' ? props.kelembapan : '...';
                         const terasa = typeof props.terasa !== 'undefined' ? props.terasa : '...';
+                        const siangmalam = typeof props.siangmalam !== 'undefined' ? props.siangmalam : '...';
+                        const prob_presipitasi = typeof props.prob_presipitasi !== 'undefined' ? props.prob_presipitasi : '...';
+                        const kecepatan_angin_10m = typeof props.kecepatan_angin_10m !== 'undefined' ? props.kecepatan_angin_10m : '...';
+                        const arah_angin_10m = typeof props.arah_angin_10m !== 'undefined' ? props.arah_angin_10m : '...';
 
-                        const popupHTML = `<b>${props.nama}</b><br>
-                            Suhu: ${suhu}°C<br>
-                            Cuaca: ${cuaca}<br>
-                            Kelembapan: ${kelembapan}%<br>
-                            Terasa Seperti: ${terasa}°C<br>
-                            <button id="center-map-btn" style="margin-top: 8px; cursor: pointer;">Pusatkan Peta</button>`;
+                        const popupHTML = `
+                            <div style="font-family: sans-serif; font-size: 14px;">
+                            <b style="font-size: 16px;">${props.nama}</b>
+                            
+                            <div style="display: flex; align-items: center; margin: 8px 0;">
+                                <i class="${kelas_ikon}" style="font-size: 1.2em; margin-right: 10px;"></i>
+                                <span style="font-size: 1.2em;">${cuaca}</span>
+                            </div>
+
+                            <div>Suhu: <b>${suhu}°C</b> (Terasa ${terasa}°C)</div>
+                            <div>Kelembapan: <b>${kelembapan}%</b></div>
+                            <div>Peluang Hujan: <b>${prob_presipitasi}%</b></div>
+                            <div>Angin: <b>${kecepatan_angin_10m} m/s</b> dari ${arah_angin_10m}°</div>
+                            
+                            <button id="center-map-btn" style="margin-top: 10px; cursor: pointer; width: 100%;">Pusatkan Peta</button>
+                        </div>
+                        `;
                         currentPopup = new maplibregl.Popup().setLngLat(feature.geometry.coordinates).setHTML(popupHTML).addTo(map);
                         document.getElementById('center-map-btn').addEventListener('click', () => {
                             map.easeTo({ center: coordinates, zoom: 12 });

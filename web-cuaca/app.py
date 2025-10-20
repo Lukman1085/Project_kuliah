@@ -34,7 +34,50 @@ CACHE_TTL = 1800  # 30 menit
 API_CALL_TIMESTAMPS = []
 LAST_API_CALL_COUNT = 0
 
-# ================== FUNGSI API CUACA YANG DIPERBAIKI ==================
+# ================== FUNGSI API CUACA ==================
+
+# --- Logika Pemetaan Ikon ---
+# Kamus ini adalah "source of truth".
+# Kunci adalah weather_code dari WMO.
+# Nilainya adalah sebuah tuple: (deskripsi, kelas_ikon_siang, kelas_ikon_malam)
+WMO_CODE_MAP = {
+    0: ("Cerah", "wi-day-sunny", "wi-night-clear"),
+    1: ("Sebagian Besar Cerah", "wi-day-sunny-overcast", "wi-night-alt-partly-cloudy"),
+    2: ("Berawan Sebagian", "wi-day-cloudy", "wi-night-alt-cloudy"),
+    3: ("Mendung", "wi-cloudy", "wi-cloudy"),
+    45: ("Kabut", "wi-fog", "wi-fog"),
+    48: ("Kabut Rime", "wi-fog", "wi-fog"),
+    51: ("Gerimis Ringan", "wi-day-sprinkle", "wi-night-alt-sprinkle"),
+    53: ("Gerimis Sedang", "wi-day-sprinkle", "wi-night-alt-sprinkle"),
+    55: ("Gerimis Lebat", "wi-day-sprinkle", "wi-night-alt-sprinkle"),
+    61: ("Hujan Ringan", "wi-day-rain", "wi-night-alt-rain"),
+    63: ("Hujan Sedang", "wi-day-rain", "wi-night-alt-rain"),
+    65: ("Hujan Lebat", "wi-day-rain", "wi-night-alt-rain"),
+    71: ("Salju Ringan", "wi-day-snow", "wi-night-alt-snow"),
+    73: ("Salju Sedang", "wi-day-snow", "wi-night-alt-snow"),
+    75: ("Salju Lebat", "wi-day-snow", "wi-night-alt-snow"),
+    80: ("Hujan Deras Ringan", "wi-day-showers", "wi-night-alt-showers"),
+    81: ("Hujan Deras Sedang", "wi-day-showers", "wi-night-alt-showers"),
+    82: ("Hujan Deras Lebat", "wi-day-showers", "wi-night-alt-showers"),
+    95: ("Badai Petir", "wi-day-thunderstorm", "wi-night-alt-thunderstorm"),
+    96: ("Badai Petir dengan Hujan Es", "wi-day-hail", "wi-night-alt-hail"),
+    99: ("Badai Petir dengan Hujan Es Lebat", "wi-day-hail", "wi-night-alt-hail"),
+}
+
+def get_weather_info(weather_code, is_day):
+    """
+    Menerjemahkan weather_code dan is_day menjadi deskripsi dan kelas ikon.
+    """
+    # Default value jika kode tidak ditemukan
+    default_info = ("Data Tidak Tersedia", "wi-na", "wi-na")
+    
+    info = WMO_CODE_MAP.get(weather_code, default_info)
+    deskripsi = info[0]
+    
+    # is_day adalah 1 untuk siang, 0 untuk malam
+    icon_class = info[1] if is_day == 1 else info[2]
+    
+    return deskripsi, f"wi {icon_class}" # Menambahkan prefix 'wi' yang dibutuhkan oleh library
 
 def call_external_weather_api(wilayah_infos):
     """
@@ -52,14 +95,32 @@ def call_external_weather_api(wilayah_infos):
     print(f"Memanggil API eksternal untuk {call_count} wilayah.")
 
     mock_data = {}
+    # Daftar kode WMO yang mungkin untuk simulasi
+    possible_codes = list(WMO_CODE_MAP.keys())
+
     for info in wilayah_infos:
         suhu = random.uniform(25.0, 32.0)
+        weather_code = random.choice(possible_codes) # Menghasilkan weather_code acak dari daftar yang valid
         kelembapan = random.randint(60, 90)
+        siangmalam = random.randint(0, 1)  # 0 = malam, 1 = siang
+        prob_presipitasi = random.randint(0, 20)
+        kecepatan_angin_10m = random.uniform(0.5, 5.0)
+        arah_angin_10m = random.randint(0, 360)
+
+        # --- PEMETAAN CUACA KE IKON DI SINI ---
+        deskripsi_cuaca, kelas_ikon = get_weather_info(weather_code, siangmalam)
+
         mock_data[info['id']] = {
+            "waktu": int(time.time()), # timestamp saat data diambil (format ISO 8601)
+            "cuaca": deskripsi_cuaca,
+            "kelas_ikon": kelas_ikon,
             "suhu": suhu,
-            "cuaca": "Cerah" if suhu > 28 else "Berawan",
             "kelembapan": kelembapan,
-            "terasa": suhu - (kelembapan / 100) * (suhu - 14.5)
+            "terasa": suhu - ((100 - kelembapan) / 5),  # Perkiraan suhu terasa
+            "siangmalam": siangmalam,
+            "prob_presipitasi": prob_presipitasi,
+            "kecepatan_angin_10m": kecepatan_angin_10m,
+            "arah_angin_10m": arah_angin_10m
         }
     return mock_data
 
