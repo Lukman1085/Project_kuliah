@@ -192,3 +192,134 @@ body { margin: 0; padding: 0; }
     font-size: 14px; /* Ukuran emoji */
     line-height: 1;
 }
+
+/* Sidebar Container */
+#detail-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 30%; /* Lebar default */
+    max-width: 400px; /* Batas lebar maksimum */
+    min-width: 300px; /* Batas lebar minimum */
+    background-color: white;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    z-index: 1001; /* Di atas peta, di bawah popup? */
+    transform: translateX(-100%); /* Sembunyi di kiri by default */
+    transition: transform 0.3s ease-in-out;
+    display: flex; /* Untuk layout header + content */
+    flex-direction: column;
+    font-family: sans-serif;
+}
+
+#detail-sidebar.sidebar-open {
+    transform: translateX(0%); /* Munculkan sidebar */
+}
+
+/* Tombol Buka/Tutup Sidebar */
+#sidebar-toggle-btn {
+    position: fixed; /* Atau absolute relatif ke body/map container */
+    top: 50%;
+    left: 0; /* Awalnya di tepi kiri layar */
+    transform: translateY(-50%);
+    width: 25px; /* Lebar tombol */
+    height: 60px; /* Tinggi tombol */
+    background-color: white;
+    border: none;
+    border-top-right-radius: 5px; /* Hanya kanan atas */
+    border-bottom-right-radius: 5px; /* Hanya kanan bawah */
+    box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
+    cursor: pointer;
+    z-index: 1000; /* Di bawah sidebar */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+    color: #555;
+    transition: left 0.3s ease-in-out, background-color 0.2s; /* Animasi posisi left */
+}
+#sidebar-toggle-btn:hover {
+    background-color: #f0f0f0;
+}
+
+/* Posisi tombol saat sidebar terbuka */
+#detail-sidebar.sidebar-open + #sidebar-toggle-btn {
+    left: 30%; /* Sesuaikan dengan lebar sidebar */
+    /* Atau gunakan calc() jika lebar sidebar dinamis: left: calc(30% + 0px); */
+    border-radius: 0; /* Mungkin hilangkan radius saat menempel */
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    box-shadow: -1px 1px 4px rgba(0,0,0,0.2);
+}
+
+
+/* Header Sidebar */
+#sidebar-header {
+    padding: 12px 16px;
+    background-color: #007bff;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0; /* Agar header tidak menyusut */
+}
+
+#sidebar-header h2 {
+    margin: 0;
+    font-size: 1.1rem; /* Sedikit lebih kecil */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Jika nama terlalu panjang */
+    margin-right: 10px; /* Jarak ke tombol close */
+}
+
+#close-sidebar-btn { /* Menggantikan .modal-close-btn */
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 5px;
+}
+
+/* Konten Sidebar */
+#sidebar-content {
+    padding: 16px;
+    flex-grow: 1; /* Konten mengisi sisa ruang */
+    overflow-y: auto; /* Scroll vertikal jika perlu */
+}
+
+/* Placeholder & Loading di Sidebar */
+#sidebar-placeholder,
+#sidebar-loading {
+    text-align: center;
+    color: #777;
+    margin-top: 50px;
+    font-style: italic;
+}
+#sidebar-loading i { /* Style untuk ikon spinner jika ada */
+    display: block;
+    margin-bottom: 10px;
+    font-size: 2rem;
+}
+
+/* Styling konten detail cuaca di sidebar (mirip modal) */
+#sidebar-current-conditions { /* Ganti ID jika perlu */
+    text-align: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+}
+#sidebar-current-icon { font-size: 3.5rem; color: #007bff; }
+#sidebar-current-temp { font-size: 2rem; font-weight: bold; margin: 5px 0; }
+#sidebar-current-desc, #sidebar-current-feelslike { font-size: 1rem; color: #555; }
+
+#sidebar-daily-forecast-title { /* Ganti ID jika perlu */
+    font-size: 1rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+}
+/* Style .daily-forecast-item bisa digunakan kembali */
