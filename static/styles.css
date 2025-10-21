@@ -1,0 +1,194 @@
+body { margin: 0; padding: 0; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+#koordinat-info {
+    position: absolute; bottom: 10px; left: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 5px 10px; border-radius: 3px;
+    font-family: sans-serif; font-size: 12px; z-index: 1;
+}
+.cluster-popup-content { max-height: 200px; overflow-y: auto; }
+.cluster-item { padding: 4px; cursor: pointer; }
+.cluster-item:hover { background-color: #f0f0f0; }
+.maplibregl-popup-content { font-family: sans-serif; font-size: 14px; }
+
+/* Spinner Loading Global */
+#global-loading-spinner {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    z-index: 1001;
+    font-size: 14px;
+    font-family: sans-serif;
+    display: none; /* Sembunyi by default */
+}
+
+/* Container Slider Waktu */
+#timeline-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70%;
+    max-width: 800px;
+    background-color: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+#global-time-slider {
+    width: 100%;
+    cursor: pointer;
+}
+#global-time-slider:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+#slider-time-label {
+    font-family: sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+    margin-top: 8px;
+}
+
+/* Modal Detail Cuaca */
+#detail-modal {
+    display: none; /* Sembunyi by default */
+    position: fixed;
+    z-index: 1002;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+    font-family: sans-serif;
+}
+.modal-content {
+    background-color: #fefefe;
+    margin: 10% auto;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    width: 90%;
+    max-width: 500px;
+}
+.modal-header {
+    padding: 12px 16px;
+    background-color: #007bff;
+    color: white;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+.modal-close-btn {
+    color: white;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+}
+.modal-body {
+    padding: 16px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+/* Konten spesifik di dalam modal */
+#modal-current-conditions {
+    text-align: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+}
+#modal-current-icon {
+    font-size: 4rem;
+    color: #007bff;
+}
+#modal-current-temp {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin: 5px 0;
+}
+#modal-current-desc, #modal-current-feelslike {
+    font-size: 1.1rem;
+    color: #555;
+}
+#modal-daily-forecast-title {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+}
+.daily-forecast-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f4f4f4;
+}
+.daily-forecast-item:last-child {
+    border-bottom: none;
+}
+.daily-day { font-weight: bold; flex-basis: 100px; }
+.daily-icon { font-size: 1.5rem; color: #555; flex-basis: 40px; text-align: center; }
+.daily-desc { flex-grow: 1; padding-left: 10px; color: #666; }
+.daily-temp { font-weight: bold; }
+
+/* CSS untuk Popup */
+.weather-popup-content {
+    font-family: sans-serif;
+    font-size: 14px;
+    min-width: 240px;
+}
+.weather-popup-content b { font-size: 16px; }
+.popup-current-weather {
+    display: flex;
+    align-items: center;
+    margin: 8px 0;
+}
+.popup-current-weather i {
+    font-size: 2.5em; /* Perbesar ikon popup */
+    margin-right: 12px;
+}
+.popup-details div { margin-bottom: 3px; }
+.popup-actions { margin-top: 10px; }
+.popup-actions button {
+    cursor: pointer;
+    width: 100%;
+    padding: 8px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: white;
+}
+.popup-actions button:hover { background-color: #0056b3; }
+
+/* --- PERUBAHAN: CSS BARU --- */
+/* Style untuk Teks Presipitasi di Peta */
+.map-precip-text {
+    font-family: sans-serif;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Style untuk Ikon Cuaca Emoji di Peta */
+.map-weather-icon {
+    font-size: 14px; /* Ukuran emoji */
+    line-height: 1;
+}
