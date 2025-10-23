@@ -223,7 +223,7 @@ def process_wilayah_data(wilayah_list):
 
 # ================== ROUTES ==================
 
-# --- ENDPOINT BARU ---
+# --- ENDPOINT AMBIL IKON CUACA ---
 @app.route('/api/wmo-codes')
 def get_wmo_codes():
     """
