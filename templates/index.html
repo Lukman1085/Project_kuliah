@@ -29,9 +29,12 @@
             <div id="sidebar-weather-details" style="display: none;">
                 <div id="sidebar-current-conditions">
                     <i id="sidebar-current-icon" class="wi wi-na"></i>
-                    <div id="sidebar-current-temp">-°C</div>
+                    <div id="sidebar-current-temp">...°C</div>
                     <div id="sidebar-current-desc">...</div>
                     <div id="sidebar-current-feelslike">Terasa ...°C</div>
+                    <div id="sidebar-current-humidity">...%</div>
+                    <div id="sidebar-current-precipitation">...%</div>
+                    <div id="sidebar-current-wind">... m/s dari arah ...°</div>
                 </div>
                 <h3 id="sidebar-daily-forecast-title">Prakiraan 14 Hari</h3>
                 <div id="sidebar-daily-forecast-list">
@@ -405,6 +408,9 @@
                      sidebarEl.querySelector('#sidebar-current-temp').textContent = `${data.suhu?.toFixed(1) ?? '-'}°C`;
                      sidebarEl.querySelector('#sidebar-current-desc').textContent = deskripsi;
                      sidebarEl.querySelector('#sidebar-current-feelslike').textContent = `Terasa ${data.terasa?.toFixed(1) ?? '-'}°C`;
+                     sidebarEl.querySelector('#sidebar-current-humidity').textContent = `Kelembapan ${data.kelembapan ?? '-'}%`;
+                     sidebarEl.querySelector('#sidebar-current-precipitation').textContent = `Presipitasi ${data.prob_presipitasi ?? '-'}%`;
+                     sidebarEl.querySelector('#sidebar-current-wind').textContent = `Angin ${data.kecepatan_angin_10m ?? '-'} m/s dari arah ${data.arah_angin_10m ?? '-'}°`;
                  } catch(e) { console.warn("Error updating sidebar DOM:", e); }
             }
         }
@@ -524,7 +530,10 @@
             toggleBtnEl.innerHTML = '&gt;';
             toggleBtnEl.setAttribute('aria-label', 'Buka detail lokasi');
             // Hapus highlight dari marker yang SEDANG AKTIF saat sidebar ditutup
-            removeActiveMarkerHighlight(appState.activeLocationId);
+            if (!appState.activeLocationId) {
+                console.log("No active location ID to remove highlight from.");
+                removeActiveMarkerHighlight(appState.activeLocationId);
+            }
         }
 
         /** Toggle buka/tutup sidebar */
@@ -652,9 +661,9 @@
                 } catch (e) { console.error("Error removing highlight for ID:", idToRemove, e); }
             }
             // Reset previous ID hanya jika BUKAN dipaksa (misal dari closeSidebar)
-            //  if (!forceId) {
-            //     appState.previousActiveLocationId = null;
-            //  }
+             if (!forceId) {
+                appState.previousActiveLocationId = null;
+             }
         }
 
         // HAPUS: const closeCurrentPopup = () => { ... }; // Diganti popupManager.close()

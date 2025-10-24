@@ -314,7 +314,7 @@ body { margin: 0; padding: 0; }
 }
 #sidebar-current-icon { font-size: 3.5rem; color: #007bff; }
 #sidebar-current-temp { font-size: 2rem; font-weight: bold; margin: 5px 0; }
-#sidebar-current-desc, #sidebar-current-feelslike { font-size: 1rem; color: #555; }
+#sidebar-current-desc, #sidebar-current-feelslike, #sidebar-current-humidity, #sidebar-current-precipitation, #sidebar-current-wind { font-size: 1rem; color: #555; }
 
 #sidebar-daily-forecast-title { /* Ganti ID jika perlu */
     font-size: 1rem;
