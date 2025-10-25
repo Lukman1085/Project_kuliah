@@ -37,7 +37,7 @@ CACHE_TTL = 1800  # 30 menit
 API_CALL_TIMESTAMPS = []
 LAST_API_CALL_COUNT = 0
 
-USE_REAL_API = False # Tetap False untuk pengujian
+USE_REAL_API = True # Tetap False untuk pengujian
 
 # Pola regex untuk validasi ID
 # Memperbolehkan angka, huruf, dan underscore. Sesuaikan jika perlu.
@@ -75,6 +75,7 @@ WMO_CODE_MAP = {
 def generate_dummy_api_response(wilayah_infos):
     """
     Menghasilkan data dummy (14 hari) untuk multi-lokasi.
+    [VERSI PERBAIKAN]
     """
     print(f"MODE DUMMY: Menghasilkan data untuk {len(wilayah_infos)} lokasi.")
     dummy_list = []
@@ -82,14 +83,44 @@ def generate_dummy_api_response(wilayah_infos):
     total_daily_points = 14     # 14 hari
     possible_codes = list(WMO_CODE_MAP.keys())
 
-    # Buat daftar timestamp dummy
-    start_time_utc = datetime.now(dt_timezone.utc) - timedelta(days=7)
-    dummy_hourly_times = [(start_time_utc + timedelta(hours=i)).isoformat() for i in range(total_hourly_points)]
-    dummy_daily_times = [(start_time_utc.date() + timedelta(days=i)).isoformat() for i in range(total_daily_points)]
+    # --- PERBAIKAN: Meniru format timestamp OpenMeteo ---
+
+    # 1. Tentukan timezone dummy (harus konsisten dengan data di bawah)
+    dummy_tz_str = 'Asia/Singapore'
+    dummy_tz = pytz_timezone(dummy_tz_str)
+    
+    # 2. Dapatkan 'sekarang' di timezone itu
+    now_in_tz = datetime.now(dummy_tz)
+    
+    # 3. Dapatkan tanggal 7 hari lalu (hanya tanggal)
+    start_date_in_tz = (now_in_tz - timedelta(days=7)).date()
+    
+    # 4. Buat datetime jam 00:00 pada tanggal itu (ini adalah start_datetime lokal)
+    #    Kita buat sebagai datetime "naive" (tanpa info TZ)
+    start_datetime_local = datetime(
+        start_date_in_tz.year, 
+        start_date_in_tz.month, 
+        start_date_in_tz.day, 
+        0, 0, 0
+    )
+
+    # 5. Buat daftar string waktu LOKAL (tanpa offset)
+    #    Formatnya YYYY-MM-DDTHH:MM, persis seperti yang diharapkan frontend
+    dummy_hourly_times = [
+        (start_datetime_local + timedelta(hours=i)).strftime('%Y-%m-%dT%H:%M') 
+        for i in range(total_hourly_points)
+    ]
+    
+    # 6. Buat daftar string tanggal (format YYYY-MM-DD)
+    dummy_daily_times = [
+        (start_date_in_tz + timedelta(days=i)).isoformat() 
+        for i in range(total_daily_points)
+    ]
+    # --- AKHIR PERBAIKAN ---
 
     for info in wilayah_infos:
         hourly_data = {
-            'time': dummy_hourly_times,
+            'time': dummy_hourly_times, # <-- Sekarang formatnya sudah benar
             'temperature_2m': [round(random.uniform(25.0, 32.0), 1) for _ in range(total_hourly_points)],
             'relative_humidity_2m': [random.randint(60, 90) for _ in range(total_hourly_points)],
             'apparent_temperature': [round(random.uniform(28.0, 35.0), 1) for _ in range(total_hourly_points)],
@@ -100,17 +131,28 @@ def generate_dummy_api_response(wilayah_infos):
             'wind_direction_10m': [random.randint(0, 360) for _ in range(total_hourly_points)]
         }
         daily_data = {
-            'time': dummy_daily_times,
+            'time': dummy_daily_times, # <-- Format ini sudah benar
             'weather_code': [random.choice(possible_codes) for _ in range(total_daily_points)],
             'temperature_2m_max': [round(random.uniform(30.0, 34.0), 1) for _ in range(total_daily_points)],
             'temperature_2m_min': [round(random.uniform(23.0, 26.0), 1) for _ in range(total_daily_points)]
         }
+        
+        # [PERBAIKAN KONSISTENSI]
+        # Pastikan offset dan singkatan TZ sesuai dengan string waktu yang dibuat
+        localized_start = dummy_tz.localize(start_datetime_local)
+        localizeds = localized_start.utcoffset()
+        if localizeds:
+            dummy_offset_seconds = int(localizeds.total_seconds())
+        dummy_tz_abbrev = localized_start.strftime('%Z') # Cth: SGT
+
         location_dummy = {
             'latitude': info['lat'], 'longitude': info['lon'], 'generationtime_ms': random.uniform(0.5, 2.0),
-            'utc_offset_seconds': 28800, 'timezone': 'Asia/Singapore', 'timezone_abbreviation': 'SGT',
+            'utc_offset_seconds': dummy_offset_seconds,      # <-- Konsisten
+            'timezone': dummy_tz_str,                   # <-- Konsisten
+            'timezone_abbreviation': dummy_tz_abbrev,   # <-- Konsisten
             'elevation': random.uniform(5, 50),
             'hourly_units': {}, 'hourly': hourly_data,
-            'daily_units': {}, 'daily': daily_data # <-- TAMBAHAN: Data harian
+            'daily_units': {}, 'daily': daily_data
         }
         dummy_list.append(location_dummy)
     return dummy_list
@@ -169,6 +211,7 @@ def process_api_response(api_data_list, wilayah_infos):
             "longitude": location_data.get('longitude'),
             "timezone": location_data.get('timezone'),
             "timezone_abbreviation": location_data.get('timezone_abbreviation'),
+            "utc_offset_seconds": location_data.get('utc_offset_seconds'),
             "hourly": location_data.get('hourly', {}),
             "daily": location_data.get('daily', {})
         }
