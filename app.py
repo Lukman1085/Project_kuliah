@@ -1,19 +1,17 @@
 import os
+import time
+import random
+import sqlite3
+import requests
+from datetime import datetime, timedelta
 from flask import Flask, Response, render_template, request, jsonify
 from flask_cors import CORS
 from flask_compress import Compress
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from geoalchemy2 import Geometry
-from shapely.geometry import box
-import time
-import random
 from dotenv import load_dotenv
-import sqlite3
-import requests
-from datetime import datetime, timedelta, timezone as dt_timezone
 from pytz import timezone as pytz_timezone
-import re  # <-- TAMBAHAN: Untuk validasi
+import re
 
 load_dotenv()
 
@@ -37,15 +35,11 @@ CACHE_TTL = 1800  # 30 menit
 API_CALL_TIMESTAMPS = []
 LAST_API_CALL_COUNT = 0
 
-USE_REAL_API = True # Tetap False untuk pengujian
+USE_REAL_API = True
 
-# Pola regex untuk validasi ID
-# Memperbolehkan angka, huruf, dan underscore. Sesuaikan jika perlu.
 ID_REGEX = re.compile(r"^[a-zA-Z0-9_.-]+$")
 
-# ================== FUNGSI API CUACA (VERSI BARU) ==================
-
-# Kamus ini akan dikirim ke frontend via endpoint baru
+# Peta WMO -> (deskripsi, icon siang, icon malam)
 WMO_CODE_MAP = {
     0: ("Cerah", "wi-day-sunny", "wi-night-clear"),
     1: ("Sebagian Besar Cerah", "wi-day-sunny-overcast", "wi-night-alt-partly-cloudy"),
@@ -69,58 +63,43 @@ WMO_CODE_MAP = {
     96: ("Badai Petir dengan Hujan Es", "wi-day-hail", "wi-night-alt-hail"),
     99: ("Badai Petir dengan Hujan Es Lebat", "wi-day-hail", "wi-night-alt-hail"),
 }
-# Fungsi get_weather_info(code, is_day) dihapus dari sini,
-# karena logikanya dipindah ke frontend.
 
 def generate_dummy_api_response(wilayah_infos):
     """
-    Menghasilkan data dummy (14 hari) untuk multi-lokasi.
-    [VERSI PERBAIKAN]
+    Menghasilkan data dummy (14 hari) untuk multi-lokasi,
+    meniru struktur Open-Meteo (timezone & time array per lokasi).
     """
     print(f"MODE DUMMY: Menghasilkan data untuk {len(wilayah_infos)} lokasi.")
     dummy_list = []
     total_hourly_points = 336  # 14 hari * 24 jam
-    total_daily_points = 14     # 14 hari
+    total_daily_points = 14    # 14 hari
     possible_codes = list(WMO_CODE_MAP.keys())
 
-    # --- PERBAIKAN: Meniru format timestamp OpenMeteo ---
-
-    # 1. Tentukan timezone dummy (harus konsisten dengan data di bawah)
     dummy_tz_str = 'Asia/Singapore'
     dummy_tz = pytz_timezone(dummy_tz_str)
-    
-    # 2. Dapatkan 'sekarang' di timezone itu
     now_in_tz = datetime.now(dummy_tz)
-    
-    # 3. Dapatkan tanggal 7 hari lalu (hanya tanggal)
     start_date_in_tz = (now_in_tz - timedelta(days=7)).date()
-    
-    # 4. Buat datetime jam 00:00 pada tanggal itu (ini adalah start_datetime lokal)
-    #    Kita buat sebagai datetime "naive" (tanpa info TZ)
-    start_datetime_local = datetime(
-        start_date_in_tz.year, 
-        start_date_in_tz.month, 
-        start_date_in_tz.day, 
-        0, 0, 0
-    )
 
-    # 5. Buat daftar string waktu LOKAL (tanpa offset)
-    #    Formatnya YYYY-MM-DDTHH:MM, persis seperti yang diharapkan frontend
+    start_datetime_local = datetime(start_date_in_tz.year, start_date_in_tz.month, start_date_in_tz.day, 0, 0, 0)
+
     dummy_hourly_times = [
-        (start_datetime_local + timedelta(hours=i)).strftime('%Y-%m-%dT%H:%M') 
+        (start_datetime_local + timedelta(hours=i)).strftime('%Y-%m-%dT%H:%M')
         for i in range(total_hourly_points)
     ]
-    
-    # 6. Buat daftar string tanggal (format YYYY-MM-DD)
     dummy_daily_times = [
-        (start_date_in_tz + timedelta(days=i)).isoformat() 
+        (start_date_in_tz + timedelta(days=i)).isoformat()
         for i in range(total_daily_points)
     ]
-    # --- AKHIR PERBAIKAN ---
+
+    localized_start = dummy_tz.localize(start_datetime_local)
+    dummy_offset_second = localized_start.utcoffset()
+    if dummy_offset_second is not None:
+        dummy_offset_seconds = int(dummy_offset_second.total_seconds())
+    dummy_tz_abbrev = localized_start.strftime('%Z')
 
     for info in wilayah_infos:
         hourly_data = {
-            'time': dummy_hourly_times, # <-- Sekarang formatnya sudah benar
+            'time': dummy_hourly_times,
             'temperature_2m': [round(random.uniform(25.0, 32.0), 1) for _ in range(total_hourly_points)],
             'relative_humidity_2m': [random.randint(60, 90) for _ in range(total_hourly_points)],
             'apparent_temperature': [round(random.uniform(28.0, 35.0), 1) for _ in range(total_hourly_points)],
@@ -131,35 +110,31 @@ def generate_dummy_api_response(wilayah_infos):
             'wind_direction_10m': [random.randint(0, 360) for _ in range(total_hourly_points)]
         }
         daily_data = {
-            'time': dummy_daily_times, # <-- Format ini sudah benar
+            'time': dummy_daily_times,
             'weather_code': [random.choice(possible_codes) for _ in range(total_daily_points)],
             'temperature_2m_max': [round(random.uniform(30.0, 34.0), 1) for _ in range(total_daily_points)],
             'temperature_2m_min': [round(random.uniform(23.0, 26.0), 1) for _ in range(total_daily_points)]
         }
-        
-        # [PERBAIKAN KONSISTENSI]
-        # Pastikan offset dan singkatan TZ sesuai dengan string waktu yang dibuat
-        localized_start = dummy_tz.localize(start_datetime_local)
-        localizeds = localized_start.utcoffset()
-        if localizeds:
-            dummy_offset_seconds = int(localizeds.total_seconds())
-        dummy_tz_abbrev = localized_start.strftime('%Z') # Cth: SGT
 
         location_dummy = {
-            'latitude': info['lat'], 'longitude': info['lon'], 'generationtime_ms': random.uniform(0.5, 2.0),
-            'utc_offset_seconds': dummy_offset_seconds,      # <-- Konsisten
-            'timezone': dummy_tz_str,                   # <-- Konsisten
-            'timezone_abbreviation': dummy_tz_abbrev,   # <-- Konsisten
+            'latitude': info['lat'],
+            'longitude': info['lon'],
+            'generationtime_ms': random.uniform(0.5, 2.0),
+            'utc_offset_seconds': dummy_offset_seconds,
+            'timezone': dummy_tz_str,
+            'timezone_abbreviation': dummy_tz_abbrev,
             'elevation': random.uniform(5, 50),
-            'hourly_units': {}, 'hourly': hourly_data,
-            'daily_units': {}, 'daily': daily_data
+            'hourly_units': {},
+            'hourly': hourly_data,
+            'daily_units': {},
+            'daily': daily_data
         }
         dummy_list.append(location_dummy)
     return dummy_list
 
 def call_open_meteo_api(wilayah_infos):
     """
-    Memanggil API OpenMeteo asli (meminta data hourly dan daily).
+    Memanggil API OpenMeteo asli (hourly + daily).
     """
     global LAST_API_CALL_COUNT, API_CALL_TIMESTAMPS
     if not wilayah_infos:
@@ -170,16 +145,18 @@ def call_open_meteo_api(wilayah_infos):
     longitudes = [str(info['lon']) for info in wilayah_infos]
 
     params = {
-        "latitude": ",".join(latitudes), "longitude": ",".join(longitudes),
+        "latitude": ",".join(latitudes),
+        "longitude": ",".join(longitudes),
         "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m",
-        "daily": "weather_code,temperature_2m_max,temperature_2m_min", # <-- TAMBAHAN: Minta data harian
-        "timezone": "auto", "forecast_days": 7, "past_days": 7
+        "daily": "weather_code,temperature_2m_max,temperature_2m_min",
+        "timezone": "auto",
+        "forecast_days": 7,
+        "past_days": 7
     }
 
-    call_count = len(wilayah_infos)
-    LAST_API_CALL_COUNT = call_count
+    LAST_API_CALL_COUNT = len(wilayah_infos)
     API_CALL_TIMESTAMPS.append(time.time())
-    print(f"MODE API ASLI: Memanggil OpenMeto untuk {call_count} lokasi.")
+    print(f"MODE API ASLI: Memanggil OpenMeteo untuk {LAST_API_CALL_COUNT} lokasi.")
     
     try:
         response = requests.get(base_url, params=params, timeout=15)
@@ -189,23 +166,20 @@ def call_open_meteo_api(wilayah_infos):
             return [api_data]
         return api_data
     except requests.exceptions.HTTPError as http_err:
-        print(f"HTTP error terjadi: {http_err} - {response.text}")
+        print(f"HTTP error: {http_err} - {response.text}")
     except requests.exceptions.RequestException as req_err:
-        print(f"Error koneksi atau request: {req_err}")
+        print(f"Request error: {req_err}")
     except ValueError as json_err:
-        print(f"Gagal mem-parsing JSON: {json_err}")
+        print(f"Gagal parsing JSON: {json_err}")
     return None
 
 def process_api_response(api_data_list, wilayah_infos):
     """
-    PERUBAHAN BESAR: Fungsi ini sekarang hanya mengemas data 14 hari (hourly+daily)
-    ke dalam dict per wilayah_id. Tidak ada lagi pemilihan 'current_index'.
+    Mengemas data per wilayah_id (14 hari penuh).
     """
     processed_data = {}
     for original_info, location_data in zip(wilayah_infos, api_data_list):
         wilayah_id = original_info['id']
-        
-        # Kirim semua data yang relevan
         processed_data[wilayah_id] = {
             "latitude": location_data.get('latitude'),
             "longitude": location_data.get('longitude'),
@@ -218,25 +192,14 @@ def process_api_response(api_data_list, wilayah_infos):
     return processed_data
 
 def get_weather_data_for_locations(wilayah_infos):
-    """
-    Fungsi "gatekeeper" (Tidak berubah, tapi data yang dikembalikan berbeda).
-    """
     if not wilayah_infos:
         return {}
-    
     api_data_list = call_open_meteo_api(wilayah_infos) if USE_REAL_API else generate_dummy_api_response(wilayah_infos)
-    
     if api_data_list is None:
         return {}
-        
     return process_api_response(api_data_list, wilayah_infos)
 
-# ================== FUNGSI PROSES DATA UTAMA ==================
-
 def process_wilayah_data(wilayah_list):
-    """
-    PERUBAHAN: Cache sekarang menyimpan data 14 hari penuh, bukan data 1 indeks.
-    """
     final_data = {}
     ids_to_fetch_info = []
     current_time = time.time()
@@ -245,33 +208,25 @@ def process_wilayah_data(wilayah_list):
         wilayah_id = info["id"]
         if wilayah_id in WEATHER_CACHE and (current_time - WEATHER_CACHE[wilayah_id]['timestamp'] < CACHE_TTL):
             weather_data = WEATHER_CACHE[wilayah_id]['data']
-            # Gabungkan info geo (lat, lon, nama) dengan data cuaca lengkap
             final_data[wilayah_id] = {**info, **weather_data}
         else:
             ids_to_fetch_info.append(info)
     
     if ids_to_fetch_info:
-        # Panggil gatekeeper, yang sekarang mengembalikan data 14 hari penuh
         new_weather_data_map = get_weather_data_for_locations(ids_to_fetch_info)
-        
         for info in ids_to_fetch_info:
             wilayah_id = info['id']
             if wilayah_id in new_weather_data_map:
-                weather_data = new_weather_data_map[wilayah_id] # Ini adalah data 14 hari
+                weather_data = new_weather_data_map[wilayah_id]
                 WEATHER_CACHE[wilayah_id] = {"data": weather_data, "timestamp": current_time}
-                # Gabungkan info geo (lat, lon, nama) dengan data cuaca lengkap
                 final_data[wilayah_id] = {**info, **weather_data}
 
     return final_data
 
 # ================== ROUTES ==================
 
-# --- ENDPOINT AMBIL IKON CUACA ---
 @app.route('/api/wmo-codes')
 def get_wmo_codes():
-    """
-    Endpoint baru untuk mengirim peta WMO ke frontend.
-    """
     return jsonify(WMO_CODE_MAP)
 
 @app.route('/api/provinsi-info')
@@ -298,17 +253,12 @@ def get_data_cuaca():
     try:
         bbox_str = request.args.get('bbox')
         zoom = int(float(request.args.get('zoom', 9)))
-        # Parameter 'only_geo' sekarang jadi default behavior
-        # only_geo = str(request.args.get('only_geo', '0')).lower() in ('1', 'true', 'yes')
-
         if not bbox_str:
             return jsonify({"error": "bbox parameter is required"}), 400
 
         xmin, ymin, xmax, ymax = [float(coord) for coord in bbox_str.split(',')]
-        
-        # Validasi BBOX sederhana
         if not all(isinstance(c, (int, float)) for c in [xmin, ymin, xmax, ymax]):
-             return jsonify({"error": "Invalid bbox coordinates"}), 400
+            return jsonify({"error": "Invalid bbox coordinates"}), 400
         
         bbox_wkt = f'SRID=4326;POLYGON(({xmin} {ymin}, {xmax} {ymin}, {xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'
 
@@ -317,7 +267,7 @@ def get_data_cuaca():
         elif 11 <= zoom <= 14:
             table_name, id_column, name_column = "batas_kecamatandistrik", "KDCPUM", "WADMKC"
         else:
-            return jsonify([]) # Kembalikan array kosong
+            return jsonify([])
 
         query = text(f"""
             SELECT "{id_column}" as id, "{name_column}" as nama, latitude as lat, longitude as lon
@@ -329,10 +279,6 @@ def get_data_cuaca():
         wilayah_info = [dict(row) for row in result.mappings()]
 
         print(f"Ditemukan {len(wilayah_info)} wilayah di BBOX ini.")
-        # if wilayah_info:
-        #     print("Contoh data pertama:", wilayah_info)
-        # PERUBAHAN: Endpoint ini SEKARANG HANYA mengembalikan data geo.
-        # Data cuaca akan diambil secara terpisah oleh /api/data-by-ids saat di-klik.
         return jsonify(wilayah_info)
 
     except Exception as e:
@@ -349,7 +295,6 @@ def get_data_by_ids():
         if not ids_str:
             return jsonify({"error": "ids parameter is required"}), 400
 
-        # --- TAMBAHAN: Validasi Keamanan ---
         list_of_ids_raw = ids_str.split(',')
         list_of_ids_validated = []
         for id_ in list_of_ids_raw:
@@ -359,10 +304,9 @@ def get_data_by_ids():
                 print(f"PERINGATAN: ID tidak valid terdeteksi dan diabaikan: {id_}")
         
         if not list_of_ids_validated:
-             return jsonify({"error": "No valid IDs provided"}), 400
+            return jsonify({"error": "No valid IDs provided"}), 400
 
         ids_tuple_str = f"({','.join(list_of_ids_validated)})"
-        # --- Akhir Validasi ---
 
         query = text(f"""
             SELECT id, nama, lat, lon FROM (
@@ -375,9 +319,7 @@ def get_data_by_ids():
         result = session.execute(query)
         relevant_rows = [dict(row) for row in result.mappings()]
 
-        # PERUBAHAN: Fungsi ini sekarang mengambil data 14-hari penuh dari cache/API
         final_data = process_wilayah_data(relevant_rows)
-        
         return jsonify(final_data)
 
     except Exception as e:
@@ -386,7 +328,6 @@ def get_data_by_ids():
     finally:
         session.close()
 
-# Rute monitoring, index, favicon, dan tiles tidak berubah
 @app.route('/api/monitoring-stats')
 def get_monitoring_stats():
     global API_CALL_TIMESTAMPS
@@ -401,7 +342,7 @@ def get_monitoring_stats():
 
 @app.route('/')
 def index():
-  return render_template('index.html')
+    return render_template('index.html')
 
 @app.route('/favicon.ico')
 def favicon():
@@ -423,7 +364,7 @@ def get_tile(z, x, y):
                 'Content-Encoding': 'gzip',
                 'Access-Control-Allow-Origin': '*'
             }
-            return Response(tile_data[0], headers=headers) # tile_data[0] untuk data blob
+            return Response(tile_data[0], headers=headers)
         else:
             return Response('Tile not found', status=404)
     except sqlite3.Error as e:
