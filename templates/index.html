@@ -54,9 +54,11 @@
             <button id="next-day-btn" aria-label="Hari Berikutnya">&gt;</button>
         </div>
         <div class="datetime-row">
+            <button id="prev-three-hour-btn" aria-label="3 Jam Sebelumnya">&ll;</button>
             <button id="prev-hour-btn" aria-label="Jam Sebelumnya">&lt;</button>
             <span id="hour-display">--:--</span>
             <button id="next-hour-btn" aria-label="Jam Berikutnya">&gt;</button>
+            <button id="next-three-hour-btn" aria-label="3 Jam Berikutnya">&gg;</button>
         </div>
         <div id="calendar-popup">
             <button id="calendar-prev-month" aria-label="Bulan Sebelumnya">&lt;</button>
@@ -97,7 +99,7 @@
         // Variabel elemen UI
         let sidebarEl, toggleBtnEl, closeBtnEl, sidebarContentEl, sidebarLocationNameEl;
         let sidebarPlaceholderEl, sidebarLoadingEl, sidebarWeatherDetailsEl, sidebarProvinceDetailsEl;
-        let prevDayBtn, nextDayBtn, dateDisplay, calendarBtn, prevHourBtn, nextHourBtn, hourDisplay;
+        let prevDayBtn, nextDayBtn, dateDisplay, calendarBtn, prevHourBtn, nextHourBtn, prevThreeHourBtn, nextThreeHourBtn, hourDisplay;
         let calendarPopup, calendarGrid, calendarMonthYear, calendarPrevMonthBtn, calendarNextMonthBtn;
         let map; // Referensi MapLibre
 
@@ -496,8 +498,10 @@
             // 4. Update status tombol navigasi
             if (prevDayBtn) prevDayBtn.disabled = (idx < 24);
             if (nextDayBtn) nextDayBtn.disabled = (idx >= 312); 
+            if (prevThreeHourBtn) prevThreeHourBtn.disabled = (idx < 3);
             if (prevHourBtn) prevHourBtn.disabled = (idx <= 0);
             if (nextHourBtn) nextHourBtn.disabled = (idx >= 335);
+            if (nextThreeHourBtn) nextThreeHourBtn.disabled = (idx >= 333);
         }
 
         /** [REFAKTOR] Memperbarui tampilan picker waktu. */
@@ -825,8 +829,10 @@
             nextDayBtn = document.getElementById('next-day-btn');
             dateDisplay = document.getElementById('date-display');
             calendarBtn = document.getElementById('calendar-btn');
+            prevThreeHourBtn = document.getElementById('prev-three-hour-btn');
             prevHourBtn = document.getElementById('prev-hour-btn');
             nextHourBtn = document.getElementById('next-hour-btn');
+            nextThreeHourBtn = document.getElementById('next-three-hour-btn');
             hourDisplay = document.getElementById('hour-display');
             calendarPopup = document.getElementById('calendar-popup');
             calendarGrid = document.getElementById('calendar-grid');
@@ -912,6 +918,13 @@
                     updateTimeSelectionAndUI();
                 }
             });
+            prevThreeHourBtn.addEventListener('click', () => {
+                const newIndex = Math.max(0, appState.selectedTimeIndex - 3); 
+                if (newIndex !== appState.selectedTimeIndex) {
+                    appState.selectedTimeIndex = newIndex;
+                    updateTimeSelectionAndUI();
+                }
+            });
             prevHourBtn.addEventListener('click', () => {
                 const newIndex = Math.max(0, appState.selectedTimeIndex - 1); 
                 if (newIndex !== appState.selectedTimeIndex) {
@@ -922,6 +935,13 @@
             nextHourBtn.addEventListener('click', () => {
                 const newIndex = Math.min(335, appState.selectedTimeIndex + 1); 
                  if (newIndex !== appState.selectedTimeIndex) {
+                    appState.selectedTimeIndex = newIndex;
+                    updateTimeSelectionAndUI();
+                }
+            });
+            nextThreeHourBtn.addEventListener('click', () => {
+                const newIndex = Math.max(0, appState.selectedTimeIndex + 3); 
+                if (newIndex !== appState.selectedTimeIndex) {
                     appState.selectedTimeIndex = newIndex;
                     updateTimeSelectionAndUI();
                 }
@@ -1113,27 +1133,9 @@
                         handleUnclusteredClick(dataUntukHandler);
                     }
                 }); 
-
+                
                 // ================================================================
-                // 7. LOGIKA DOUBLE CLICK PETA
-                // ================================================================
-                map.on('dblclick', allInteractiveLayers, (e) => {
-                     if (!e.features || !e.features.length) return;
-                     const feature = e.features[0];
-                     const layerId = feature.layer.id;
-                     const featureId = feature.id;
-                     console.log("Double Click Detected on:", featureId, "Layer:", layerId);
-                     if (layerId === 'unclustered-point-temp-circle') {
-                         if (featureId && featureId === appState.activeLocationId) {
-                             console.log("Double click on ACTIVE marker. Opening sidebar.");
-                             e.preventDefault(); 
-                             openSidebar();
-                         } else { console.log("Double click on INACTIVE marker. Ignoring."); }
-                     } else { console.log("Double click on non-marker layer. Ignoring."); }
-                }); 
-
-                // ================================================================
-                // 8. FUNGSI HANDLER KLIK (Menggunakan popupManager)
+                // 7. FUNGSI HANDLER KLIK (Menggunakan popupManager)
                 // ================================================================
 
                 /** Menangani klik pada klaster */
@@ -1196,7 +1198,7 @@
                      });
                 } // Akhir handleClusterClick
 
-                /** [REFAKTOR] Menangani klik pada marker provinsi. TIDAK mereset waktu. */
+                /** Menangani klik pada marker provinsi. TIDAK mereset waktu. */
                 function handleProvinceClick(props, coordinates) {
                     console.log("Handling Province Click:", props.nama);
                     popupManager.close(true);
@@ -1214,7 +1216,7 @@
                     popupManager.open(coordinates, popupHTML);
                 } // Akhir handleProvinceClick
 
-                /** [REFAKTOR] Menangani klik pada marker unclustered. */
+                /** Menangani klik pada marker unclustered. */
                 async function handleUnclusteredClick(props) {
                     const { id, nama, lat, lon } = props;
                     const coordinates = [lon, lat];
