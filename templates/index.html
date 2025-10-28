@@ -80,7 +80,7 @@
 
         const appState = {
             selectedTimeIndex: -1, 
-            globalTimeLocalLookup: [], // [REFAKTOR] Array 336 string "YYYY-MM-DDTHH:MM"
+            globalTimeLocalLookup: [], // Array 336 string "YYYY-MM-DDTHH:MM"
             calendarDisplayMonth: new Date().getMonth(),
             calendarDisplayYear: new Date().getFullYear(),
             isLoading: false,
@@ -180,7 +180,7 @@
             return { deskripsi: deskripsi, ikon: `wi ${icon_class || default_info[1]}` };
         }
 
-        // [REFAKTOR] Helper untuk mengubah "YYYY-MM-DDTHH:MM" menjadi "Rabu, 25 Okt 2025, 10.00"
+        // [LOGIKA ASLI] Helper untuk mengubah "YYYY-MM-DDTHH:MM" menjadi "Rabu, 25 Okt 2025, 10.00"
         // Menggunakan timezone LOKAL BROWSER untuk parsing dan formatting.
         function formatLocalTimestampString(localTimeString) {
             if (!localTimeString) return "Error Waktu";
@@ -202,7 +202,7 @@
             } catch (e) { console.error("Error formatting local timestamp:", localTimeString, e); return "Error Waktu"; }
         }
 
-        // [REFAKTOR] Helper untuk mengubah "YYYY-MM-DD" menjadi "Rabu, 25 Okt" atau "Hari Ini"
+        // [LOGIKA ASLI] Helper untuk mengubah "YYYY-MM-DD" menjadi "Rabu, 25 Okt" atau "Hari Ini"
         // Membandingkan dengan TANGGAL LOKAL BROWSER
         function formatDateDisplayFromLocalString(localDateString) {
             if (!localDateString) return "Error Tgl";
@@ -233,12 +233,9 @@
         }
 
 
-        /** Memformat YYYY-MM-DD ke nama hari & tanggal lokal */
+        /** [LOGIKA ASLI] Memformat YYYY-MM-DD ke nama hari & tanggal lokal */
         function formatDayOnly(dateString, timeZone) {
              if (!dateString) return "Error Tgl";
-             // [REFAKTOR] timeZone ini sekarang hanya dipakai untuk prakiraan harian.
-             // Kita bisa membuatnya lebih sederhana dengan parsing sebagai UTC
-             // karena OpenMeteo *selalu* memberikan tanggal harian dalam UTC.
              const tz = timeZone || 'UTC';
              try {
                 const dateParts = dateString.split('-');
@@ -251,7 +248,7 @@
             } catch (e) { console.error("Error formatting day:", dateString, tz, e); return dateString; }
         }
 
-        /** [REFAKTOR] Fungsi ini HANYA digunakan untuk inisialisasi waktu awal */
+        /** [LOGIKA ASLI] Fungsi ini HANYA digunakan untuk inisialisasi waktu awal (Fallback) */
         function calculateBaseTimestamp(localTimeString, offsetSeconds) {
             if (localTimeString === undefined || localTimeString === null || offsetSeconds === undefined) {
                  return null;
@@ -269,7 +266,7 @@
             }
         }
         
-        /** [REFAKTOR] Fungsi ini HANYA digunakan untuk inisialisasi waktu awal */
+        /** [LOGIKA ASLI] Fungsi ini HANYA digunakan untuk inisialisasi waktu awal (Fallback) */
         function findIndexForTimestampUTC(targetTimestampUTC, tempUTCLookup) {
             if (!tempUTCLookup || tempUTCLookup.length === 0) return -1;
             let closestIndex = 0;
@@ -295,7 +292,7 @@
          };
 
         /**
-         * [REFAKTOR] Mereset state aplikasi terkait lokasi aktif.
+         * [LOGIKA ASLI] Mereset state aplikasi terkait lokasi aktif.
          * TIDAK LAGI MERESET WAKTU.
          */
         function resetActiveLocationState() {
@@ -339,7 +336,7 @@
              }
         }
 
-        /** [REFAKTOR] Merender isi kalender untuk bulan dan tahun tertentu */
+        /** [LOGIKA ASLI] Merender isi kalender untuk bulan dan tahun tertentu */
         function renderCalendar() {
              if (!calendarGrid || !calendarMonthYear) return;
              const displayMonth = appState.calendarDisplayMonth;
@@ -434,7 +431,7 @@
              }
          }
 
-        /** [PERBAIKAN UX] Menangani klik kalender (mempertahankan jam) */
+        /** [LOGIKA ASLI] Menangani klik kalender (mempertahankan jam) */
         function handleCalendarDateClick(targetIndex) {
             console.log("Calendar date clicked, target index (for ~12:00):", targetIndex);
             
@@ -469,7 +466,7 @@
         // ================================================================
 
         /**
-         * [REFAKTOR] Fungsi Induk untuk mengupdate state waktu, tampilan picker, dan peta/UI.
+         * [LOGIKA ASLI] Fungsi Induk untuk mengupdate state waktu, tampilan picker, dan peta/UI.
          */
         function updateTimeSelectionAndUI() {
             const idx = appState.selectedTimeIndex;
@@ -504,7 +501,7 @@
             if (nextThreeHourBtn) nextThreeHourBtn.disabled = (idx >= 333);
         }
 
-        /** [REFAKTOR] Memperbarui tampilan picker waktu. */
+        /** [LOGIKA ASLI] Memperbarui tampilan picker waktu. */
         function updateTimeSelectionDisplayOnly(localTimeString) {
             if (!dateDisplay || !hourDisplay) return;
 
@@ -520,7 +517,7 @@
         }
 
 
-        /** [REFAKTOR] Mengupdate UI dinamis (Popup & Sidebar) */
+        /** [LOGIKA ASLI] Mengupdate UI dinamis (Popup & Sidebar) */
         function updateDynamicUI(idxGlobal, localTimeString) {
             if (idxGlobal < 0) return;
 
@@ -628,7 +625,7 @@
         }
 
 
-        /** [REFAKTOR] Mengupdate state visual semua marker di peta berdasarkan indeks terpilih. */
+        /** [LOGIKA ASLI] Mengupdate state visual semua marker di peta berdasarkan indeks terpilih. */
         function updateMapFeaturesForTime(idxGlobal) {
             if (!map || !map.getSource('data-cuaca-source')) return; // Gunakan global 'map'
             if (idxGlobal === undefined || idxGlobal < 0) {
@@ -667,7 +664,7 @@
             }
         }
 
-        /** Menghasilkan HTML untuk konten popup */
+        /** [LOGIKA ASLI] Menghasilkan HTML untuk konten popup */
         function generatePopupContent(nama, data, deskripsi, ikon, formattedTime) {
             return `
                 <div class="weather-popup-content">
@@ -688,7 +685,7 @@
          }
 
         // ================================================================
-        // 4. FUNGSI SIDEBAR & HIGHLIGHT (SAMA)
+        // 4. FUNGSI SIDEBAR & HIGHLIGHT
         // ================================================================
         function openSidebar() {
             if (!sidebarEl || !toggleBtnEl || appState.isSidebarOpen) return;
@@ -751,13 +748,13 @@
                         const date = daily.time[i], code = daily.weather_code?.[i], maxT = daily.temperature_2m_max?.[i], minT = daily.temperature_2m_min?.[i];
                         if (date === undefined || code === undefined || maxT === undefined || minT === undefined) continue;
                         const { deskripsi, ikon } = getWeatherInfo(code, 1);
-                        // [REFAKTOR] Tampilkan prakiraan harian di timezone lokasi
+                        // [LOGIKA ASLI] Tampilkan prakiraan harian di timezone lokasi
                         const itemHTML = `<div class="daily-forecast-item"><span class="daily-day">${formatDayOnly(date, timeZone)}</span><i class="daily-icon ${ikon}"></i><span class="daily-desc">${deskripsi}</span><span class="daily-temp">${maxT.toFixed(1)}° / ${minT.toFixed(1)}°</span></div>`;
                         listContainer.innerHTML += itemHTML;
                     }
                 } else { listContainer.innerHTML = '<p><i>Data harian tidak tersedia.</i></p>'; }
                 
-                // [REFAKTOR] Panggil updateDynamicUI dengan indeks dan string waktu saat ini
+                // [LOGIKA ASLI] Panggil updateDynamicUI dengan indeks dan string waktu saat ini
                 const idx = appState.selectedTimeIndex;
                 const timeStr = appState.globalTimeLocalLookup[idx];
                 updateDynamicUI(idx, timeStr); // Isi "Current Conditions"
@@ -1025,7 +1022,7 @@
                             const data = dataMap[id];
                             clientWeatherCache.set(id, data); 
 
-                            // --- [REFAKTOR] INISIALISASI WAKTU SAAT DATA PERTAMA TIBA ---
+                            // --- INISIALISASI WAKTU SAAT DATA PERTAMA TIBA ---
                             if (isFirstLoad && data.hourly?.time?.length > 0) {
                                 console.log(`Data pertama dimuat. Mengatur referensi waktu global dari: ${id}`);
                                 
@@ -1033,23 +1030,56 @@
                                 appState.globalTimeLocalLookup = data.hourly.time;
                                 console.log(`Lookup waktu lokal di-set (Total: ${appState.globalTimeLocalLookup.length} jam)`);
 
-                                // 2. Buat lookup UTC HANYA untuk menemukan indeks awal
-                                const tempUTCLookup = data.hourly.time.map(timeStr => 
-                                    calculateBaseTimestamp(timeStr, data.utc_offset_seconds)
-                                );
+                                // ==========================================================
+                                // [PERUBAHAN LOGIKA] Mencari Indeks Awal
+                                // ==========================================================
                                 
-                                if (tempUTCLookup.includes(null)) {
-                                     console.error("Gagal membuat lookup UTC sementara. Waktu akan rusak.");
-                                     isFirstLoad = true; 
-                                     appState.globalTimeLocalLookup = []; // Reset
-                                     continue;
-                                }
+                                // 2. PRIORITAS 1: Coba cocokkan "wall-clock" browser
+                                const now = new Date(); // Waktu LOKAL BROWSER
+                                if (now.getMinutes() >= 30) { now.setHours(now.getHours() + 1); } // Bulatkan ke jam terdekat
+                                now.setMinutes(0); now.setSeconds(0); now.setMilliseconds(0);
 
-                                // 3. Temukan indeks terdekat dengan waktu browser saat ini
-                                const nowUTC = Date.now();
-                                const initialIndex = findIndexForTimestampUTC(nowUTC, tempUTCLookup); 
+                                // Buat string target YYYY-MM-DDTHH:00
+                                const year = now.getFullYear();
+                                const month = String(now.getMonth() + 1).padStart(2, '0');
+                                const day = String(now.getDate()).padStart(2, '0');
+                                const hours = String(now.getHours()).padStart(2, '0');
+                                const targetLocalString = `${year}-${month}-${day}T${hours}:00`;
+
+                                let initialIndex = appState.globalTimeLocalLookup.indexOf(targetLocalString);
+                                console.log(`Mencoba mencocokkan "wall-clock" browser: ${targetLocalString}`);
+
+                                if (initialIndex !== -1) {
+                                    console.log(`Sukses "wall-clock", indeks: ${initialIndex}`);
+                                } else {
+                                    // 3. FALLBACK: Jika "wall-clock" gagal (misal, di luar jangkauan 14 hari),
+                                    //    gunakan logika UTC-global-moment (logika asli Anda).
+                                    console.warn(`"wall-clock" gagal. Kembali ke pencocokan UTC global.`);
+                                    
+                                    // Buat lookup UTC HANYA untuk menemukan indeks awal
+                                    const tempUTCLookup = data.hourly.time.map(timeStr => 
+                                        calculateBaseTimestamp(timeStr, data.utc_offset_seconds)
+                                    );
+                                    
+                                    if (tempUTCLookup.includes(null)) {
+                                         console.error("Gagal membuat lookup UTC sementara. Waktu akan rusak.");
+                                         isFirstLoad = true; 
+                                         appState.globalTimeLocalLookup = []; // Reset
+                                         continue;
+                                    }
+
+                                    // Temukan indeks terdekat dengan waktu browser saat ini
+                                    const nowUTC = Date.now();
+                                    initialIndex = findIndexForTimestampUTC(nowUTC, tempUTCLookup); 
+                                    if (initialIndex === -1) initialIndex = 0; // Fallback terakhir
+                                }
+                                
+                                // ==========================================================
+                                // [AKHIR PERUBAHAN LOGIKA]
+                                // ==========================================================
+                                
                                 console.log("Indeks awal dihitung:", initialIndex);
-                                appState.selectedTimeIndex = (initialIndex !== -1) ? initialIndex : 0;
+                                appState.selectedTimeIndex = initialIndex;
                                 
                                 // 4. Set bulan/tahun kalender berdasarkan hari ini (di browser)
                                 const nowForCalendar = new Date();
