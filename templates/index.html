@@ -795,7 +795,7 @@
                 appState.isSidebarOpen = false;
                 toggleBtnEl.innerHTML = '&gt;';
                 toggleBtnEl.setAttribute('aria-label', 'Buka detail lokasi');
-                if (appState.activeLocationId) { return } 
+                if (!appState.activeLocationId) { return } 
                 mapManager.removeActiveMarkerHighlight(appState.activeLocationId); // Panggil mapManager
             },
 
@@ -848,7 +848,37 @@
                  sidebarLocationNameEl.textContent = appState.activeLocationName;
             },
 
-            /** FASE 2: Merender detail cuaca */
+            /** FASE 3: Membuat satu elemen DOM untuk prakiraan harian */
+            _createDailyForecastItem: function(date, code, maxT, minT, timeZone) {
+                const { deskripsi, ikon } = utils.getWeatherInfo(code, 1);
+                
+                const item = document.createElement('div');
+                item.className = 'daily-forecast-item';
+
+                const daySpan = document.createElement('span');
+                daySpan.className = 'daily-day';
+                daySpan.textContent = utils.formatDayOnly(date, timeZone);
+
+                const iconEl = document.createElement('i');
+                iconEl.className = `daily-icon ${ikon}`;
+
+                const descSpan = document.createElement('span');
+                descSpan.className = 'daily-desc';
+                descSpan.textContent = deskripsi;
+
+                const tempSpan = document.createElement('span');
+                tempSpan.className = 'daily-temp';
+                tempSpan.textContent = `${maxT.toFixed(1)}° / ${minT.toFixed(1)}°`;
+
+                item.appendChild(daySpan);
+                item.appendChild(iconEl);
+                item.appendChild(descSpan);
+                item.appendChild(tempSpan);
+
+                return item;
+            },
+
+            /** FASE 2 & 3: Merender detail cuaca */
             _renderSidebarWeatherState: function() {
                 sidebarWeatherDetailsEl.style.display = 'block';
                 sidebarLocationNameEl.textContent = appState.activeLocationName;
@@ -856,23 +886,35 @@
                 const daily = appState.activeLocationData.daily;
                 const timeZone = appState.activeLocationData.timezone; 
                 const listContainer = sidebarEl.querySelector('#sidebar-daily-forecast-list');
-                listContainer.innerHTML = '';
+                listContainer.innerHTML = ''; // Bersihkan kontainer
+
                 if (daily?.time) {
+                    // FASE 3: Gunakan DocumentFragment untuk performa
+                    const fragment = document.createDocumentFragment();
                     for (let i = 0; i < daily.time.length; i++) {
                         const date = daily.time[i], code = daily.weather_code?.[i], maxT = daily.temperature_2m_max?.[i], minT = daily.temperature_2m_min?.[i];
                         if (date === undefined || code === undefined || maxT === undefined || minT === undefined) continue;
-                        const { deskripsi, ikon } = utils.getWeatherInfo(code, 1); // Panggil via utils
-                        // TODO FASE 3: Ubah ini ke DOM Creation, bukan innerHTML
-                        const itemHTML = `<div class="daily-forecast-item"><span class="daily-day">${utils.formatDayOnly(date, timeZone)}</span><i class="daily-icon ${ikon}"></i><span class="daily-desc">${deskripsi}</span><span class="daily-temp">${maxT.toFixed(1)}° / ${minT.toFixed(1)}°</span></div>`; // Panggil via utils
-                        listContainer.innerHTML += itemHTML;
+                        
+                        // FASE 3: Panggil helper DOM creation
+                        const itemEl = this._createDailyForecastItem(date, code, maxT, minT, timeZone);
+                        fragment.appendChild(itemEl);
                     }
-                } else { listContainer.innerHTML = '<p><i>Data harian tidak tersedia.</i></p>'; }
+                    listContainer.appendChild(fragment); // Tambahkan ke DOM sekali
+                } else { 
+                    // FASE 3: Konsistensi DOM
+                    const p = document.createElement('p');
+                    const i = document.createElement('i');
+                    i.textContent = 'Data harian tidak tersedia.';
+                    p.appendChild(i);
+                    listContainer.appendChild(p);
+                }
                 
                 const idx = appState.selectedTimeIndex;
                  if (idx >= 0 && idx < appState.globalTimeLocalLookup.length) {
                       const timeStr = appState.globalTimeLocalLookup[idx];
                       timeManager.updateDynamicUI(idx, timeStr); // Panggil timeManager
                  } else {
+                       // Atur ulang tampilan waktu saat ini jika data tidak ada
                        sidebarEl.querySelector('#sidebar-current-time').textContent = '...';
                        sidebarEl.querySelector('#sidebar-current-icon').className = 'wi wi-na';
                        sidebarEl.querySelector('#sidebar-current-temp').textContent = '-°C';
