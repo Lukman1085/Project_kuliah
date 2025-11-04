@@ -7,15 +7,33 @@
     
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
+    <script src="static/js/searchbar.js" defer></script>
     
     <link rel="stylesheet" href="static/styles.css">
+    <link rel="stylesheet" href="static/searchbar.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css">
 </head>
 <body>
     <!-- ... (HTML Anda yang lain tidak berubah) ... -->
-    <div id="map"></div>
+    <div id="map" ></div>
     <div id="koordinat-info"></div>
     <div id="global-loading-spinner">Memuat data cuaca...</div>
+    
+    <div id="search-wrapper">
+        
+        <!-- 2. Container ASLI Anda (HTML tidak berubah) -->
+        <!-- Pastikan input memiliki autocomplete="off" -->
+        <div id="search-container">
+            <input type="text" id="search-bar" placeholder="Cari lokasi..." autocomplete="off" />
+            <button id="search-btn">
+                <img src="static/icons8-search.svg" width="20" height="20" alt="Cari" />
+            </button>
+        </div>
+        
+        <!-- 3. Dropdown BARU (kita tambahkan di sini) -->
+        <div id="suggestions-dropdown" ></div>
+
+    </div>
 
     <div id="detail-sidebar" role="dialog" aria-modal="true" aria-labelledby="sidebar-location-name">
         <div id="sidebar-header">
@@ -191,7 +209,7 @@
                     tomorrow.setDate(now.getDate() + 1);
                     const tomorrowStr = getLocalDateString(tomorrow);
 
-                    if (localDateString === todayStr) return "Hari Ini";
+                    if (localDateString === todayStr) return "Hari ini";
                     if (localDateString === yesterdayStr) return "Kemarin";
                     if (localDateString === tomorrowStr) return "Besok";
 
@@ -1447,6 +1465,7 @@
             loadingSpinner = document.getElementById('global-loading-spinner');
             calendarPrevMonthBtn = document.getElementById('calendar-prev-month'); 
             calendarNextMonthBtn = document.getElementById('calendar-next-month'); 
+
             
             // ================================================================
             // 2. Logika Inisialisasi Awal

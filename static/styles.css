@@ -1,5 +1,5 @@
 body { margin: 0; padding: 0; }
-#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1;}
 #koordinat-info {
     position: absolute; bottom: 10px; left: 10px;
     background-color: rgba(255, 255, 255, 0.8);
@@ -408,5 +408,110 @@ body { margin: 0; padding: 0; }
     font-weight: bold;
     margin-bottom: 10px;
     color: #333;
+}
+
+/* ... (CSS untuk map, body, html tetap sama) ... */
+
+/* 1. Wrapper BARU - Mengatur POSISI dan menjadi INDUK (parent) */
+#search-wrapper {
+  position: fixed;          /* Diambil dari #search-container */
+  top: 10px;                /* Diambil dari #search-container */
+  left: 50%;                /* Diambil dari #search-container */
+  transform: translateX(-50%); /* Diambil dari #search-container */
+  z-index: 1000;            /* Diambil dari #search-container */
+  
+  position: relative; /* <-- PENTING agar dropdown menempel di sini */
+  
+  /* Atur lebar wrapper agar dropdown tahu batasnya */
+  /* Sesuaikan angka 320px ini jika perlu */
+  width: 320px; 
+}
+
+/* 2. Container ASLI Anda - Sekarang hanya fokus TAMPILAN */
+#search-container {
+  /* HAPUS: position, top, left, transform, z-index (sudah pindah ke wrapper) */
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 30px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 3px 12px;
+  width: 100%; /* Penuhi wrapper */
+  box-sizing: border-box; /* Agar padding tidak merusak lebar */
+}
+
+/* 3. Input (dari kode Anda, disesuaikan) */
+#search-bar {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 1rem;
+  padding: 8px; /* PERBAIKAN: 'px' tidak valid, diubah ke '8px' */
+  flex-grow: 1; /* Biarkan input mengisi ruang */
+  width: 100%; /* Hapus width 240px, biarkan flex-grow bekerja */
+}
+
+/* 4. Tombol (dari kode Anda, disesuaikan) */
+#search-btn {
+  border: none;
+  border-radius: 50%;
+  padding: 6px; /* Dikecilkan sedikit agar pas */
+  cursor: pointer;
+  background: transparent;
+  display: flex; /* Agar icon di tengah */
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px; /* Beri jarak dari input */
+}
+
+#search-btn:hover {
+  background: #e0e0e0; /* Sedikit lebih soft */
+}
+
+/* --- CSS BARU UNTUK DROPDOWN --- */
+
+/* 5. Container Dropdown */
+#suggestions-dropdown {
+    display: none; /* Sembunyi secara default */
+    position: absolute; /* Diposisikan relatif ke #search-wrapper */
+    
+    top: 100%; /* Menempel langsung di bawah #search-wrapper */
+    margin-top: 8px; /* Beri jarak 8px dari search bar */
+    
+    left: 0;
+    width: 100%; /* Mengikuti lebar #search-wrapper */
+    
+    background-color: white;
+    border-radius: 20px; /* Samakan radiusnya dengan search bar */
+    box-shadow: 0 8px 12px rgba(0,0,0,0.10); /* Lanjutkan shadow */
+    
+    max-height: 250px;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+/* 6. Item di dalam Dropdown */
+.suggestion-item {
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 15px;
+    color: #333;
+    font-family: Arial, sans-serif;
+}
+
+/* Efek hover */
+.suggestion-item:hover {
+    background-color: #f0f0f0;
+}
+
+/* Atur radius untuk item pertama dan terakhir agar pas */
+.suggestion-item:first-child {
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+}
+
+.suggestion-item:last-child {
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
 }
 /* Style .daily-forecast-item bisa digunakan kembali */
