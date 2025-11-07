@@ -7,15 +7,32 @@
     
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
+    <script src="static/js/searchbar.js" defer></script>
     
     <link rel="stylesheet" href="static/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css">
 </head>
 <body>
     <!-- ... (HTML Anda yang lain tidak berubah) ... -->
-    <div id="map"></div>
+    <div id="map" ></div>
     <div id="koordinat-info"></div>
     <div id="global-loading-spinner">Memuat data cuaca...</div>
+    
+    <div id="search-wrapper">
+        
+        <!-- 2. Container ASLI Anda (HTML tidak berubah) -->
+        <!-- Pastikan input memiliki autocomplete="off" -->
+        <div id="search-container">
+            <input type="text" id="search-bar" placeholder="Cari lokasi..." autocomplete="off" />
+            <button id="search-btn">
+                <img src="static/icons8-search.svg" width="20" height="20" alt="Cari" />
+            </button>
+        </div>
+        
+        <!-- 3. Dropdown BARU (kita tambahkan di sini) -->
+        <div id="suggestions-dropdown" ></div>
+
+    </div>
 
     <div id="detail-sidebar" role="dialog" aria-modal="true" aria-labelledby="sidebar-location-name">
         <div id="sidebar-header">
@@ -38,11 +55,12 @@
                     <div id="sidebar-current-precipitation" style="font-size: 1rem; color: #555;">Presipitasi: ...%</div>
                     <div id="sidebar-current-wind" style="font-size: 1rem; color: #555;">Angin: ... m/s</div>
                 </div>
-                <h3 id="sidebar-daily-forecast-title">Prakiraan 14 Hari</h3>
+                <h3 id="sidebar-daily-forecast-title">Prakiraan 7 Hari Kedepan</h3>
                 <div id="sidebar-daily-forecast-list">
-                    </div>
+                    <!-- Item prakiraan harian akan ditambahkan di sini -->
+                </div>
             </div>
-            <div id="sidebar-province-details" style="display: none;">
+                <div id="sidebar-province-details" style="display: none;">
                 </div>
         </div>
     </div>
@@ -191,7 +209,7 @@
                     tomorrow.setDate(now.getDate() + 1);
                     const tomorrowStr = getLocalDateString(tomorrow);
 
-                    if (localDateString === todayStr) return "Hari Ini";
+                    if (localDateString === todayStr) return "Hari ini";
                     if (localDateString === yesterdayStr) return "Kemarin";
                     if (localDateString === tomorrowStr) return "Besok";
 
@@ -889,19 +907,35 @@
                 listContainer.innerHTML = ''; // Bersihkan kontainer
 
                 if (daily?.time) {
-                    // FASE 3: Gunakan DocumentFragment untuk performa
+                    // --- MODIFIKASI DIMULAI ---
+
+                    // 1. Helper untuk mendapatkan string YYYY-MM-DD
+                    const getLocalDateString = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    const todayStr = getLocalDateString(new Date());
+
+                    // 2. Cari indeks hari ini di dalam data prakiraan
+                    const todayIndex = daily.time.indexOf(todayStr);
+                    
+                    // 3. Tentukan indeks awal (mulai dari hari ini, atau 0 jika hari ini tidak ditemukan)
+                    const startIndex = (todayIndex !== -1) ? todayIndex : 0;
+                    
+                    // 4. Tentukan indeks akhir (7 hari dari startIndex, tapi jangan melebihi panjang data)
+                    const endIndex = Math.min(startIndex + 7, daily.time.length);
+
+                    // --- MODIFIKASI SELESAI ---
+
                     const fragment = document.createDocumentFragment();
-                    for (let i = 0; i < daily.time.length; i++) {
+
+                    // 5. Ubah loop untuk menggunakan startIndex dan endIndex
+                    for (let i = startIndex; i < endIndex; i++) {
                         const date = daily.time[i], code = daily.weather_code?.[i], maxT = daily.temperature_2m_max?.[i], minT = daily.temperature_2m_min?.[i];
                         if (date === undefined || code === undefined || maxT === undefined || minT === undefined) continue;
                         
-                        // FASE 3: Panggil helper DOM creation
                         const itemEl = this._createDailyForecastItem(date, code, maxT, minT, timeZone);
                         fragment.appendChild(itemEl);
                     }
                     listContainer.appendChild(fragment); // Tambahkan ke DOM sekali
                 } else { 
-                    // FASE 3: Konsistensi DOM
                     const p = document.createElement('p');
                     const i = document.createElement('i');
                     i.textContent = 'Data harian tidak tersedia.';
@@ -1447,6 +1481,7 @@
             loadingSpinner = document.getElementById('global-loading-spinner');
             calendarPrevMonthBtn = document.getElementById('calendar-prev-month'); 
             calendarNextMonthBtn = document.getElementById('calendar-next-month'); 
+
             
             // ================================================================
             // 2. Logika Inisialisasi Awal
