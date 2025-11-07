@@ -221,19 +221,53 @@ body { margin: 0; padding: 0; }
     color: #333;
 }
 .daily-forecast-item {
+    /* --- Ubah dari list horizontal menjadi card vertikal --- */
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid #f4f4f4;
+    flex-direction: column; /* Susun konten card secara vertikal */
+    align-items: center;    /* Pusatkan konten (ikon, teks) */
+   
+    /* --- Atur ukuran dan spasi card --- */
+    flex-shrink: 0;        /* Jangan biarkan card menyusut */
+    width: 110px;      /* Lebar minimum setiap card */
+    margin-right: 10px;    /* Jarak antar card */
+    padding: 12px 8px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    text-align: center;
 }
 .daily-forecast-item:last-child {
     border-bottom: none;
+    margin-right: 0;
 }
-.daily-day { font-weight: bold; flex-basis: 100px; }
-.daily-icon { font-size: 1.5rem; color: #555; flex-basis: 40px; text-align: center; }
-.daily-desc { flex-grow: 1; padding-left: 10px; color: #666; }
-.daily-temp { font-weight: bold; }
+.daily-day {
+    font-weight: bold;
+    font-size: 0.9rem;
+    white-space: nowrap; /* Cegah tanggal agar tidak terpotong */
+    margin-bottom: 6px;
+}
+.daily-icon { 
+    font-size: 2.5rem; 
+    color: #555; 
+    flex-basis: 40px; 
+    text-align: center;  
+    margin: 20px 0 10px 0;
+}
+.daily-desc {
+    flex-grow: 1;
+    font-size: 0.85rem;
+    color: #666;
+    height: 2.6em; /* Beri 2 baris ruang untuk deskripsi */
+    line-height: 1.3em;
+    overflow: hidden;
+    margin-bottom: 20px; /* Tambah jarak ke temperatur */
+}
+.daily-temp {
+    font-weight: bold;
+    font-size: 1rem;
+    margin-top: 4px;
+    white-space: nowrap;
+}
 
 /* CSS untuk Popup */
 .weather-popup-content {
@@ -281,26 +315,34 @@ body { margin: 0; padding: 0; }
 }
 
 /* Sidebar Container */
+/* GANTI INI */
 #detail-sidebar {
     position: fixed;
     top: 0;
-    left: 0;
+    /* HAPUS left: 0; */
     height: 100vh;
-    width: 30%; /* Lebar default */
-    max-width: 400px; /* Batas lebar maksimum */
-    min-width: 300px; /* Batas lebar minimum */
+    /* HAPUS width: 30%; */
+    /* HAPUS max-width: 400px; */
+    /* HAPUS min-width: 300px; */
     background-color: white;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-    z-index: 1001; /* Di atas peta, di bawah popup? */
-    transform: translateX(-100%); /* Sembunyi di kiri by default */
-    transition: transform 0.3s ease-in-out;
-    display: flex; /* Untuk layout header + content */
+    z-index: 1001;
+    /* HAPUS transform: translateX(-100%); */
+    /* GANTI transisi: */
+    transition: left 0.3s ease-in-out; /* <-- UBAH KE left */
+    display: flex;
     flex-direction: column;
     font-family: sans-serif;
+    
+    /* --- TAMBAHAN BARU --- */
+    width: 360px;    /* <-- Gunakan lebar tetap */
+    left: -360px;    /* <-- Mulai dari luar layar */
 }
 
+/* GANTI INI */
 #detail-sidebar.sidebar-open {
-    transform: translateX(0%); /* Munculkan sidebar */
+    /* HAPUS transform: translateX(0%); */
+    left: 0; /* <-- Geser ke dalam layar */
 }
 
 /* Tombol Buka/Tutup Sidebar */
@@ -330,10 +372,11 @@ body { margin: 0; padding: 0; }
 }
 
 /* Posisi tombol saat sidebar terbuka */
+/* GANTI INI */
 #detail-sidebar.sidebar-open + #sidebar-toggle-btn {
-    left: 30%; /* Sesuaikan dengan lebar sidebar */
-    /* Atau gunakan calc() jika lebar sidebar dinamis: left: calc(30% + 0px); */
-    border-radius: 0; /* Mungkin hilangkan radius saat menempel */
+    left: 360px; /* <-- Samakan dengan width sidebar (360px) */
+    /* ...style radius & shadow lain... */
+    border-radius: 0;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
     box-shadow: -1px 1px 4px rgba(0,0,0,0.2);
@@ -403,12 +446,34 @@ body { margin: 0; padding: 0; }
 #sidebar-current-temp { font-size: 2rem; font-weight: bold; margin: 5px 0; }
 #sidebar-current-desc, #sidebar-current-feelslike, #sidebar-current-humidity, #sidebar-current-precipitation, #sidebar-current-wind { font-size: 1rem; color: #555; }
 
-#sidebar-daily-forecast-title { /* Ganti ID jika perlu */
-    font-size: 1rem;
-    font-weight: bold;
-    margin-bottom: 10px;
-    color: #333;
+
+#sidebar-daily-forecast-list {
+    display: flex;
+    flex-direction: row;   /* Susun item secara horizontal */
+    overflow-x: auto;     /* Aktifkan horizontal scroll jika perlu */
+    overflow-y: hidden;   /* Sembunyikan scroll vertikal */
+    padding: 10px 0 16px 0; /* Beri ruang di bawah untuk scrollbar */
+    -webkit-overflow-scrolling: touch; /* Scroll lebih mulus di iOS */
+    scrollbar-width: thin;  /* Scrollbar tipis di Firefox */
+    scrollbar-color: #ccc #f0f0f0;
 }
+
+/* 2. Styling scrollbar untuk browser Webkit (Chrome, Safari) */
+#sidebar-daily-forecast-list::-webkit-scrollbar {
+    height: 8px;
+}
+#sidebar-daily-forecast-list::-webkit-scrollbar-track {
+    background: #f0f0f0;
+    border-radius: 4px;
+}
+#sidebar-daily-forecast-list::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+#sidebar-daily-forecast-list::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
+}
+
 
 /* ... (CSS untuk map, body, html tetap sama) ... */
 
@@ -514,4 +579,5 @@ body { margin: 0; padding: 0; }
     border-bottom-left-radius: 20px;
     border-bottom-right-radius: 20px;
 }
+
 /* Style .daily-forecast-item bisa digunakan kembali */
