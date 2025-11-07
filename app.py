@@ -39,6 +39,10 @@ USE_REAL_API = False # PENTING! JADIKAN False JIKA DALAM PENGEMBANGAN ATAU PENGU
 
 ID_REGEX = re.compile(r"^[a-zA-Z0-9_.-]+$")
 
+# Regex sederhana untuk memvalidasi input pencarian
+SEARCH_REGEX = re.compile(r"^[a-zA-Z0-9\s.,'-]+$")
+MAX_SEARCH_LENGTH = 50 
+
 # Peta WMO -> (deskripsi, icon siang, icon malam)
 WMO_CODE_MAP = {
     0: ("Cerah", "wi-day-sunny", "wi-night-clear"),
@@ -247,6 +251,56 @@ def get_provinsi_info():
     finally:
         session.close()
 
+# --- PENAMBAHAN BARU ---
+@app.route('/api/cari-lokasi')
+def cari_lokasi():
+    q = request.args.get('q', '').strip()
+
+    # Validasi input
+    if not q or len(q) < 3 or len(q) > MAX_SEARCH_LENGTH:
+        # Kembalikan array kosong jika kueri terlalu pendek, untuk mengosongkan hasil
+        return jsonify([])
+        
+    # Validasi pola untuk keamanan tambahan
+    if not SEARCH_REGEX.match(q):
+        return jsonify({"error": "Karakter tidak valid"}), 400
+
+    session = Session()
+    try:
+        # Kueri yang diperbarui:
+        # 1. Menggunakan COALESCE untuk mendapatkan ID yang valid
+        # 2. Menggunakan 'label' untuk pencarian ILIKE (case-insensitive)
+        # 3. Menambahkan filter IS NOT NULL pada COALESCE untuk mengecualikan data tanpa ID
+        # 4. Mengambil TIPADM untuk logika zoom di frontend
+        query = text("""
+            SELECT 
+                COALESCE("KDCPUM", "KDPKAB", "KDPPUM") as id, 
+                label as nama, 
+                latitude as lat, 
+                longitude as lon,
+                "TIPADM" as tipadm
+            FROM wilayah_administratif
+            WHERE 
+                label ILIKE :search_term 
+                AND COALESCE("KDCPUM", "KDPKAB", "KDPPUM") IS NOT NULL
+            ORDER BY "TIPADM", label
+            LIMIT 10;
+        """)
+        
+        search_term = f"%{q}%"
+        
+        result = session.execute(query, {"search_term": search_term})
+        lokasi = [dict(row) for row in result.mappings()]
+        
+        return jsonify(lokasi)
+
+    except Exception as e:
+        print(f"Error in /api/cari-lokasi: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        session.close()
+# --- AKHIR PENAMBAHAN BARU ---
+
 @app.route('/api/data-cuaca')
 def get_data_cuaca():
     session = Session()
@@ -308,6 +362,7 @@ def get_data_by_ids():
 
         ids_tuple_str = f"({','.join(list_of_ids_validated)})"
 
+        # Kueri ini sudah benar, ia akan mencari di kedua tabel
         query = text(f"""
             SELECT id, nama, lat, lon FROM (
                 SELECT "KDPKAB" as id, "WADMKK" as nama, latitude as lat, longitude as lon FROM batas_kabupatenkota WHERE "KDPKAB" IN {ids_tuple_str}
