@@ -514,4 +514,52 @@ body { margin: 0; padding: 0; }
     border-bottom-left-radius: 20px;
     border-bottom-right-radius: 20px;
 }
+
+.suggestion-item-none {
+    padding: 12px 20px;
+    cursor: default;
+    font-size: 15px;
+    color: #333;
+    font-family: Arial, sans-serif;
+}
+
+/* Efek hover */
+.suggestion-item-none:hover {
+    background-color: #f0f0f0;
+}
+
+/* Atur radius untuk item pertama dan terakhir agar pas */
+.suggestion-item-none:first-child {
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+}
+
+.suggestion-item-none:last-child {
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
+}
+
+.suggestion-item-error {
+    padding: 12px 20px;
+    cursor: default;
+    font-size: 15px;
+    color: #333;
+    font-family: Arial, sans-serif;
+}
+
+/* Efek hover */
+.suggestion-item-error:hover {
+    background-color: #f0f0f0;
+}
+
+/* Atur radius untuk item pertama dan terakhir agar pas */
+.suggestion-item-error:first-child {
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+}
+
+.suggestion-item-error:last-child {
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
+}
 /* Style .daily-forecast-item bisa digunakan kembali */

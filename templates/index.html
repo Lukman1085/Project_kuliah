@@ -7,7 +7,6 @@
     
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
-    <script src="static/js/searchbar.js" defer></script>
     
     <link rel="stylesheet" href="static/styles.css">
     <link rel="stylesheet" href="static/searchbar.css">
@@ -20,21 +19,16 @@
     <div id="global-loading-spinner">Memuat data cuaca...</div>
     
     <div id="search-wrapper">
-        
-        <!-- 2. Container ASLI Anda (HTML tidak berubah) -->
-        <!-- Pastikan input memiliki autocomplete="off" -->
         <div id="search-container">
             <input type="text" id="search-bar" placeholder="Cari lokasi..." autocomplete="off" />
             <button id="search-btn">
                 <img src="static/icons8-search.svg" width="20" height="20" alt="Cari" />
             </button>
         </div>
-        
-        <!-- 3. Dropdown BARU (kita tambahkan di sini) -->
         <div id="suggestions-dropdown" ></div>
-
     </div>
 
+    <!-- ... (Sisa HTML Anda dari #detail-sidebar hingga #datetime-picker-container tidak berubah) ... -->
     <div id="detail-sidebar" role="dialog" aria-modal="true" aria-labelledby="sidebar-location-name">
         <div id="sidebar-header">
             <h2 id="sidebar-location-name">Detail Lokasi</h2>
@@ -87,6 +81,7 @@
             </div>
         </div>
     </div>
+
     <script>
         // ================================================================
         // 1. KONFIGURASI & STATE GLOBAL
@@ -115,17 +110,20 @@
         const clientWeatherCache = new Map();
         const inflightIds = new Set();
 
-        // Variabel elemen UI (dideklarasikan di sini, diisi di DOMContentLoaded)
+        // Variabel elemen UI
         let sidebarEl, toggleBtnEl, closeBtnEl, sidebarContentEl, sidebarLocationNameEl;
         let sidebarPlaceholderEl, sidebarLoadingEl, sidebarWeatherDetailsEl, sidebarProvinceDetailsEl;
         let prevDayBtn, nextDayBtn, dateDisplay, calendarBtn, prevHourBtn, nextHourBtn, prevThreeHourBtn, nextThreeHourBtn, hourDisplay;
         let calendarPopup, calendarGrid, calendarMonthYear, calendarPrevMonthBtn, calendarNextMonthBtn, loadingSpinner;
-        let map; // Referensi MapLibre
+        let map; 
+        let searchInput, suggestionsDropdown, searchDebounceTimer; 
 
         // ================================================================
         // 2. OBJEK HELPER & MANAJER
         // ================================================================
 
+        // ... (utils, popupManager, calendarManager, timeManager, sidebarManager, mapManager... semua objek manajer Anda yang ada di sini tidak berubah) ...
+        
         /** 🛠️ UTILS: Kumpulan fungsi helper murni */
         const utils = {
             /** Menerjemahkan kode WMO ke deskripsi & ikon Weather Icons */
@@ -1103,17 +1101,30 @@
                 const isActive = (id === appState.activeLocationId);
 
                 if (data.hourly?.time && idxSaatIni >= 0) {
-                    map.setFeatureState(
-                        { source: 'data-cuaca-source', id: id },
-                        {
-                            hasData: true,
-                            suhu: data.hourly.temperature_2m?.[idxSaatIni] ?? -999,
-                            precip: data.hourly.precipitation_probability?.[idxSaatIni] ?? -1,
-                            active: isActive
-                        }
-                    );
+                    // --- PERBAIKAN 3: Memeriksa null/undefined secara eksplisit ---
+                    const suhu = data.hourly.temperature_2m?.[idxSaatIni];
+                    const precip = data.hourly.precipitation_probability?.[idxSaatIni];
+
+                    // --- PERBAIKAN 4: Menambahkan try...catch untuk race condition ---
+                    try {
+                        map.setFeatureState(
+                            { source: 'data-cuaca-source', id: id },
+                            {
+                                hasData: true,
+                                suhu: (suhu === null || suhu === undefined) ? -999 : suhu,
+                                precip: (precip === null || precip === undefined) ? -1 : precip,
+                                active: isActive
+                            }
+                        );
+                    } catch (e) {
+                        console.warn(`Gagal set state untuk feature ${id} (mungkin hilang dari peta):`, e.message);
+                    }
                 } else {
-                    map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: isActive });
+                    try {
+                        map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: isActive });
+                    } catch (e) {
+                         console.warn(`Gagal set state 'noData' untuk feature ${id}:`, e.message);
+                    }
                 }
                 
                 return didInitTime; // Kembalikan apakah inisialisasi waktu terjadi
@@ -1277,7 +1288,9 @@
 
             /** FASE 2: Menangani klik pada marker unclustered (Fungsi Kontroler Utama) */
             handleUnclusteredClick: function(props) {
-                const { id, nama, lat, lon } = props;
+                // 'props' bisa datang dari klik peta atau dari handleSuggestionClick
+                // Pastikan ia memiliki: id, nama, lat, lon
+                const { id, nama, lat, lon } = props; 
                 const coordinates = [lon, lat];
                 if (!coordinates || isNaN(coordinates[0]) || isNaN(coordinates[1])) { return; }
                 console.log("Handling Unclustered Click:", nama, id);
@@ -1332,6 +1345,7 @@
                         weather_code: hourly.weather_code?.[idxLocal],
                         suhu: hourly.temperature_2m?.[idxLocal],
                         terasa: hourly.apparent_temperature?.[idxLocal],
+                        // --- PERBAIKAN: Mengganti idxGlobal ke idxLocal ---
                         kelembapan: hourly.relative_humidity_2m?.[idxLocal],
                         prob_presipitasi: hourly.precipitation_probability?.[idxLocal],
                         kecepatan_angin_10m: hourly.wind_speed_10m?.[idxLocal],
@@ -1382,7 +1396,22 @@
                         const localTimeStringNow = hasGlobalTimeDataNow ? appState.globalTimeLocalLookup[idxLocal] : null;
 
                         if (data.hourly?.time && idxLocal >= 0 && idxLocal < data.hourly.time.length) {
-                            map.setFeatureState( { source: 'data-cuaca-source', id: id }, { hasData: true, suhu: data.hourly.temperature_2m?.[idxLocal] ?? -999, precip: data.hourly.precipitation_probability?.[idxLocal] ?? -1, active: true });
+                            
+                            // --- PERBAIKAN 3: Memeriksa null/undefined secara eksplisit ---
+                            const suhu = data.hourly.temperature_2m?.[idxLocal];
+                            const precip = data.hourly.precipitation_probability?.[idxLocal];
+                            
+                            // --- PERBAIKAN 4: Menambahkan try...catch ---
+                            try {
+                                map.setFeatureState( { source: 'data-cuaca-source', id: id }, { 
+                                    hasData: true, 
+                                    suhu: (suhu === null || suhu === undefined) ? -999 : suhu, 
+                                    precip: (precip === null || precip === undefined) ? -1 : precip, 
+                                    active: true 
+                                });
+                            } catch(e) {
+                                console.warn(`Gagal set state (cache miss) untuk ${id}:`, e.message);
+                            }
 
                             if (hasGlobalTimeDataNow && localTimeStringNow && popupManager.getInstance() === loadingPopupRef) {
                                 const popupData = { 
@@ -1390,6 +1419,7 @@
                                      weather_code: data.hourly.weather_code?.[idxLocal],
                                      suhu: data.hourly.temperature_2m?.[idxLocal],
                                      terasa: data.hourly.apparent_temperature?.[idxLocal],
+                                     // --- PERBAIKAN 2: Mengganti idxGlobal ke idxLocal ---
                                      kelembapan: data.hourly.relative_humidity_2m?.[idxLocal],
                                      prob_presipitasi: data.hourly.precipitation_probability?.[idxLocal],
                                      kecepatan_angin_10m: data.hourly.wind_speed_10m?.[idxLocal],
@@ -1404,7 +1434,12 @@
                                  popupManager.setHTML(`<b>${nama}</b><br>Data waktu belum siap.`);
                             }
                         } else {
-                            map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: true });
+                             // --- PERBAIKAN 4: Menambahkan try...catch ---
+                            try {
+                                map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: true });
+                            } catch (e) {
+                                console.warn(`Gagal set state 'noData' (cache miss) untuk ${id}:`, e.message);
+                            }
                             if (popupManager.getInstance() === loadingPopupRef) {
                                 popupManager.setHTML(`<b>${nama}</b><br>Data cuaca tidak valid.`);
                             }
@@ -1431,6 +1466,109 @@
                 }
             } // Akhir _handleCacheMiss
         };
+
+
+        // --- FUNGSI-FUNGSI UNTUK SEARCH BAR ---
+
+        /** 🔍 Mengambil data lokasi dari backend */
+        async function fetchLokasi(query) {
+            try {
+                // Panggil endpoint baru kita
+                const resp = await fetch(`${baseUrl}/api/cari-lokasi?q=${encodeURIComponent(query)}`);
+                if (!resp.ok) throw new Error('Network response was not ok');
+                const results = await resp.json();
+                renderSuggestions(results);
+            } catch (e) {
+                console.error("Search fetch error:", e);
+                suggestionsDropdown.innerHTML = '<div class="suggestion-item-error">Gagal memuat hasil</div>';
+                suggestionsDropdown.style.display = 'block';
+            }
+        }
+
+        /** 🔍 Merender hasil pencarian ke dropdown */
+        function renderSuggestions(results) {
+            suggestionsDropdown.innerHTML = '';
+            if (!results) {
+                suggestionsDropdown.style.display = 'none';
+                return;
+            }
+            
+            if (results.length === 0) {
+                suggestionsDropdown.innerHTML = '<div class="suggestion-item-none">Lokasi tidak ditemukan</div>';
+                suggestionsDropdown.style.display = 'block';
+                return;
+            }
+
+            results.forEach(lokasi => {
+                const item = document.createElement('div');
+                item.className = 'suggestion-item';
+                item.textContent = lokasi.nama; // Ini adalah 'label' dari backend
+
+                // Simpan semua data penting di dataset untuk handleSuggestionClick
+                item.dataset.id = lokasi.id;
+                item.dataset.nama = lokasi.nama;
+                item.dataset.lat = lokasi.lat;
+                item.dataset.lon = lokasi.lon;
+                item.dataset.tipadm = lokasi.tipadm; // Misal: 1, 2, 3, atau 4
+
+                item.addEventListener('click', () => {
+                    // Kirim objek lokasi lengkap ke handler
+                    handleSuggestionClick(lokasi);
+                });
+                suggestionsDropdown.appendChild(item);
+            });
+            suggestionsDropdown.style.display = 'block';
+        }
+
+        /** 🔍 Aksi yang terjadi saat hasil pencarian di-klik */
+        function handleSuggestionClick(lokasi) {
+            // 1. Bersihkan UI pencarian
+            searchInput.value = ''; // Kosongkan search bar
+            suggestionsDropdown.innerHTML = '';
+            suggestionsDropdown.style.display = 'none';
+            searchInput.blur(); // Sembunyikan keyboard di mobile
+
+            // 2. Tentukan zoom level berdasarkan tipe lokasi
+            let zoom = 10; // Default (Kabupaten)
+            const tipadm = parseInt(lokasi.tipadm, 10);
+            if (tipadm === 1) { zoom = 7; }       // Provinsi
+            else if (tipadm === 2) { zoom = 9; } // Kabupaten/Kota
+            else if (tipadm === 3) { zoom = 11; } // Kecamatan
+            else if (tipadm === 4) { zoom = 14; } // Kelurahan/Desa
+            
+            console.log(`Search click: ${lokasi.nama} (TIPADM: ${tipadm}), zooming to ${zoom}`);
+
+            // 3. Pindahkan peta ke lokasi
+            if (map) {
+                map.easeTo({
+                    center: [lokasi.lon, lokasi.lat],
+                    zoom: zoom
+                });
+            }
+
+            // 4. (KUNCI) Gunakan manajer yang ada untuk membuka sidebar!
+            const props = {
+                id: lokasi.id,
+                nama: lokasi.nama,
+                lat: lokasi.lat,
+                lon: lokasi.lon
+            };
+            
+            if (mapManager) {
+                setTimeout(() => {
+                     mapManager.handleUnclusteredClick(props);
+                     
+                     // --- PERBAIKAN 1: Buka sidebar jika tertutup ---
+                     if (!appState.isSidebarOpen && sidebarManager) {
+                        console.log("Search click: Forcing sidebar open.");
+                        sidebarManager.openSidebar();
+                     }
+                     // --- AKHIR PERBAIKAN 1 ---
+
+                }, 500); // Penundaan 500ms agar 'flyTo' bisa dimulai
+            }
+        }
+        // --- AKHIR FUNGSI SEARCH BAR ---
 
 
         // ================================================================
@@ -1465,6 +1603,8 @@
             loadingSpinner = document.getElementById('global-loading-spinner');
             calendarPrevMonthBtn = document.getElementById('calendar-prev-month'); 
             calendarNextMonthBtn = document.getElementById('calendar-next-month'); 
+            searchInput = document.getElementById('search-bar');
+            suggestionsDropdown = document.getElementById('suggestions-dropdown');
 
             
             // ================================================================
@@ -1506,6 +1646,7 @@
             // 3. Pasang Event Listener
             // ================================================================
 
+            // Listener Waktu
             prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(appState.selectedTimeIndex - 24));
             nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(appState.selectedTimeIndex + 24));
             prevThreeHourBtn.addEventListener('click', () => timeManager.handleTimeChange(appState.selectedTimeIndex - 3));
@@ -1513,12 +1654,52 @@
             nextHourBtn.addEventListener('click', () => timeManager.handleTimeChange(appState.selectedTimeIndex + 1));
             nextThreeHourBtn.addEventListener('click', () => timeManager.handleTimeChange(appState.selectedTimeIndex + 3));
             
+            // Listener Kalender
             calendarBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.toggleCalendar(); });
             calendarPrevMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(-1); });
             calendarNextMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(1); });
 
+            // Listener Sidebar
             toggleBtnEl.addEventListener('click', () => sidebarManager.toggleSidebar());
             closeBtnEl.addEventListener('click', () => sidebarManager.closeSidebar());
+
+            // --- Listener untuk Search Bar (Saat Mengetik) ---
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchDebounceTimer);
+                const query = searchInput.value;
+
+                if (query.length < 3) { // Hanya cari jika >= 3 karakter
+                    suggestionsDropdown.innerHTML = '';
+                    suggestionsDropdown.style.display = 'none';
+                    return;
+                }
+                
+                // Gunakan debounce untuk menunda API call saat pengguna masih mengetik
+                searchDebounceTimer = setTimeout(() => {
+                    fetchLokasi(query); // Panggil fungsi helper
+                }, 350); // Tunda 350ms
+            });
+
+            // --- PERBAIKAN 2: Listener untuk 'Enter' dihapus dan diganti 'focus' ---
+            
+            // Listener 'focus' (saat diklik)
+            searchInput.addEventListener('focus', () => {
+                const query = searchInput.value;
+                if (query.length >= 3) {
+                    console.log("Search bar fokus & punya 3+ karakter, langsung cari.");
+                    fetchLokasi(query); // Panggil fetch_lokasi SEGERA
+                }
+            });
+            // --- AKHIR PERBAIKAN 2 ---
+
+            // Listener untuk menutup dropdown saat klik di luar
+            document.addEventListener('click', function(e) {
+                // Pastikan search-wrapper ada sebelum memanggil .contains
+                const wrapper = document.getElementById('search-wrapper');
+                if (wrapper && !wrapper.contains(e.target)) {
+                    suggestionsDropdown.style.display = 'none';
+                }
+            });
 
 
             // ================================================================
@@ -1526,7 +1707,7 @@
             // ================================================================
             map = new maplibregl.Map({ 
                 container: 'map',
-                // ... (Style peta tidak berubah) ...
+                // ... (Style peta Anda tidak berubah) ...
                  style: { 
                     version: 8,
                     glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
@@ -1594,6 +1775,7 @@
                 map.on('click', (e) => {
                     const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
 
+                    // Logika untuk menutup sidebar jika klik di luar area interaktif
                     if (appState.isSidebarOpen && !features.length) { 
                         const sidebarClicked = e.originalEvent.target.closest('#detail-sidebar');
                         const popupClicked = e.originalEvent.target.closest('.maplibregl-popup');
@@ -1601,7 +1783,9 @@
                         const toggleClicked = e.originalEvent.target.closest('#sidebar-toggle-btn');
                         const pickerClicked = e.originalEvent.target.closest('#datetime-picker-container');
                         const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
-                        if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked) {
+                        const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
+
+                        if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked) {
                             sidebarManager.closeSidebar(); // Panggil sidebarManager
                         }
                     }
@@ -1619,6 +1803,7 @@
                     if (layerId === 'cluster-background-layer') { mapManager.handleClusterClick(feature, coordinates); }
                     else if (layerId === 'provinsi-point-circle') { mapManager.handleProvinceClick(props, coordinates); }
                     else if (layerId === 'unclustered-point-temp-circle') {
+                        // Pastikan props memiliki lat/lon untuk handleUnclusteredClick
                         const dataUntukHandler = { id: feature.id, nama: props.nama, lat: coordinates[1], lon: coordinates[0] };
                         mapManager.handleUnclusteredClick(dataUntukHandler);
                     }
