@@ -210,7 +210,6 @@ def process_wilayah_data(wilayah_list):
 
     for info in wilayah_list:
         wilayah_id = info["id"]
-        # **MODIFIKASI**: Menambahkan 'nama_simpel' dan 'nama_label' ke data yang akan di-cache/dikembalikan
         data_to_store = {
             "id": info["id"],
             "lat": info["lat"],
@@ -221,10 +220,9 @@ def process_wilayah_data(wilayah_list):
 
         if wilayah_id in WEATHER_CACHE and (current_time - WEATHER_CACHE[wilayah_id]['timestamp'] < CACHE_TTL):
             weather_data = WEATHER_CACHE[wilayah_id]['data']
-            # Gabungkan info (nama) yang tersimpan DENGAN data cuaca
             final_data[wilayah_id] = {**data_to_store, **weather_data}
         else:
-            ids_to_fetch_info.append(info) # info sudah berisi semua data (id, lat, lon, nama_simpel, nama_label)
+            ids_to_fetch_info.append(info) 
     
     if ids_to_fetch_info:
         new_weather_data_map = get_weather_data_for_locations(ids_to_fetch_info)
@@ -233,7 +231,6 @@ def process_wilayah_data(wilayah_list):
             if wilayah_id in new_weather_data_map:
                 weather_data = new_weather_data_map[wilayah_id]
                 WEATHER_CACHE[wilayah_id] = {"data": weather_data, "timestamp": current_time}
-                # Gabungkan info (nama) DENGAN data cuaca baru
                 final_data[wilayah_id] = {**info, **weather_data}
 
     return final_data
@@ -248,8 +245,6 @@ def get_wmo_codes():
 def get_provinsi_info():
     session = Session()
     try:
-        # **MODIFIKASI**: Endpoint ini juga harus distandardisasi jika akan diklik
-        # Kita anggap 'WADMPR' adalah nama simpel dan label untuk provinsi
         query = text("""
             SELECT 
                 "KDPPUM" as id, 
@@ -269,36 +264,47 @@ def get_provinsi_info():
     finally:
         session.close()
 
-# --- PENAMBAHAN BARU ---
 @app.route('/api/cari-lokasi')
 def cari_lokasi():
     q = request.args.get('q', '').strip()
 
-    # Validasi input
     if not q or len(q) < 3 or len(q) > MAX_SEARCH_LENGTH:
-        # Kembalikan array kosong jika kueri terlalu pendek, untuk mengosongkan hasil
         return jsonify([])
         
-    # Validasi pola untuk keamanan tambahan
     if not SEARCH_REGEX.match(q):
         return jsonify({"error": "Karakter tidak valid"}), 400
 
     session = Session()
     try:
-        # **MODIFIKASI**: Kueri diubah untuk mengembalikan 'nama_simpel' dan 'nama_label'
-        # Endpoint ini TIDAK diubah, karena logikanya sudah benar (memungkinkan pencarian semua level)
+        # **MODIFIKASI**: Mengganti COALESCE dengan CASE...WHEN "TIPADM"
+        # Ini adalah perbaikan untuk bug data pollution provinsi
         query = text("""
             SELECT 
-                COALESCE("KDCPUM", "KDPKAB", "KDPPUM") as id, 
+                CASE "TIPADM"
+                    WHEN 1 THEN "KDPPUM"
+                    WHEN 2 THEN "KDPKAB"
+                    WHEN 3 THEN "KDCPUM"
+                    WHEN 4 THEN "KDEPUM"
+                    ELSE COALESCE("KDCPUM", "KDPKAB", "KDPPUM")
+                END as id, 
+                
                 label as nama_label, 
-                COALESCE("WADMKC", "WADMKK", "WADMPR") as nama_simpel,
+                
+                CASE "TIPADM"
+                    WHEN 1 THEN "WADMPR"
+                    WHEN 2 THEN "WADMKK"
+                    WHEN 3 THEN "WADMKC"
+                    WHEN 4 THEN "WADMKD"
+                    ELSE COALESCE("WADMKC", "WADMKK", "WADMPR")
+                END as nama_simpel,
+                
                 latitude as lat, 
                 longitude as lon,
                 "TIPADM" as tipadm
             FROM wilayah_administratif
             WHERE 
                 label ILIKE :search_term 
-                AND COALESCE("KDCPUM", "KDPKAB", "KDPPUM") IS NOT NULL
+                AND COALESCE("KDCPUM", "KDPKAB", "KDPPUM", "KDEPUM") IS NOT NULL
             ORDER BY "TIPADM", label
             LIMIT 10;
         """)
@@ -315,7 +321,6 @@ def cari_lokasi():
         return jsonify({"error": "Internal server error"}), 500
     finally:
         session.close()
-# --- AKHIR PENAMBAHAN BARU ---
 
 @app.route('/api/data-cuaca')
 def get_data_cuaca():
@@ -331,13 +336,10 @@ def get_data_cuaca():
             return jsonify({"error": "Invalid bbox coordinates"}), 400
         
         bbox_wkt = f'SRID=4326;POLYGON(({xmin} {ymin}, {xmax} {ymin}, {xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'
-
-        # **MODIFIKASI**: Logika diubah untuk menggunakan JOIN
         
         query = None
         if 8 <= zoom <= 10:
-            # **PERBAIKAN**: Hapus CTE `RankedLabels` dan `ORDER BY "TIPADM" DESC`.
-            # Ganti dengan filter `TIPADM = 2` secara eksplisit.
+            # Filter TIPADM = 2 (Kab/Kota)
             query = text("""
                 SELECT
                     t1."KDPKAB" as id,
@@ -353,8 +355,7 @@ def get_data_cuaca():
                     AND t1."KDPKAB" IS NOT NULL;
             """)
         elif 11 <= zoom <= 14:
-            # **PERBAIKAN**: Hapus CTE `RankedLabels` dan `ORDER BY "TIPADM" DESC`.
-            # Ganti dengan filter `TIPADM = 3` secara eksplisit.
+            # Filter TIPADM = 3 (Kecamatan)
             query = text("""
                 SELECT
                     t1."KDCPUM" as id,
@@ -370,7 +371,6 @@ def get_data_cuaca():
                     AND t1."KDCPUM" IS NOT NULL;
             """)
         else:
-            # Zoom level di luar rentang, kembalikan array kosong
             return jsonify([])
 
         result = session.execute(query, {"bbox_wkt": bbox_wkt})
@@ -406,8 +406,7 @@ def get_data_by_ids():
 
         ids_tuple_str = f"({','.join(list_of_ids_validated)})"
 
-        # **MODIFIKASI**: Kueri ini diubah untuk mengambil 'nama_simpel' dan 'nama_label'
-        # **PERBAIKAN**: Hapus CTE `RankedLabels` dan ganti dengan `JOIN` yang logikanya spesifik.
+        # Logika JOIN yang sudah benar (dari perbaikan sebelumnya)
         query = text(f"""
             SELECT
                 combined.id,
@@ -419,13 +418,15 @@ def get_data_by_ids():
                 SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "KDPKAB" as join_key_kab, NULL as join_key_kec FROM batas_kabupatenkota WHERE "KDPKAB" IN {ids_tuple_str}
                 UNION ALL
                 SELECT "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, NULL as join_key_kab, "KDCPUM" as join_key_kec FROM batas_kecamatandistrik WHERE "KDCPUM" IN {ids_tuple_str}
+                UNION ALL
+                -- Tambahkan UNION untuk Provinsi jika mereka bisa di-cache/di-fetch
+                SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, "KDPPUM" as join_key_kab, NULL as join_key_kec FROM batas_provinsi WHERE "KDPPUM" IN {ids_tuple_str}
             ) as combined
             LEFT JOIN wilayah_administratif AS wa
-                -- Logika JOIN yang diperbaiki:
-                -- 1. Cocokkan ID Kab/Kota HANYA DENGAN TIPADM 2
                 ON (wa."KDPKAB" = combined.join_key_kab AND wa."TIPADM" = 2)
-                -- 2. Cocokkan ID Kecamatan HANYA DENGAN TIPADM 3
-                OR (wa."KDCPUM" = combined.join_key_kec AND wa."TIPADM" = 3);
+                OR (wa."KDCPUM" = combined.join_key_kec AND wa."TIPADM" = 3)
+                -- Tambahkan kondisi JOIN untuk Provinsi
+                OR (wa."KDPPUM" = combined.join_key_kab AND wa."TIPADM" = 1);
         """)
         
         result = session.execute(query)

@@ -1,7 +1,11 @@
 body { margin: 0; padding: 0; }
 #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1;}
+
+/* MODIFIKASI: Dipindahkan ke atas ScaleControl baru */
 #koordinat-info {
-    position: absolute; bottom: 10px; left: 10px;
+    position: absolute; 
+    bottom: 35px; /* <-- MODIFIKASI: Pindahkan ke atas ScaleControl */
+    left: 10px;
     background-color: rgba(255, 255, 255, 0.8);
     padding: 5px 10px; border-radius: 3px;
     font-family: sans-serif; font-size: 12px; z-index: 1;
@@ -169,86 +173,11 @@ body { margin: 0; padding: 0; }
     color: #aaa;
 }
 
-/* Modal Detail Cuaca */
-#detail-modal {
-    display: none; /* Sembunyi by default */
-    position: fixed;
-    z-index: 1002;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.4);
-    font-family: sans-serif;
-}
-.modal-content {
-    background-color: #fefefe;
-    margin: 10% auto;
-    border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    width: 90%;
-    max-width: 500px;
-}
-.modal-header {
-    padding: 12px 16px;
-    background-color: #007bff;
-    color: white;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.modal-header h2 {
-    margin: 0;
-    font-size: 1.25rem;
-}
-.modal-close-btn {
-    color: white;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-    line-height: 1;
-}
-.modal-body {
-    padding: 16px;
-    max-height: 60vh;
-    overflow-y: auto;
-}
-/* Konten spesifik di dalam modal */
-#modal-current-conditions {
-    text-align: center;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 15px;
-    margin-bottom: 15px;
-}
-#modal-current-icon {
-    font-size: 4rem;
-    color: #007bff;
-}
-#modal-current-temp {
-    font-size: 2.5rem;
-    font-weight: bold;
-    margin: 5px 0;
-}
-#modal-current-desc, #modal-current-feelslike {
-    font-size: 1.1rem;
-    color: #555;
-}
-#modal-daily-forecast-title {
-    font-size: 1.1rem;
-    font-weight: bold;
-    margin-bottom: 10px;
-    color: #333;
-}
+/* Modal Detail Cuaca (Tidak digunakan, tapi style-nya dipakai sidebar) */
 .daily-forecast-item {
-    /* --- Ubah dari list horizontal menjadi card vertikal --- */
     display: flex;
     flex-direction: column; /* Susun konten card secara vertikal */
     align-items: center;    /* Pusatkan konten (ikon, teks) */
-   
-    /* --- Atur ukuran dan spasi card --- */
     flex-shrink: 0;        /* Jangan biarkan card menyusut */
     width: 110px;      /* Lebar minimum setiap card */
     margin-right: 10px;    /* Jarak antar card */
@@ -321,83 +250,59 @@ body { margin: 0; padding: 0; }
 }
 .popup-actions button:hover { background-color: #0056b3; }
 
-/* --- PERUBAHAN: CSS BARU --- */
-/* Style untuk Teks Presipitasi di Peta */
-.map-precip-text {
-    font-family: sans-serif;
-    font-size: 10px;
-    font-weight: bold;
-    line-height: 1;
-}
+/* Teks Presipitasi & Ikon Cuaca (Tetap) */
+.map-precip-text { font-family: sans-serif; font-size: 10px; font-weight: bold; line-height: 1; }
+.map-weather-icon { font-size: 14px; line-height: 1; }
 
-/* Style untuk Ikon Cuaca Emoji di Peta */
-.map-weather-icon {
-    font-size: 14px; /* Ukuran emoji */
-    line-height: 1;
-}
 
 /* Sidebar Container */
-/* GANTI INI */
 #detail-sidebar {
     position: fixed;
     top: 0;
-    /* HAPUS left: 0; */
     height: 100vh;
-    /* HAPUS width: 30%; */
-    /* HAPUS max-width: 400px; */
-    /* HAPUS min-width: 300px; */
     background-color: white;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
     z-index: 1001;
-    /* HAPUS transform: translateX(-100%); */
-    /* GANTI transisi: */
-    transition: left 0.3s ease-in-out; /* <-- UBAH KE left */
+    transition: left 0.3s ease-in-out; 
     display: flex;
     flex-direction: column;
     font-family: sans-serif;
-    
-    /* --- TAMBAHAN BARU --- */
-    width: 360px;    /* <-- Gunakan lebar tetap */
-    left: -360px;    /* <-- Mulai dari luar layar */
+    width: 360px;    
+    left: -360px;    
 }
 
-/* GANTI INI */
 #detail-sidebar.sidebar-open {
-    /* HAPUS transform: translateX(0%); */
-    left: 0; /* <-- Geser ke dalam layar */
+    left: 0; 
 }
 
 /* Tombol Buka/Tutup Sidebar */
 #sidebar-toggle-btn {
-    position: fixed; /* Atau absolute relatif ke body/map container */
+    position: fixed; 
     top: 50%;
-    left: 0; /* Awalnya di tepi kiri layar */
+    left: 0; 
     transform: translateY(-50%);
-    width: 25px; /* Lebar tombol */
-    height: 60px; /* Tinggi tombol */
+    width: 25px; 
+    height: 60px; 
     background-color: white;
     border: none;
-    border-top-right-radius: 5px; /* Hanya kanan atas */
-    border-bottom-right-radius: 5px; /* Hanya kanan bawah */
+    border-top-right-radius: 5px; 
+    border-bottom-right-radius: 5px; 
     box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
     cursor: pointer;
-    z-index: 1000; /* Di bawah sidebar */
+    z-index: 1000; 
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 18px;
     color: #555;
-    transition: left 0.3s ease-in-out, background-color 0.2s; /* Animasi posisi left */
+    transition: left 0.3s ease-in-out, background-color 0.2s; 
 }
 #sidebar-toggle-btn:hover {
     background-color: #f0f0f0;
 }
 
-/* Posisi tombol saat sidebar terbuka */
-/* GANTI INI */
 #detail-sidebar.sidebar-open + #sidebar-toggle-btn {
-    left: 360px; /* <-- Samakan dengan width sidebar (360px) */
-    /* ...style radius & shadow lain... */
+    left: 360px; 
     border-radius: 0;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
@@ -413,19 +318,19 @@ body { margin: 0; padding: 0; }
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-shrink: 0; /* Agar header tidak menyusut */
+    flex-shrink: 0; 
 }
 
 #sidebar-header h2 {
     margin: 0;
-    font-size: 1.1rem; /* Sedikit lebih kecil */
+    font-size: 1.1rem; 
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis; /* Jika nama terlalu panjang */
-    margin-right: 10px; /* Jarak ke tombol close */
+    text-overflow: ellipsis; 
+    margin-right: 10px; 
 }
 
-#close-sidebar-btn { /* Menggantikan .modal-close-btn */
+#close-sidebar-btn { 
     background: none;
     border: none;
     color: white;
@@ -439,8 +344,8 @@ body { margin: 0; padding: 0; }
 /* Konten Sidebar */
 #sidebar-content {
     padding: 16px;
-    flex-grow: 1; /* Konten mengisi sisa ruang */
-    overflow-y: auto; /* Scroll vertikal jika perlu */
+    flex-grow: 1; 
+    overflow-y: auto; 
 }
 
 /* Placeholder & Loading di Sidebar */
@@ -451,14 +356,14 @@ body { margin: 0; padding: 0; }
     margin-top: 50px;
     font-style: italic;
 }
-#sidebar-loading i { /* Style untuk ikon spinner jika ada */
+#sidebar-loading i { 
     display: block;
     margin-bottom: 10px;
     font-size: 2rem;
 }
 
 /* Styling konten detail cuaca di sidebar (mirip modal) */
-#sidebar-current-conditions { /* Ganti ID jika perlu */
+#sidebar-current-conditions { 
     text-align: center;
     border-bottom: 1px solid #eee;
     padding-bottom: 15px;
@@ -471,16 +376,15 @@ body { margin: 0; padding: 0; }
 
 #sidebar-daily-forecast-list {
     display: flex;
-    flex-direction: row;   /* Susun item secara horizontal */
-    overflow-x: auto;     /* Aktifkan horizontal scroll jika perlu */
-    overflow-y: hidden;   /* Sembunyikan scroll vertikal */
-    padding: 10px 0 16px 0; /* Beri ruang di bawah untuk scrollbar */
-    -webkit-overflow-scrolling: touch; /* Scroll lebih mulus di iOS */
-    scrollbar-width: thin;  /* Scrollbar tipis di Firefox */
+    flex-direction: row;   
+    overflow-x: auto;     
+    overflow-y: hidden;   
+    padding: 10px 0 16px 0; 
+    -webkit-overflow-scrolling: touch; 
+    scrollbar-width: thin;  
     scrollbar-color: #ccc #f0f0f0;
 }
 
-/* 2. Styling scrollbar untuk browser Webkit (Chrome, Safari) */
 #sidebar-daily-forecast-list::-webkit-scrollbar {
     height: 8px;
 }
@@ -496,157 +400,195 @@ body { margin: 0; padding: 0; }
     background: #aaa;
 }
 
-
-/* ... (CSS untuk map, body, html tetap sama) ... */
-
-/* 1. Wrapper BARU - Mengatur POSISI dan menjadi INDUK (parent) */
+/* Search Bar (Tetap) */
 #search-wrapper {
-  position: fixed;          /* Diambil dari #search-container */
-  top: 10px;                /* Diambil dari #search-container */
-  left: 50%;                /* Diambil dari #search-container */
-  transform: translateX(-50%); /* Diambil dari #search-container */
-  z-index: 1000;            /* Diambil dari #search-container */
-  
-  position: relative; /* <-- PENTING agar dropdown menempel di sini */
-  
-  /* Atur lebar wrapper agar dropdown tahu batasnya */
-  /* Sesuaikan angka 320px ini jika perlu */
+  position: fixed;          
+  top: 10px;                
+  left: 50%;                
+  transform: translateX(-50%); 
+  z-index: 1000;            
+  position: relative; 
   width: 320px; 
 }
 
-/* 2. Container ASLI Anda - Sekarang hanya fokus TAMPILAN */
 #search-container {
-  /* HAPUS: position, top, left, transform, z-index (sudah pindah ke wrapper) */
   display: flex;
   align-items: center;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 30px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   padding: 3px 12px;
-  width: 100%; /* Penuhi wrapper */
-  box-sizing: border-box; /* Agar padding tidak merusak lebar */
+  width: 100%; 
+  box-sizing: border-box; 
 }
 
-/* 3. Input (dari kode Anda, disesuaikan) */
 #search-bar {
   border: none;
   outline: none;
   background: transparent;
   font-size: 1rem;
-  padding: 8px; /* PERBAIKAN: 'px' tidak valid, diubah ke '8px' */
-  flex-grow: 1; /* Biarkan input mengisi ruang */
-  width: 100%; /* Hapus width 240px, biarkan flex-grow bekerja */
+  padding: 8px; 
+  flex-grow: 1; 
+  width: 100%; 
 }
 
-/* 4. Tombol (dari kode Anda, disesuaikan) */
 #search-btn {
   border: none;
   border-radius: 50%;
-  padding: 6px; /* Dikecilkan sedikit agar pas */
+  padding: 6px; 
   cursor: pointer;
   background: transparent;
-  display: flex; /* Agar icon di tengah */
+  display: flex; 
   align-items: center;
   justify-content: center;
-  margin-left: 4px; /* Beri jarak dari input */
+  margin-left: 4px; 
 }
 
 #search-btn:hover {
-  background: #e0e0e0; /* Sedikit lebih soft */
+  background: #e0e0e0; 
 }
 
-/* --- CSS BARU UNTUK DROPDOWN --- */
-
-/* 5. Container Dropdown */
+/* Dropdown Search (Tetap) */
 #suggestions-dropdown {
-    display: none; /* Sembunyi secara default */
-    position: absolute; /* Diposisikan relatif ke #search-wrapper */
-    
-    top: 100%; /* Menempel langsung di bawah #search-wrapper */
-    margin-top: 8px; /* Beri jarak 8px dari search bar */
-    
+    display: none; 
+    position: absolute; 
+    top: 100%; 
+    margin-top: 8px; 
     left: 0;
-    width: 100%; /* Mengikuti lebar #search-wrapper */
-    
+    width: 100%; 
     background-color: white;
-    border-radius: 20px; /* Samakan radiusnya dengan search bar */
-    box-shadow: 0 8px 12px rgba(0,0,0,0.10); /* Lanjutkan shadow */
-    
+    border-radius: 20px; 
+    box-shadow: 0 8px 12px rgba(0,0,0,0.10); 
     max-height: 250px;
     overflow-y: auto;
     box-sizing: border-box;
 }
-
-/* 6. Item di dalam Dropdown */
-.suggestion-item {
+.suggestion-item, .suggestion-item-none, .suggestion-item-error {
     padding: 12px 20px;
     cursor: pointer;
     font-size: 15px;
     color: #333;
     font-family: Arial, sans-serif;
 }
-
-/* Efek hover */
-.suggestion-item:hover {
+.suggestion-item:hover, .suggestion-item-none:hover, .suggestion-item-error:hover {
     background-color: #f0f0f0;
 }
-
-/* Atur radius untuk item pertama dan terakhir agar pas */
-.suggestion-item:first-child {
+.suggestion-item:first-child, .suggestion-item-none:first-child, .suggestion-item-error:first-child {
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
 }
-
-.suggestion-item:last-child {
+.suggestion-item:last-child, .suggestion-item-none:last-child, .suggestion-item-error:last-child {
     border-bottom-left-radius: 20px;
     border-bottom-right-radius: 20px;
 }
-
-.suggestion-item-none {
-    padding: 12px 20px;
+.suggestion-item-none, .suggestion-item-error {
     cursor: default;
-    font-size: 15px;
-    color: #333;
-    font-family: Arial, sans-serif;
 }
 
-/* Efek hover */
-.suggestion-item-none:hover {
+
+/* ======================================================= */
+/* --- CSS YANG SUDAH ADA (DARI LANGKAH SEBELUMNYA) --- */
+/* ======================================================= */
+
+/* 1. Style untuk sub-judul label hierarki di sidebar */
+.location-label-subtitle {
+    font-size: 0.9rem;
+    font-style: italic;
+    color: #666; /* Sedikit lebih redup */
+    text-align: center;
+    padding: 0 10px; /* Agar tidak menempel di tepi */
+    margin-bottom: 15px; /* Jarak ke blok "current conditions" */
+    line-height: 1.4;
+}
+
+/* 2. Styling untuk Kontrol Peta MapLibre */
+
+/* Container utama (Navigasi & Skala) */
+.maplibregl-ctrl-group {
+    background-color: rgba(255, 255, 255, 0.98);
+    border-radius: 8px !important; /* Timpa default */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    /* MapLibre menambahkan margin 10px by default, itu oke */
+}
+
+/* Tombol di dalam grup navigasi */
+.maplibregl-ctrl-group button {
+    background-color: transparent;
+    transition: background-color 0.2s;
+    width: 32px !important; /* Paksa ukuran */
+    height: 32px !important; /* Paksa ukuran */
+}
+
+.maplibregl-ctrl-group button:hover {
     background-color: #f0f0f0;
 }
 
-/* Atur radius untuk item pertama dan terakhir agar pas */
-.suggestion-item-none:first-child {
-    border-top-left-radius: 20px;
-    border-top-right-radius: 20px;
+/* Radius untuk tombol pertama dan terakhir */
+.maplibregl-ctrl-group button:first-child {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+.maplibregl-ctrl-group button:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
 }
 
-.suggestion-item-none:last-child {
-    border-bottom-left-radius: 20px;
-    border-bottom-right-radius: 20px;
+/* Garis pemisah di grup navigasi */
+.maplibregl-ctrl-group button + button {
+    border-top: 1px solid #ddd;
 }
 
-.suggestion-item-error {
-    padding: 12px 20px;
-    cursor: default;
-    font-size: 15px;
-    color: #333;
-    font-family: Arial, sans-serif;
+/* Ikon di dalam tombol (compass, zoom) */
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+    opacity: 0.8;
 }
 
-/* Efek hover */
-.suggestion-item-error:hover {
-    background-color: #f0f0f0;
+/* Kontrol Skala (di bottom-left) */
+.maplibregl-ctrl-scale {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    padding: 2px 8px !important;
+    border-radius: 3px !important;
+    font-family: sans-serif !important;
+    font-size: 12px !important;
+    color: #333 !important;
+    border: 1px solid #ccc !important;
+    margin-bottom: 10px !important; /* Samakan dengan #koordinat-info */
+    margin-left: 10px !important;
 }
 
-/* Atur radius untuk item pertama dan terakhir agar pas */
-.suggestion-item-error:first-child {
-    border-top-left-radius: 20px;
-    border-top-right-radius: 20px;
+
+/* ======================================================= */
+/* --- CSS BARU (TAMBAHAN INI) --- */
+/* ======================================================= */
+
+/* 3. Styling untuk TOMBOL RESET PITCH KUSTOM */
+.maplibregl-ctrl-pitch-reset {
+    /* Style diwarisi dari `.maplibregl-ctrl-group button` */
+    /* (width, height, background-color, transition) */
+    
+    /* Pastikan tidak ada border atau padding default */
+    padding: 0;
+    border: none;
+    
+    /* Karena ini adalah satu-satunya tombol di grupnya, 
+      ia akan secara otomatis mendapatkan 4 sudut bulat 
+      dari rules `:first-child` dan `:last-child` 
+      yang sudah kita definisikan di atas.
+    */
 }
 
-.suggestion-item-error:last-child {
-    border-bottom-left-radius: 20px;
-    border-bottom-right-radius: 20px;
+/* Target SVG di dalam tombol kustom kita */
+.maplibregl-ctrl-pitch-reset svg {
+    /* Warna dan opasitas ikon agar serasi */
+    fill: #333;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+    /* Centering (display: block; margin: auto;) 
+      sudah ditambahkan inline di JS 
+    */
 }
-/* Style .daily-forecast-item bisa digunakan kembali */
+
+/* Efek hover pada tombol kustom */
+.maplibregl-ctrl-pitch-reset:hover svg {
+    opacity: 1;
+}
