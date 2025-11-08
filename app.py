@@ -276,8 +276,7 @@ def cari_lokasi():
 
     session = Session()
     try:
-        # **MODIFIKASI**: Mengganti COALESCE dengan CASE...WHEN "TIPADM"
-        # Ini adalah perbaikan untuk bug data pollution provinsi
+        # Kueri CASE...WHEN ini sudah benar dari perbaikan sebelumnya
         query = text("""
             SELECT 
                 CASE "TIPADM"
@@ -371,6 +370,9 @@ def get_data_cuaca():
                     AND t1."KDCPUM" IS NOT NULL;
             """)
         else:
+            # **MODIFIKASI**: Zoom 14+ (jika terjadi) harusnya menampilkan Kelurahan.
+            # Namun, kita tidak punya layer 'batas_kelurahan' di mbtiles, 
+            # jadi kita biarkan ini kosong agar tidak ada marker.
             return jsonify([])
 
         result = session.execute(query, {"bbox_wkt": bbox_wkt})
@@ -406,7 +408,8 @@ def get_data_by_ids():
 
         ids_tuple_str = f"({','.join(list_of_ids_validated)})"
 
-        # Logika JOIN yang sudah benar (dari perbaikan sebelumnya)
+        # **MODIFIKASI**: Menambahkan `UNION ALL` untuk `TIPADM=4`
+        # dan `LEFT JOIN` yang sesuai.
         query = text(f"""
             SELECT
                 combined.id,
@@ -415,22 +418,57 @@ def get_data_by_ids():
                 combined.lat,
                 combined.lon
             FROM (
-                SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "KDPKAB" as join_key_kab, NULL as join_key_kec FROM batas_kabupatenkota WHERE "KDPKAB" IN {ids_tuple_str}
+                -- TIPADM 1 (Provinsi)
+                SELECT 
+                    "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, 
+                    "KDPPUM" as j_prov, NULL as j_kab, NULL as j_kec, NULL as j_kel 
+                FROM batas_provinsi 
+                WHERE "KDPPUM" IN {ids_tuple_str}
+                
                 UNION ALL
-                SELECT "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, NULL as join_key_kab, "KDCPUM" as join_key_kec FROM batas_kecamatandistrik WHERE "KDCPUM" IN {ids_tuple_str}
+                
+                -- TIPADM 2 (Kab/Kota)
+                SELECT 
+                    "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, 
+                    NULL as j_prov, "KDPKAB" as j_kab, NULL as j_kec, NULL as j_kel 
+                FROM batas_kabupatenkota 
+                WHERE "KDPKAB" IN {ids_tuple_str}
+                
                 UNION ALL
-                -- Tambahkan UNION untuk Provinsi jika mereka bisa di-cache/di-fetch
-                SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, "KDPPUM" as join_key_kab, NULL as join_key_kec FROM batas_provinsi WHERE "KDPPUM" IN {ids_tuple_str}
+                
+                -- TIPADM 3 (Kecamatan)
+                SELECT 
+                    "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, 
+                    NULL as j_prov, NULL as j_kab, "KDCPUM" as j_kec, NULL as j_kel 
+                FROM batas_kecamatandistrik 
+                WHERE "KDCPUM" IN {ids_tuple_str}
+                
+                UNION ALL
+                
+                -- **INI PERBAIKANNYA**
+                -- TIPADM 4 (Kel/Desa) - Ambil langsung dari tabel wilayah_administratif
+                SELECT 
+                    "KDEPUM" as id, "WADMKD" as nama_simpel, latitude as lat, longitude as lon, 
+                    NULL as j_prov, NULL as j_kab, NULL as j_kec, "KDEPUM" as j_kel 
+                FROM wilayah_administratif
+                WHERE "KDEPUM" IN {ids_tuple_str} AND "TIPADM" = 4
+
             ) as combined
             LEFT JOIN wilayah_administratif AS wa
-                ON (wa."KDPKAB" = combined.join_key_kab AND wa."TIPADM" = 2)
-                OR (wa."KDCPUM" = combined.join_key_kec AND wa."TIPADM" = 3)
-                -- Tambahkan kondisi JOIN untuk Provinsi
-                OR (wa."KDPPUM" = combined.join_key_kab AND wa."TIPADM" = 1);
+                -- Kondisi JOIN untuk semua level
+                ON (wa."KDPPUM" = combined.j_prov AND wa."TIPADM" = 1)
+                OR (wa."KDPKAB" = combined.j_kab AND wa."TIPADM" = 2)
+                OR (wa."KDCPUM" = combined.j_kec AND wa."TIPADM" = 3)
+                OR (wa."KDEPUM" = combined.j_kel AND wa."TIPADM" = 4); -- **INI PERBAIKANNYA**
         """)
         
         result = session.execute(query)
         relevant_rows = [dict(row) for row in result.mappings()]
+        
+        if not relevant_rows:
+             # **MODIFIKASI**: Ini akan membuat frontend menampilkan error yang benar
+             print(f"PERINGATAN: Tidak ada data ditemukan di /api/data-by-ids untuk {ids_tuple_str}")
+             return jsonify({}), 404 # Kembalikan objek kosong atau error
 
         final_data = process_wilayah_data(relevant_rows)
         return jsonify(final_data)
