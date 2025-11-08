@@ -6,6 +6,28 @@ body { margin: 0; padding: 0; }
     padding: 5px 10px; border-radius: 3px;
     font-family: sans-serif; font-size: 12px; z-index: 1;
 }
+
+/* ===== PERBAIKAN UNTUK MASALAH JITTER (MASALAH 1) ===== */
+#global-loading-spinner {
+    position: fixed; /* 1. Keluarkan dari alur dokumen (layout) */
+    top: 10px;
+    right: 10px;
+    z-index: 2000;  /* 2. Pastikan di atas elemen peta dan UI lain */
+    
+    /* 3. Styling agar terlihat bagus */
+    background-color: rgba(40, 40, 40, 0.85);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-family: sans-serif;
+    font-size: 13px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    
+    /* 4. Sembunyikan di awal. JS (appState.isLoading) akan menampilkannya saat perlu. */
+    display: none; 
+}
+/* ======================================================= */
+
 .cluster-popup-content { max-height: 200px; overflow-y: auto; }
 .cluster-item { padding: 4px; cursor: pointer; }
 .cluster-item:hover { background-color: #f0f0f0; }

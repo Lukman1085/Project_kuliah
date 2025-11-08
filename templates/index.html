@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css">
 </head>
 <body>
-    <!-- ... (HTML Anda yang lain tidak berubah) ... -->
     <div id="map" ></div>
     <div id="koordinat-info"></div>
     <div id="global-loading-spinner">Memuat data cuaca...</div>
@@ -27,7 +26,6 @@
         <div id="suggestions-dropdown" ></div>
     </div>
 
-    <!-- ... (Sisa HTML Anda dari #detail-sidebar hingga #datetime-picker-container tidak berubah) ... -->
     <div id="detail-sidebar" role="dialog" aria-modal="true" aria-labelledby="sidebar-location-name">
         <div id="sidebar-header">
             <h2 id="sidebar-location-name">Detail Lokasi</h2>
@@ -121,8 +119,6 @@
         // ================================================================
         // 2. OBJEK HELPER & MANAJER
         // ================================================================
-
-        // ... (utils, popupManager, calendarManager, timeManager, sidebarManager, mapManager... semua objek manajer Anda yang ada di sini tidak berubah) ...
         
         /** 🛠️ UTILS: Kumpulan fungsi helper murni */
         const utils = {
@@ -366,7 +362,6 @@
                 } else { this._internalCloseFlag = false; }
             },
             
-            // ... (sisa fungsi popupManager tidak berubah) ...
             isOpen: function() { return !!this._currentInstance && this._currentInstance.isOpen(); },
             getElement: function() { return (this._currentInstance && this._currentInstance.isOpen()) ? this._currentInstance.getElement() : null; },
             getInstance: function() { return this._currentInstance; },
@@ -1723,7 +1718,6 @@
             // ================================================================
             map = new maplibregl.Map({ 
                 container: 'map',
-                // ... (Style peta Anda tidak berubah) ...
                  style: { 
                     version: 8,
                     glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
