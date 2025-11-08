@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css">
 </head>
 <body>
-    <!-- ... (HTML Anda yang lain tidak berubah) ... -->
     <div id="map" ></div>
     <div id="koordinat-info"></div>
     <div id="global-loading-spinner">Memuat data cuaca...</div>
@@ -27,7 +26,6 @@
         <div id="suggestions-dropdown" ></div>
     </div>
 
-    <!-- ... (Sisa HTML Anda dari #detail-sidebar hingga #datetime-picker-container tidak berubah) ... -->
     <div id="detail-sidebar" role="dialog" aria-modal="true" aria-labelledby="sidebar-location-name">
         <div id="sidebar-header">
             <h2 id="sidebar-location-name">Detail Lokasi</h2>
@@ -39,6 +37,9 @@
                 <i class="wi wi-day-sunny"></i> Memuat data...
             </div>
             <div id="sidebar-weather-details" style="display: none;">
+                <!-- MODIFIKASI: Elemen baru untuk label hierarki -->
+                <div id="sidebar-location-label-weather" class="location-label-subtitle"></div>
+                
                 <div id="sidebar-current-conditions">
                     <div id="sidebar-current-time" style="font-size: 0.9rem; color: #555; margin-bottom: 8px; text-align: center;">...</div>
                     <i id="sidebar-current-icon" class="wi wi-na"></i>
@@ -54,8 +55,9 @@
                     <!-- Item prakiraan harian akan ditambahkan di sini -->
                 </div>
             </div>
-                <div id="sidebar-province-details" style="display: none;">
-                </div>
+            <div id="sidebar-province-details" style="display: none;">
+                <!-- MODIFIKASI: Konten akan di-render oleh JS, termasuk elemen label baru -->
+            </div>
         </div>
     </div>
     <button id="sidebar-toggle-btn" aria-label="Buka detail lokasi">&gt;</button>
@@ -100,7 +102,8 @@
             isLoading: false,
             isClickLoading: false,
             activeLocationId: null,
-            activeLocationName: null,
+            activeLocationSimpleName: null, // Nama simpel (misal: "Hantakan")
+            activeLocationLabel: null, // Nama hierarki (misal: "Hantakan, Kab. ...")
             activeLocationData: null,
             isSidebarOpen: false,
             previousActiveLocationId: null,
@@ -121,8 +124,6 @@
         // ================================================================
         // 2. OBJEK HELPER & MANAJER
         // ================================================================
-
-        // ... (utils, popupManager, calendarManager, timeManager, sidebarManager, mapManager... semua objek manajer Anda yang ada di sini tidak berubah) ...
         
         /** 🛠️ UTILS: Kumpulan fungsi helper murni */
         const utils = {
@@ -272,10 +273,7 @@
             _currentInstance: null,
             _internalCloseFlag: false,
 
-            /**
-             * [PERBAIKAN] Menghasilkan Elemen DOM untuk konten popup,
-             * bukan string HTML.
-             */
+            // 'nama' di sini adalah NAMA SIMPEL
             generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
                 // 1. Buat elemen kontainer utama
                 const container = document.createElement('div');
@@ -366,7 +364,6 @@
                 } else { this._internalCloseFlag = false; }
             },
             
-            // ... (sisa fungsi popupManager tidak berubah) ...
             isOpen: function() { return !!this._currentInstance && this._currentInstance.isOpen(); },
             getElement: function() { return (this._currentInstance && this._currentInstance.isOpen()) ? this._currentInstance.getElement() : null; },
             getInstance: function() { return this._currentInstance; },
@@ -836,7 +833,8 @@
             /** FASE 2: Merender status loading */
             _renderSidebarLoadingState: function() {
                 sidebarLoadingEl.style.display = 'block';
-                sidebarLocationNameEl.textContent = `Memuat ${appState.activeLocationName || 'lokasi'}...`;
+                // **MODIFIKASI**: Gunakan activeLocationSimpleName untuk judul
+                sidebarLocationNameEl.textContent = `Memuat ${appState.activeLocationSimpleName || 'lokasi'}...`;
             },
 
             /** FASE 2: Merender status placeholder (default) */
@@ -848,9 +846,10 @@
             
             /** FASE 2: Merender status error/data tidak ada */
             _renderSidebarErrorState: function(message) {
-                 sidebarPlaceholderEl.textContent = message || `Data cuaca untuk ${appState.activeLocationName} belum dimuat atau tidak lengkap.`;
+                 // **MODIFIKASI**: Pesan error tetap pakai Label, tapi Judul pakai SimpleName
+                 sidebarPlaceholderEl.textContent = message || `Data cuaca untuk ${appState.activeLocationLabel} belum dimuat atau tidak lengkap.`;
                  sidebarPlaceholderEl.style.display = 'block';
-                 sidebarLocationNameEl.textContent = appState.activeLocationName || 'Detail Lokasi';
+                 sidebarLocationNameEl.textContent = appState.activeLocationSimpleName || 'Detail Lokasi';
                  if (!appState.activeLocationId) {
                      sidebarLocationNameEl.textContent = 'Detail Lokasi';
                      sidebarPlaceholderEl.textContent = 'Terjadi kesalahan.';
@@ -859,9 +858,29 @@
 
             /** FASE 2: Merender detail provinsi */
             _renderSidebarProvinceState: function() {
-                 sidebarProvinceDetailsEl.innerHTML = `<h3>${appState.activeLocationName}</h3><p>(Detail informasi provinsi)</p>`;
-                 sidebarProvinceDetailsEl.style.display = 'block';
-                 sidebarLocationNameEl.textContent = appState.activeLocationName;
+                 // **MODIFIKASI**: Pisahkan Judul (SimpleName) dan Label (LabelName)
+                 const container = sidebarProvinceDetailsEl;
+                 container.innerHTML = ''; // Hapus konten lama
+
+                 // 1. Buat dan tambahkan elemen label (sub-judul)
+                 const labelEl = document.createElement('div');
+                 labelEl.className = 'location-label-subtitle'; // Untuk styling CSS
+                 labelEl.id = 'sidebar-location-label-province'; // ID unik
+                 labelEl.textContent = appState.activeLocationLabel;
+                 container.appendChild(labelEl);
+
+                 // 2. Tambahkan info placeholder
+                 const infoEl = document.createElement('p');
+                 infoEl.textContent = '(Detail informasi provinsi akan ditampilkan di sini.)';
+                 infoEl.style.textAlign = 'center';
+                 infoEl.style.marginTop = '20px';
+                 container.appendChild(infoEl);
+                 
+                 // 3. Tampilkan container
+                 container.style.display = 'block';
+                 
+                 // 4. Set judul header
+                 sidebarLocationNameEl.textContent = appState.activeLocationSimpleName;
             },
 
             /** FASE 3: Membuat satu elemen DOM untuk prakiraan harian */
@@ -897,7 +916,14 @@
             /** FASE 2 & 3: Merender detail cuaca */
             _renderSidebarWeatherState: function() {
                 sidebarWeatherDetailsEl.style.display = 'block';
-                sidebarLocationNameEl.textContent = appState.activeLocationName;
+                // **MODIFIKASI**: Set Judul (SimpleName) dan Sub-judul (LabelName)
+                sidebarLocationNameEl.textContent = appState.activeLocationSimpleName;
+                
+                const labelEl = sidebarEl.querySelector('#sidebar-location-label-weather');
+                if (labelEl) {
+                    labelEl.textContent = appState.activeLocationLabel;
+                }
+                // --- Akhir Modifikasi ---
 
                 const daily = appState.activeLocationData.daily;
                 const timeZone = appState.activeLocationData.timezone; 
@@ -905,8 +931,6 @@
                 listContainer.innerHTML = ''; // Bersihkan kontainer
 
                 if (daily?.time) {
-                    // --- MODIFIKASI DIMULAI ---
-
                     // 1. Helper untuk mendapatkan string YYYY-MM-DD
                     const getLocalDateString = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     const todayStr = getLocalDateString(new Date());
@@ -919,8 +943,6 @@
                     
                     // 4. Tentukan indeks akhir (7 hari dari startIndex, tapi jangan melebihi panjang data)
                     const endIndex = Math.min(startIndex + 7, daily.time.length);
-
-                    // --- MODIFIKASI SELESAI ---
 
                     const fragment = document.createDocumentFragment();
 
@@ -963,7 +985,13 @@
                  if (!appState.isSidebarOpen || !sidebarContentEl || !sidebarPlaceholderEl || !sidebarLoadingEl || !sidebarWeatherDetailsEl || !sidebarProvinceDetailsEl || !sidebarLocationNameEl) { return; }
 
                 this._hideAllSidebarSections();
-                sidebarLocationNameEl.textContent = 'Detail Lokasi';
+                sidebarLocationNameEl.textContent = 'Detail Lokasi'; // Default
+                // Kosongkan label-label
+                const lblWeather = sidebarEl.querySelector('#sidebar-location-label-weather');
+                const lblProvince = sidebarEl.querySelector('#sidebar-location-label-province');
+                if (lblWeather) lblWeather.textContent = '';
+                if (lblProvince) lblProvince.textContent = '';
+
 
                 if (appState.isClickLoading) { 
                     this._renderSidebarLoadingState();
@@ -974,7 +1002,7 @@
                 } else if (appState.activeLocationData?.hourly && appState.globalTimeLocalLookup.length > 0) { 
                     this._renderSidebarWeatherState();
                 } else if (appState.activeLocationId) { 
-                     this._renderSidebarErrorState(`Data cuaca untuk ${appState.activeLocationName} belum dimuat atau tidak lengkap.`);
+                     this._renderSidebarErrorState(`Data cuaca untuk ${appState.activeLocationLabel} belum dimuat atau tidak lengkap.`);
                 } else { 
                      this._renderSidebarErrorState('Terjadi kesalahan.');
                 }
@@ -1028,7 +1056,8 @@
                 const idToReset = appState.activeLocationId;
                 if (idToReset) { this.removeActiveMarkerHighlight(idToReset); } // Panggil via 'this'
                 appState.activeLocationId = null;
-                appState.activeLocationName = null;
+                appState.activeLocationSimpleName = null; 
+                appState.activeLocationLabel = null; 
                 appState.activeLocationData = null;
                 appState.isClickLoading = false;
                 appState.previousActiveLocationId = null;
@@ -1060,7 +1089,16 @@
                           const resp = await fetch(`${baseUrl}/api/provinsi-info`, { signal });
                           if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
                           const provinsiData = await resp.json();
-                          const features = provinsiData.map(p => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.lon, p.lat] }, properties: { id: p.id, nama: p.nama, type: 'provinsi' } }));
+                          const features = provinsiData.map(p => ({ 
+                              type: 'Feature', 
+                              geometry: { type: 'Point', coordinates: [p.lon, p.lat] }, 
+                              properties: { 
+                                  id: p.id, 
+                                  nama_simpel: p.nama_simpel, 
+                                  nama_label: p.nama_label, 
+                                  type: 'provinsi' 
+                              } 
+                          }));
                           if (provinsiSource()) provinsiSource().setData({ type: 'FeatureCollection', features: features });
                      } catch (e) { if (e.name !== 'AbortError') console.error('Gagal ambil data provinsi:', e); }
                  } else { 
@@ -1072,7 +1110,17 @@
                         if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
                         const geoOnly = await resp.json();
                         if (!geoOnly || geoOnly.error) { console.error("API Error (geo only):", geoOnly); return; }
-                        const features = geoOnly.map(g => ({ type: 'Feature', id: g.id, geometry: { type: 'Point', coordinates: [g.lon, g.lat] }, properties: { id: g.id, nama: g.nama || 'N/A', type: 'kabkec' } }));
+                        const features = geoOnly.map(g => ({ 
+                            type: 'Feature', 
+                            id: g.id, 
+                            geometry: { type: 'Point', coordinates: [g.lon, g.lat] }, 
+                            properties: { 
+                                id: g.id, 
+                                nama_simpel: g.nama_simpel || 'N/A', 
+                                nama_label: g.nama_label || 'N/A', 
+                                type: 'kabkec' 
+                            } 
+                        }));
                         if (cuacaSource()) cuacaSource().setData({ type: 'FeatureCollection', features: features });
                      } catch (e) { if (e.name !== 'AbortError') console.error('Gagal ambil geo only data:', e); }
                  }
@@ -1117,11 +1165,9 @@
                 const isActive = (id === appState.activeLocationId);
 
                 if (data.hourly?.time && idxSaatIni >= 0) {
-                    // --- PERBAIKAN 3: Memeriksa null/undefined secara eksplisit ---
                     const suhu = data.hourly.temperature_2m?.[idxSaatIni];
                     const precip = data.hourly.precipitation_probability?.[idxSaatIni];
 
-                    // --- PERBAIKAN 4: Menambahkan try...catch untuk race condition ---
                     try {
                         map.setFeatureState(
                             { source: 'data-cuaca-source', id: id },
@@ -1180,10 +1226,9 @@
                     const dataMap = await resp.json();
 
                     for (const id in dataMap) {
-                        // FASE 2: Panggil helper
                         const didInitTime = this._processFetchedMarkerData(id, dataMap[id], currentSourceIds, isFirstLoad);
                         if (isFirstLoad && didInitTime) {
-                            isFirstLoad = false; // Hentikan pengecekan 'isFirstLoad' setelah berhasil
+                            isFirstLoad = false; 
                         }
                     }
                 } catch (e) { console.error("Gagal BBOX fetch:", e); }
@@ -1192,7 +1237,7 @@
                     appState.isLoading = false;
                     loadingSpinner.style.display = 'none';
                     
-                    if (!isFirstLoad) { // Jika 'isFirstLoad' masih true, updateUIWithRealData sudah dipanggil di helper
+                    if (!isFirstLoad) { 
                        timeManager.updateMapFeaturesForTime(appState.selectedTimeIndex); // Panggil timeManager
                     }
                 }
@@ -1203,7 +1248,7 @@
                  console.log("Handling Cluster Click");
                  popupManager.close(true);
                  const clusterId = feature.properties.cluster_id;
-                 const source = map.getSource('data-cuaca-source'); // Ambil dari 'map'
+                 const source = map.getSource('data-cuaca-source'); 
                  source.getClusterLeaves(clusterId, Infinity, 0, (err, leaves) => {
                      if (err) { console.error("Error getting cluster leaves:", err); return; }
                      const loadingPopupRef = popupManager.open(coordinates, 'Memuat data klaster...');
@@ -1242,22 +1287,22 @@
                                  if (!data.hourly?.time || idxDisplay >= data.hourly.time.length) continue; 
                                  
                                  const displayData = { 
-                                     nama: data.nama, 
+                                     nama_simpel: data.nama_simpel, 
                                      suhu: data.hourly.temperature_2m[idxDisplay], 
                                      code: data.hourly.weather_code[idxDisplay], 
                                      is_day: data.hourly.is_day[idxDisplay] 
                                  };
-                                 const { deskripsi } = utils.getWeatherInfo(displayData.code, displayData.is_day); // Panggil via utils
+                                 const { deskripsi } = utils.getWeatherInfo(displayData.code, displayData.is_day); 
                                  const item = document.createElement('div');
                                  item.className = 'cluster-item'; 
                                  item.dataset.id = id; 
-                                 item.innerHTML = `<span class="item-nama">${displayData.nama}</span> (<span class="item-suhu">${displayData.suhu?.toFixed(1) ?? '-'}°C</span>, <span class="item-desc">${deskripsi}</span>)`;
+                                 item.innerHTML = `<span class="item-nama">${displayData.nama_simpel}</span> (<span class="item-suhu">${displayData.suhu?.toFixed(1) ?? '-'}°C</span>, <span class="item-desc">${deskripsi}</span>)`;
                                  item.onclick = (event) => {
                                      event.stopPropagation();
                                      if (popupManager.getInstance() === loadingPopupRef) {
                                           popupManager.close(true); 
                                      }
-                                     this.handleUnclusteredClick(data); // Panggil via 'this'
+                                     this.handleUnclusteredClick(data); 
                                  };
                                  popupContent.appendChild(item);
                                  itemsAdded++;
@@ -1274,21 +1319,23 @@
 
             /** Menangani klik pada marker provinsi. */
             handleProvinceClick: function(props, coordinates) {
-                console.log("Handling Province Click:", props.nama);
+                // props berisi: id, nama_simpel, nama_label, type
+                console.log("Handling Province Click:", props.nama_label); 
                 popupManager.close(true);
                 const previousId = appState.activeLocationId;
                 appState.activeLocationId = props.id;
-                appState.activeLocationName = props.nama;
+                appState.activeLocationSimpleName = props.nama_simpel; 
+                appState.activeLocationLabel = props.nama_label; 
                 appState.activeLocationData = { type: 'provinsi' }; 
                 appState.previousActiveLocationId = previousId;
                 if (previousId && clientWeatherCache.has(previousId)) { 
-                    this.removeActiveMarkerHighlight(previousId); // Panggil via 'this'
+                    this.removeActiveMarkerHighlight(previousId); 
                 }
                 
-                if (appState.isSidebarOpen) sidebarManager.renderSidebarContent(); // Panggil sidebarManager
+                if (appState.isSidebarOpen) sidebarManager.renderSidebarContent(); 
 
                 const popupContent = document.createElement('div');
-                popupContent.innerHTML = `<b>Provinsi:</b><br>${props.nama}<br>`;
+                popupContent.innerHTML = `<b>Provinsi:</b><br>${props.nama_simpel}<br>`;
                 const zoomButton = document.createElement('button');
                 zoomButton.textContent = 'Zoom ke Provinsi';
                 zoomButton.onclick = () => {
@@ -1304,17 +1351,17 @@
 
             /** FASE 2: Menangani klik pada marker unclustered (Fungsi Kontroler Utama) */
             handleUnclusteredClick: function(props) {
-                // 'props' bisa datang dari klik peta atau dari handleSuggestionClick
-                // Pastikan ia memiliki: id, nama, lat, lon
-                const { id, nama, lat, lon } = props; 
+                // props berisi: id, nama_simpel, nama_label, lat, lon
+                const { id, nama_simpel, nama_label, lat, lon } = props; 
                 const coordinates = [lon, lat];
                 if (!coordinates || isNaN(coordinates[0]) || isNaN(coordinates[1])) { return; }
-                console.log("Handling Unclustered Click:", nama, id);
+                console.log("Handling Unclustered Click:", nama_label, id); 
                 
                 popupManager.close(true);
                 const previousId = appState.activeLocationId;
                 appState.activeLocationId = id;
-                appState.activeLocationName = nama;
+                appState.activeLocationSimpleName = nama_simpel; 
+                appState.activeLocationLabel = nama_label; 
                 appState.previousActiveLocationId = previousId;
                 
                 if (previousId) { this.removeActiveMarkerHighlight(previousId); } 
@@ -1326,6 +1373,11 @@
                 } else if (clientWeatherCache.has(id)) { 
                     // Kasus 2: Cache Hit
                     const data = clientWeatherCache.get(id);
+                    if (!data.nama_simpel || !data.nama_label) {
+                        data.nama_simpel = props.nama_simpel;
+                        data.nama_label = props.nama_label;
+                        clientWeatherCache.set(id, data);
+                    }
                     this._handleCacheHit(props, data, coordinates);
                 } else {
                     // Kasus 3: Cache Miss
@@ -1338,7 +1390,7 @@
                 console.log(`Data for ${props.id} is inflight. Setting loading state.`);
                 appState.activeLocationData = null; 
                 appState.isClickLoading = true;
-                popupManager.open(coordinates, `<b>${props.nama}</b><br>Memuat data...`);
+                popupManager.open(coordinates, `<b>${props.nama_simpel}</b><br>Memuat data...`);
                 if (appState.isSidebarOpen) sidebarManager.renderSidebarContent();
             },
 
@@ -1361,7 +1413,6 @@
                         weather_code: hourly.weather_code?.[idxLocal],
                         suhu: hourly.temperature_2m?.[idxLocal],
                         terasa: hourly.apparent_temperature?.[idxLocal],
-                        // --- PERBAIKAN: Mengganti idxGlobal ke idxLocal ---
                         kelembapan: hourly.relative_humidity_2m?.[idxLocal],
                         prob_presipitasi: hourly.precipitation_probability?.[idxLocal],
                         kecepatan_angin_10m: hourly.wind_speed_10m?.[idxLocal],
@@ -1370,22 +1421,22 @@
                     const { deskripsi, ikon } = utils.getWeatherInfo(popupData.weather_code, popupData.is_day);
                     const formattedTime = utils.formatLocalTimestampString(localTimeString); 
                     
-                    const popupElement = popupManager.generatePopupContent(props.nama, popupData, deskripsi, ikon, formattedTime);
+                    const popupElement = popupManager.generatePopupContent(appState.activeLocationSimpleName, popupData, deskripsi, ikon, formattedTime);
                     popupManager.open(coordinates, popupElement);
                 } else {
-                     popupManager.open(coordinates, `<b>${props.nama}</b><br>${hasGlobalTimeData ? 'Data cuaca tidak valid.' : 'Data waktu belum siap.'}`);
+                     popupManager.open(coordinates, `<b>${appState.activeLocationSimpleName}</b><br>${hasGlobalTimeData ? 'Data cuaca tidak valid.' : 'Data waktu belum siap.'}`);
                 }
             },
 
             /** FASE 2: Helper untuk kasus cache miss (fetch baru) */
             _handleCacheMiss: async function(props, coordinates) {
-                const { id, nama } = props;
+                const { id, nama_simpel, nama_label } = props; 
                 console.log(`Cache miss for ${id}. Fetching...`);
                 appState.activeLocationData = null; 
                 appState.isClickLoading = true; 
                 inflightIds.add(id);
                 
-                const loadingPopupRef = popupManager.open(coordinates, `<b>${nama}</b><br>Memuat...`);
+                const loadingPopupRef = popupManager.open(coordinates, `<b>${nama_simpel}</b><br>Memuat...`);
                 if (!loadingPopupRef) { 
                     inflightIds.delete(id); 
                     appState.isClickLoading = false; 
@@ -1413,11 +1464,9 @@
 
                         if (data.hourly?.time && idxLocal >= 0 && idxLocal < data.hourly.time.length) {
                             
-                            // --- PERBAIKAN 3: Memeriksa null/undefined secara eksplisit ---
                             const suhu = data.hourly.temperature_2m?.[idxLocal];
                             const precip = data.hourly.precipitation_probability?.[idxLocal];
                             
-                            // --- PERBAIKAN 4: Menambahkan try...catch ---
                             try {
                                 map.setFeatureState( { source: 'data-cuaca-source', id: id }, { 
                                     hasData: true, 
@@ -1435,7 +1484,6 @@
                                      weather_code: data.hourly.weather_code?.[idxLocal],
                                      suhu: data.hourly.temperature_2m?.[idxLocal],
                                      terasa: data.hourly.apparent_temperature?.[idxLocal],
-                                     // --- PERBAIKAN 2: Mengganti idxGlobal ke idxLocal ---
                                      kelembapan: data.hourly.relative_humidity_2m?.[idxLocal],
                                      prob_presipitasi: data.hourly.precipitation_probability?.[idxLocal],
                                      kecepatan_angin_10m: data.hourly.wind_speed_10m?.[idxLocal],
@@ -1444,25 +1492,23 @@
                                 const { deskripsi, ikon } = utils.getWeatherInfo(popupData.weather_code, popupData.is_day);
                                 const formattedTime = utils.formatLocalTimestampString(localTimeStringNow); 
                                 
-                                const popupElement = popupManager.generatePopupContent(nama, popupData, deskripsi, ikon, formattedTime);
+                                const popupElement = popupManager.generatePopupContent(data.nama_simpel, popupData, deskripsi, ikon, formattedTime);
                                 popupManager.setDOMContent(popupElement);
                             } else if (popupManager.getInstance() === loadingPopupRef) {
-                                 popupManager.setHTML(`<b>${nama}</b><br>Data waktu belum siap.`);
+                                 popupManager.setHTML(`<b>${data.nama_simpel}</b><br>Data waktu belum siap.`);
                             }
                         } else {
-                             // --- PERBAIKAN 4: Menambahkan try...catch ---
                             try {
                                 map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: true });
                             } catch (e) {
                                 console.warn(`Gagal set state 'noData' (cache miss) untuk ${id}:`, e.message);
                             }
                             if (popupManager.getInstance() === loadingPopupRef) {
-                                popupManager.setHTML(`<b>${nama}</b><br>Data cuaca tidak valid.`);
+                                popupManager.setHTML(`<b>${data.nama_simpel}</b><br>Data cuaca tidak valid.`);
                             }
                         }
                         if (appState.isSidebarOpen) sidebarManager.renderSidebarContent();
                     } else {
-                         // Data di-fetch, tetapi pengguna sudah mengklik lokasi lain
                          if (data.hourly?.time && idxLocal >= 0 && idxLocal < data.hourly.time.length) {
                             map.setFeatureState( { source: 'data-cuaca-source', id: id }, { hasData: true, suhu: data.hourly.temperature_2m?.[idxLocal] ?? -999, precip: data.hourly.precipitation_probability?.[idxLocal] ?? -1, active: false });
                          } else {
@@ -1474,7 +1520,9 @@
                     if (appState.activeLocationId === id) { 
                         appState.isClickLoading = false; 
                         appState.activeLocationData = null;
-                        if (popupManager.getInstance() === loadingPopupRef) { popupManager.setHTML(`<b>${nama}</b><br>Gagal: ${e.message}`); }
+                        if (popupManager.getInstance() === loadingPopupRef) { 
+                            popupManager.setHTML(`<b>${nama_simpel}</b><br>Gagal: ${e.message}`); 
+                        }
                         if (appState.isSidebarOpen) sidebarManager.renderSidebarContent(); 
                     }
                 } finally { 
@@ -1483,13 +1531,71 @@
             } // Akhir _handleCacheMiss
         };
 
+        // --- MODIFIKASI BARU: Kontrol Kustom untuk Reset Pitch ---
+        /**
+         * @class ResetPitchControl
+         * Kontrol kustom MapLibre untuk menambahkan tombol yang me-reset pitch (kemiringan) peta.
+         * Ini mengimplementasikan interface IControl MapLibre.
+         */
+        class ResetPitchControl {
+            /**
+             * Dipanggil saat kontrol ditambahkan ke peta.
+             * @param {maplibregl.Map} map - Objek peta MapLibre.
+             * @returns {HTMLElement} Elemen container untuk kontrol.
+             */
+            onAdd(map) {
+                this._map = map;
+                
+                // 1. Buat elemen container
+                this._container = document.createElement('div');
+                // Gunakan class MapLibre agar style-nya konsisten
+                this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+                
+                // 2. Buat elemen tombol
+                const button = document.createElement('button');
+                button.type = 'button';
+                // Beri title untuk accessibility (tooltip)
+                button.title = 'Reset pitch (Tampilan atas)';
+                // Beri class kustom untuk styling (di styles.css)
+                button.className = 'maplibregl-ctrl-pitch-reset'; 
+                
+                // 3. Tambahkan ikon SVG inline (ikon "dashboard" yang menyimbolkan "tampilan atas/datar")
+                // SVG ini akan di-style oleh CSS agar pas
+                button.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: auto;">
+                    <path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"></path>
+                    <line x1="8" y1="2" x2="8" y2="18"></line>
+                    <line x1="16" y1="2" x2="16" y2="18"></line>
+                    </svg>
+                `;
+                
+                // 4. Tambahkan event listener untuk reset pitch
+                button.onclick = (e) => {
+                    e.stopPropagation();
+                    this._map.easeTo({ pitch: 0 });
+                };
+                
+                this._container.appendChild(button);
+                return this._container;
+            }
+
+            /**
+             * Dipanggil saat kontrol dihapus dari peta.
+             */
+            onRemove() {
+                if (this._container && this._container.parentNode) {
+                    this._container.parentNode.removeChild(this._container);
+                }
+                this._map = undefined;
+            }
+        }
+        // --- AKHIR MODIFIKASI BARU ---
 
         // --- FUNGSI-FUNGSI UNTUK SEARCH BAR ---
 
         /** 🔍 Mengambil data lokasi dari backend */
         async function fetchLokasi(query) {
             try {
-                // Panggil endpoint baru kita
                 const resp = await fetch(`${baseUrl}/api/cari-lokasi?q=${encodeURIComponent(query)}`);
                 if (!resp.ok) throw new Error('Network response was not ok');
                 const results = await resp.json();
@@ -1518,17 +1624,17 @@
             results.forEach(lokasi => {
                 const item = document.createElement('div');
                 item.className = 'suggestion-item';
-                item.textContent = lokasi.nama; // Ini adalah 'label' dari backend
+                item.textContent = lokasi.nama_label; 
 
                 // Simpan semua data penting di dataset untuk handleSuggestionClick
                 item.dataset.id = lokasi.id;
-                item.dataset.nama = lokasi.nama;
+                item.dataset.nama_simpel = lokasi.nama_simpel; 
+                item.dataset.nama_label = lokasi.nama_label; 
                 item.dataset.lat = lokasi.lat;
                 item.dataset.lon = lokasi.lon;
-                item.dataset.tipadm = lokasi.tipadm; // Misal: 1, 2, 3, atau 4
+                item.dataset.tipadm = lokasi.tipadm; 
 
                 item.addEventListener('click', () => {
-                    // Kirim objek lokasi lengkap ke handler
                     handleSuggestionClick(lokasi);
                 });
                 suggestionsDropdown.appendChild(item);
@@ -1538,11 +1644,12 @@
 
         /** 🔍 Aksi yang terjadi saat hasil pencarian di-klik */
         function handleSuggestionClick(lokasi) {
+            // lokasi: { id, nama_simpel, nama_label, lat, lon, tipadm }
             // 1. Bersihkan UI pencarian
-            searchInput.value = ''; // Kosongkan search bar
+            searchInput.value = ''; 
             suggestionsDropdown.innerHTML = '';
             suggestionsDropdown.style.display = 'none';
-            searchInput.blur(); // Sembunyikan keyboard di mobile
+            searchInput.blur(); 
 
             // 2. Tentukan zoom level berdasarkan tipe lokasi
             let zoom = 10; // Default (Kabupaten)
@@ -1552,7 +1659,7 @@
             else if (tipadm === 3) { zoom = 11; } // Kecamatan
             else if (tipadm === 4) { zoom = 14; } // Kelurahan/Desa
             
-            console.log(`Search click: ${lokasi.nama} (TIPADM: ${tipadm}), zooming to ${zoom}`);
+            console.log(`Search click: ${lokasi.nama_label} (TIPADM: ${tipadm}), zooming to ${zoom}`);
 
             // 3. Pindahkan peta ke lokasi
             if (map) {
@@ -1565,7 +1672,8 @@
             // 4. (KUNCI) Gunakan manajer yang ada untuk membuka sidebar!
             const props = {
                 id: lokasi.id,
-                nama: lokasi.nama,
+                nama_simpel: lokasi.nama_simpel,
+                nama_label: lokasi.nama_label,
                 lat: lokasi.lat,
                 lon: lokasi.lon
             };
@@ -1574,12 +1682,10 @@
                 setTimeout(() => {
                      mapManager.handleUnclusteredClick(props);
                      
-                     // --- PERBAIKAN 1: Buka sidebar jika tertutup ---
                      if (!appState.isSidebarOpen && sidebarManager) {
                         console.log("Search click: Forcing sidebar open.");
                         sidebarManager.openSidebar();
                      }
-                     // --- AKHIR PERBAIKAN 1 ---
 
                 }, 500); // Penundaan 500ms agar 'flyTo' bisa dimulai
             }
@@ -1653,10 +1759,8 @@
             appState.calendarDisplayMonth = now.getMonth();
             appState.calendarDisplayYear = now.getFullYear();
             
-            // Panggil update display picker SEGERA
-            timeManager.updateTimePickerDisplayOnly(); // Panggil timeManager
-            // Panggil update state tombol SEGERA
-            timeManager.updateNavigationButtonsState(appState.selectedTimeIndex); // Panggil timeManager
+            timeManager.updateTimePickerDisplayOnly(); 
+            timeManager.updateNavigationButtonsState(appState.selectedTimeIndex); 
             
             // ================================================================
             // 3. Pasang Event Listener
@@ -1679,38 +1783,31 @@
             toggleBtnEl.addEventListener('click', () => sidebarManager.toggleSidebar());
             closeBtnEl.addEventListener('click', () => sidebarManager.closeSidebar());
 
-            // --- Listener untuk Search Bar (Saat Mengetik) ---
+            // Listener Search Bar
             searchInput.addEventListener('input', () => {
                 clearTimeout(searchDebounceTimer);
                 const query = searchInput.value;
 
-                if (query.length < 3) { // Hanya cari jika >= 3 karakter
+                if (query.length < 3) { 
                     suggestionsDropdown.innerHTML = '';
                     suggestionsDropdown.style.display = 'none';
                     return;
                 }
                 
-                // Gunakan debounce untuk menunda API call saat pengguna masih mengetik
                 searchDebounceTimer = setTimeout(() => {
-                    fetchLokasi(query); // Panggil fungsi helper
-                }, 350); // Tunda 350ms
+                    fetchLokasi(query); 
+                }, 350); 
             });
 
-            // --- PERBAIKAN 2: Listener untuk 'Enter' dihapus dan diganti 'focus' ---
-            
-            // Listener 'focus' (saat diklik)
             searchInput.addEventListener('focus', () => {
                 const query = searchInput.value;
                 if (query.length >= 3) {
                     console.log("Search bar fokus & punya 3+ karakter, langsung cari.");
-                    fetchLokasi(query); // Panggil fetch_lokasi SEGERA
+                    fetchLokasi(query); 
                 }
             });
-            // --- AKHIR PERBAIKAN 2 ---
 
-            // Listener untuk menutup dropdown saat klik di luar
             document.addEventListener('click', function(e) {
-                // Pastikan search-wrapper ada sebelum memanggil .contains
                 const wrapper = document.getElementById('search-wrapper');
                 if (wrapper && !wrapper.contains(e.target)) {
                     suggestionsDropdown.style.display = 'none';
@@ -1723,7 +1820,6 @@
             // ================================================================
             map = new maplibregl.Map({ 
                 container: 'map',
-                // ... (Style peta Anda tidak berubah) ...
                  style: { 
                     version: 8,
                     glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
@@ -1739,7 +1835,13 @@
                         { id: 'batas-kabupaten-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_kabupatenkota', minzoom: 8, maxzoom: 10.99, paint: { 'line-color': '#4682B4', 'line-width': 1, 'line-opacity': 0.6 }},
                         { id: 'batas-kecamatan-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_kecamatandistrik', minzoom: 11, maxzoom: 14, paint: { 'line-color': '#556B2F', 'line-width': 0.8, 'line-opacity': 0.5 }},
                         { id: 'provinsi-point-circle', type: 'circle', source: 'provinsi-source', paint: { 'circle-radius': 7, 'circle-color': 'rgba(255, 255, 255, 0.6)', 'circle-stroke-color': '#333', 'circle-stroke-width': 1 }},
-                        { id: 'provinsi-point-label', type: 'symbol', source: 'provinsi-source', layout: { 'text-field': ['get', 'nama'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-optional': true }, paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1.2 }},
+                        { 
+                            id: 'provinsi-point-label', 
+                            type: 'symbol', 
+                            source: 'provinsi-source', 
+                            layout: { 'text-field': ['get', 'nama_simpel'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-optional': true }, 
+                            paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1.2 }
+                        },
                         { id: 'cluster-background-layer', type: 'circle', source: 'data-cuaca-source', filter: ['has', 'point_count'], paint: { 'circle-radius': ['step', ['get', 'point_count'], 18, 50, 22, 200, 26], 'circle-color': ['step', ['get', 'point_count'], '#51bbd6', 50, '#f1f075', 200, '#f28cb1'], 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff', 'circle-opacity': 0.9 }},
                         { id: 'cluster-count-layer', type: 'symbol', source: 'data-cuaca-source', filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-font': ['Noto Sans Regular'], 'text-size': 12 }, paint: {'text-color': '#333333', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5, 'text-halo-blur': 1 } },
                         {
@@ -1763,8 +1865,11 @@
                             }
                         },
                         {
-                            id: 'unclustered-point-label', type: 'symbol', source: 'data-cuaca-source', filter: ['!', ['has', 'point_count']],
-                            layout: { 'text-field': ['get', 'nama'], 'text-font': ['Noto Sans Regular'], 'text-size': 9.5, 'text-anchor': 'top', 'text-offset': [0, 0.9], 'text-optional': true },
+                            id: 'unclustered-point-label', 
+                            type: 'symbol', 
+                            source: 'data-cuaca-source', 
+                            filter: ['!', ['has', 'point_count']],
+                            layout: { 'text-field': ['get', 'nama_simpel'], 'text-font': ['Noto Sans Regular'], 'text-size': 9.5, 'text-anchor': 'top', 'text-offset': [0, 0.9], 'text-optional': true },
                             paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1 }
                         }
                     ]
@@ -1778,8 +1883,21 @@
                 map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
                 map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels', minzoom: 7 });
 
+                // --- MODIFIKASI: Tambahkan Kontrol Peta ---
+                
+                // 1. Tambahkan kontrol navigasi (zoom, rotasi)
+                // Tombol kompas ini akan me-reset BEARING (Utara)
+                map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+                
+                // 2. Tambahkan kontrol kustom baru kita untuk me-reset PITCH (kemiringan 3D)
+                map.addControl(new ResetPitchControl(), 'bottom-right');
+                
+                // 3. Tambahkan kontrol skala (default 'bottom-left')
+                map.addControl(new maplibregl.ScaleControl());
+                
+                // --- Akhir Modifikasi ---
+
                 // Pemicu Event Peta
-                // Gunakan .bind() agar 'this' di dalam fungsi merujuk ke mapManager
                 const perbaruiPetaDebounced = utils.debounce(mapManager.perbaruiPetaGeo.bind(mapManager), 700);
                 map.on('moveend', perbaruiPetaDebounced);
                 map.on('idle', mapManager.fetchDataForVisibleMarkers.bind(mapManager));
@@ -1791,18 +1909,18 @@
                 map.on('click', (e) => {
                     const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
 
-                    // Logika untuk menutup sidebar jika klik di luar area interaktif
                     if (appState.isSidebarOpen && !features.length) { 
                         const sidebarClicked = e.originalEvent.target.closest('#detail-sidebar');
                         const popupClicked = e.originalEvent.target.closest('.maplibregl-popup');
-                        const controlClicked = e.originalEvent.target.closest('.maplibregl-ctrl');
+                        // **MODIFIKASI**: Tambahkan .maplibregl-ctrl (untuk kontrol peta)
+                        const controlClicked = e.originalEvent.target.closest('.maplibregl-ctrl') || e.originalEvent.target.closest('.maplibregl-ctrl-group');
                         const toggleClicked = e.originalEvent.target.closest('#sidebar-toggle-btn');
                         const pickerClicked = e.originalEvent.target.closest('#datetime-picker-container');
                         const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
                         const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
 
                         if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked) {
-                            sidebarManager.closeSidebar(); // Panggil sidebarManager
+                            sidebarManager.closeSidebar(); 
                         }
                     }
 
@@ -1817,10 +1935,17 @@
                     const coordinates = feature.geometry.coordinates.slice();
 
                     if (layerId === 'cluster-background-layer') { mapManager.handleClusterClick(feature, coordinates); }
-                    else if (layerId === 'provinsi-point-circle') { mapManager.handleProvinceClick(props, coordinates); }
+                    else if (layerId === 'provinsi-point-circle') { 
+                        mapManager.handleProvinceClick(props, coordinates); 
+                    }
                     else if (layerId === 'unclustered-point-temp-circle') {
-                        // Pastikan props memiliki lat/lon untuk handleUnclusteredClick
-                        const dataUntukHandler = { id: feature.id, nama: props.nama, lat: coordinates[1], lon: coordinates[0] };
+                        const dataUntukHandler = { 
+                            id: feature.id, 
+                            nama_simpel: props.nama_simpel, 
+                            nama_label: props.nama_label, 
+                            lat: coordinates[1], 
+                            lon: coordinates[0] 
+                        };
                         mapManager.handleUnclusteredClick(dataUntukHandler);
                     }
                 }); 
@@ -1833,6 +1958,8 @@
                 const infoKoordinat = document.getElementById('koordinat-info'); 
                 infoKoordinat.innerHTML = 'Geser kursor di atas peta'; 
                 map.on('mousemove', (e) => { 
+                     // **MODIFIKASI**: Pindahkan ke 'bottom-left' (default)
+                     // tapi kita akan atur via CSS nanti agar di atas ScaleControl
                      infoKoordinat.innerHTML = `Latitude: ${e.lngLat.lat.toFixed(5)} | Longitude: ${e.lngLat.lng.toFixed(5)}`;
                  });
                 map.on('mouseout', () => { 

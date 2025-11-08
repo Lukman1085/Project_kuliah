@@ -210,11 +210,19 @@ def process_wilayah_data(wilayah_list):
 
     for info in wilayah_list:
         wilayah_id = info["id"]
+        data_to_store = {
+            "id": info["id"],
+            "lat": info["lat"],
+            "lon": info["lon"],
+            "nama_simpel": info.get("nama_simpel"),
+            "nama_label": info.get("nama_label")
+        }
+
         if wilayah_id in WEATHER_CACHE and (current_time - WEATHER_CACHE[wilayah_id]['timestamp'] < CACHE_TTL):
             weather_data = WEATHER_CACHE[wilayah_id]['data']
-            final_data[wilayah_id] = {**info, **weather_data}
+            final_data[wilayah_id] = {**data_to_store, **weather_data}
         else:
-            ids_to_fetch_info.append(info)
+            ids_to_fetch_info.append(info) 
     
     if ids_to_fetch_info:
         new_weather_data_map = get_weather_data_for_locations(ids_to_fetch_info)
@@ -238,7 +246,12 @@ def get_provinsi_info():
     session = Session()
     try:
         query = text("""
-            SELECT "KDPPUM" as id, "WADMPR" as nama, latitude as lat, longitude as lon
+            SELECT 
+                "KDPPUM" as id, 
+                "WADMPR" as nama_simpel, 
+                "WADMPR" as nama_label, 
+                latitude as lat, 
+                longitude as lon
             FROM batas_provinsi
             WHERE "KDPPUM" IS NOT NULL AND "WADMPR" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
         """)
@@ -251,38 +264,46 @@ def get_provinsi_info():
     finally:
         session.close()
 
-# --- PENAMBAHAN BARU ---
 @app.route('/api/cari-lokasi')
 def cari_lokasi():
     q = request.args.get('q', '').strip()
 
-    # Validasi input
     if not q or len(q) < 3 or len(q) > MAX_SEARCH_LENGTH:
-        # Kembalikan array kosong jika kueri terlalu pendek, untuk mengosongkan hasil
         return jsonify([])
         
-    # Validasi pola untuk keamanan tambahan
     if not SEARCH_REGEX.match(q):
         return jsonify({"error": "Karakter tidak valid"}), 400
 
     session = Session()
     try:
-        # Kueri yang diperbarui:
-        # 1. Menggunakan COALESCE untuk mendapatkan ID yang valid
-        # 2. Menggunakan 'label' untuk pencarian ILIKE (case-insensitive)
-        # 3. Menambahkan filter IS NOT NULL pada COALESCE untuk mengecualikan data tanpa ID
-        # 4. Mengambil TIPADM untuk logika zoom di frontend
+        # Kueri CASE...WHEN ini sudah benar dari perbaikan sebelumnya
         query = text("""
             SELECT 
-                COALESCE("KDCPUM", "KDPKAB", "KDPPUM") as id, 
-                label as nama, 
+                CASE "TIPADM"
+                    WHEN 1 THEN "KDPPUM"
+                    WHEN 2 THEN "KDPKAB"
+                    WHEN 3 THEN "KDCPUM"
+                    WHEN 4 THEN "KDEPUM"
+                    ELSE COALESCE("KDCPUM", "KDPKAB", "KDPPUM")
+                END as id, 
+                
+                label as nama_label, 
+                
+                CASE "TIPADM"
+                    WHEN 1 THEN "WADMPR"
+                    WHEN 2 THEN "WADMKK"
+                    WHEN 3 THEN "WADMKC"
+                    WHEN 4 THEN "WADMKD"
+                    ELSE COALESCE("WADMKC", "WADMKK", "WADMPR")
+                END as nama_simpel,
+                
                 latitude as lat, 
                 longitude as lon,
                 "TIPADM" as tipadm
             FROM wilayah_administratif
             WHERE 
                 label ILIKE :search_term 
-                AND COALESCE("KDCPUM", "KDPKAB", "KDPPUM") IS NOT NULL
+                AND COALESCE("KDCPUM", "KDPKAB", "KDPPUM", "KDEPUM") IS NOT NULL
             ORDER BY "TIPADM", label
             LIMIT 10;
         """)
@@ -299,7 +320,6 @@ def cari_lokasi():
         return jsonify({"error": "Internal server error"}), 500
     finally:
         session.close()
-# --- AKHIR PENAMBAHAN BARU ---
 
 @app.route('/api/data-cuaca')
 def get_data_cuaca():
@@ -315,24 +335,50 @@ def get_data_cuaca():
             return jsonify({"error": "Invalid bbox coordinates"}), 400
         
         bbox_wkt = f'SRID=4326;POLYGON(({xmin} {ymin}, {xmax} {ymin}, {xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'
-
+        
+        query = None
         if 8 <= zoom <= 10:
-            table_name, id_column, name_column = "batas_kabupatenkota", "KDPKAB", "WADMKK"
+            # Filter TIPADM = 2 (Kab/Kota)
+            query = text("""
+                SELECT
+                    t1."KDPKAB" as id,
+                    t1."WADMKK" as nama_simpel,
+                    COALESCE(t2.label, t1."WADMKK") as nama_label,
+                    t1.latitude as lat,
+                    t1.longitude as lon
+                FROM batas_kabupatenkota AS t1
+                LEFT JOIN wilayah_administratif AS t2
+                    ON t1."KDPKAB" = t2."KDPKAB" AND t2."TIPADM" = 2
+                WHERE
+                    ST_Intersects(t1.geometry, ST_GeomFromEWKT(:bbox_wkt))
+                    AND t1."KDPKAB" IS NOT NULL;
+            """)
         elif 11 <= zoom <= 14:
-            table_name, id_column, name_column = "batas_kecamatandistrik", "KDCPUM", "WADMKC"
+            # Filter TIPADM = 3 (Kecamatan)
+            query = text("""
+                SELECT
+                    t1."KDCPUM" as id,
+                    t1."WADMKC" as nama_simpel,
+                    COALESCE(t2.label, t1."WADMKC") as nama_label,
+                    t1.latitude as lat,
+                    t1.longitude as lon
+                FROM batas_kecamatandistrik AS t1
+                LEFT JOIN wilayah_administratif AS t2
+                    ON t1."KDCPUM" = t2."KDCPUM" AND t2."TIPADM" = 3
+                WHERE
+                    ST_Intersects(t1.geometry, ST_GeomFromEWKT(:bbox_wkt))
+                    AND t1."KDCPUM" IS NOT NULL;
+            """)
         else:
+            # **MODIFIKASI**: Zoom 14+ (jika terjadi) harusnya menampilkan Kelurahan.
+            # Namun, kita tidak punya layer 'batas_kelurahan' di mbtiles, 
+            # jadi kita biarkan ini kosong agar tidak ada marker.
             return jsonify([])
 
-        query = text(f"""
-            SELECT "{id_column}" as id, "{name_column}" as nama, latitude as lat, longitude as lon
-            FROM {table_name}
-            WHERE ST_Intersects(geometry, ST_GeomFromEWKT(:bbox_wkt)) AND "{id_column}" IS NOT NULL;
-        """)
-        
         result = session.execute(query, {"bbox_wkt": bbox_wkt})
         wilayah_info = [dict(row) for row in result.mappings()]
 
-        print(f"Ditemukan {len(wilayah_info)} wilayah di BBOX ini.")
+        print(f"Ditemukan {len(wilayah_info)} wilayah di BBOX ini (dengan JOIN yang diperbaiki).")
         return jsonify(wilayah_info)
 
     except Exception as e:
@@ -362,17 +408,67 @@ def get_data_by_ids():
 
         ids_tuple_str = f"({','.join(list_of_ids_validated)})"
 
-        # Kueri ini sudah benar, ia akan mencari di kedua tabel
+        # **MODIFIKASI**: Menambahkan `UNION ALL` untuk `TIPADM=4`
+        # dan `LEFT JOIN` yang sesuai.
         query = text(f"""
-            SELECT id, nama, lat, lon FROM (
-                SELECT "KDPKAB" as id, "WADMKK" as nama, latitude as lat, longitude as lon FROM batas_kabupatenkota WHERE "KDPKAB" IN {ids_tuple_str}
+            SELECT
+                combined.id,
+                combined.nama_simpel,
+                COALESCE(wa.label, combined.nama_simpel) as nama_label,
+                combined.lat,
+                combined.lon
+            FROM (
+                -- TIPADM 1 (Provinsi)
+                SELECT 
+                    "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, 
+                    "KDPPUM" as j_prov, NULL as j_kab, NULL as j_kec, NULL as j_kel 
+                FROM batas_provinsi 
+                WHERE "KDPPUM" IN {ids_tuple_str}
+                
                 UNION ALL
-                SELECT "KDCPUM" as id, "WADMKC" as nama, latitude as lat, longitude as lon FROM batas_kecamatandistrik WHERE "KDCPUM" IN {ids_tuple_str}
-            ) as combined_results;
+                
+                -- TIPADM 2 (Kab/Kota)
+                SELECT 
+                    "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, 
+                    NULL as j_prov, "KDPKAB" as j_kab, NULL as j_kec, NULL as j_kel 
+                FROM batas_kabupatenkota 
+                WHERE "KDPKAB" IN {ids_tuple_str}
+                
+                UNION ALL
+                
+                -- TIPADM 3 (Kecamatan)
+                SELECT 
+                    "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, 
+                    NULL as j_prov, NULL as j_kab, "KDCPUM" as j_kec, NULL as j_kel 
+                FROM batas_kecamatandistrik 
+                WHERE "KDCPUM" IN {ids_tuple_str}
+                
+                UNION ALL
+                
+                -- **INI PERBAIKANNYA**
+                -- TIPADM 4 (Kel/Desa) - Ambil langsung dari tabel wilayah_administratif
+                SELECT 
+                    "KDEPUM" as id, "WADMKD" as nama_simpel, latitude as lat, longitude as lon, 
+                    NULL as j_prov, NULL as j_kab, NULL as j_kec, "KDEPUM" as j_kel 
+                FROM wilayah_administratif
+                WHERE "KDEPUM" IN {ids_tuple_str} AND "TIPADM" = 4
+
+            ) as combined
+            LEFT JOIN wilayah_administratif AS wa
+                -- Kondisi JOIN untuk semua level
+                ON (wa."KDPPUM" = combined.j_prov AND wa."TIPADM" = 1)
+                OR (wa."KDPKAB" = combined.j_kab AND wa."TIPADM" = 2)
+                OR (wa."KDCPUM" = combined.j_kec AND wa."TIPADM" = 3)
+                OR (wa."KDEPUM" = combined.j_kel AND wa."TIPADM" = 4); -- **INI PERBAIKANNYA**
         """)
         
         result = session.execute(query)
         relevant_rows = [dict(row) for row in result.mappings()]
+        
+        if not relevant_rows:
+             # **MODIFIKASI**: Ini akan membuat frontend menampilkan error yang benar
+             print(f"PERINGATAN: Tidak ada data ditemukan di /api/data-by-ids untuk {ids_tuple_str}")
+             return jsonify({}), 404 # Kembalikan objek kosong atau error
 
         final_data = process_wilayah_data(relevant_rows)
         return jsonify(final_data)
