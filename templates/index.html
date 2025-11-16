@@ -133,7 +133,7 @@
             
             /** Fungsi untuk mendapatkan objek Date yang diprediksi berdasarkan indeks */
             getPredictedDateFromIndex: function(index) {
-                // (Tidak ada perubahan, sudah direfaktor sebelumnya)
+                // (Tidak ada perubahan)
                 const startDate = timeManager.getPredictedStartDate();
                 if (index < 0 || index > 335 || !startDate) {
                     return null;
@@ -142,10 +142,6 @@
                 predictedDate.setHours(predictedDate.getHours() + index);
                 return predictedDate;
             },
-
-            // --- REFAKTOR #5 ---
-            // Menghapus fungsi utils.getPredictedTimeString yang tidak terpakai
-            // --- Akhir Refaktor #5 ---
 
             /** Helper untuk memformat "YYYY-MM-DDTHH:MM" (dari data asli) */
             formatLocalTimestampString: function(localTimeString) {
@@ -245,6 +241,28 @@
                      clearTimeout(timeout);
                      timeout = setTimeout(() => func.apply(this, args), delay);
                  };
+            },
+
+            /**
+             * [BARU] Mengekstrak data per jam dari objek 'hourly' mentah berdasarkan indeks.
+             * Ini adalah fungsi 'cetakan' terpusat untuk prinsip DRY.
+             */
+            extractHourlyDataPoint: function(hourly, index) {
+                if (!hourly || !hourly.time) {
+                    console.warn("extractHourlyDataPoint dipanggil dengan data hourly yang tidak valid.");
+                    return {}; // Kembalikan objek kosong untuk menghindari error
+                }
+                // Ini adalah "cetakan" yang kita duplikasi
+                return {
+                    is_day: hourly.is_day?.[index],
+                    weather_code: hourly.weather_code?.[index],
+                    suhu: hourly.temperature_2m?.[index],
+                    terasa: hourly.apparent_temperature?.[index],
+                    kelembapan: hourly.relative_humidity_2m?.[index],
+                    prob_presipitasi: hourly.precipitation_probability?.[index],
+                    kecepatan_angin_10m: hourly.wind_speed_10m?.[index],
+                    arah_angin_10m: hourly.wind_direction_10m?.[index],
+                };
             }
         };
 
@@ -253,78 +271,57 @@
             _currentInstance: null,
             _internalCloseFlag: false,
 
-            // --- REFAKTOR #2 ---
             /** Membuat konten DOM untuk popup (Bukan string HTML) */
             generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
-                // 1. Buat elemen container
+                // (Tidak ada perubahan, sudah direfaktor sebelumnya)
                 const container = document.createElement('div');
                 container.className = 'weather-popup-content';
-                
-                // 2. Buat elemen anak
                 const namaEl = document.createElement('b');
                 namaEl.textContent = nama;
-                
                 const timeEl = document.createElement('div');
                 timeEl.id = 'popup-time';
                 timeEl.style.cssText = 'font-size: 12px; color: #555;';
                 timeEl.textContent = formattedTime;
-                
                 const weatherWrapper = document.createElement('div');
                 weatherWrapper.className = 'popup-current-weather';
-                
                 const iconEl = document.createElement('i');
                 iconEl.id = 'popup-icon';
                 iconEl.className = ikon;
-                
                 const detailsWrapper = document.createElement('div');
                 detailsWrapper.className = 'popup-details';
-                
-                // --- Helper untuk membuat elemen detail ---
                 const createDetailEl = (id, htmlContent) => {
                     const el = document.createElement('div');
                     if (id) el.id = id;
                     el.innerHTML = htmlContent;
                     return el;
                 };
-                
                 const tempDescEl = createDetailEl(null, `<b id="popup-temp">${data.suhu?.toFixed(1) ?? '-'}°C</b> <span id="popup-desc">(${deskripsi})</span>`);
                 const feelsLikeEl = createDetailEl('popup-feelslike', `Terasa: <b>${data.terasa?.toFixed(1) ?? '-'}°C</b>`);
                 const humidityEl = createDetailEl('popup-humidity', `Kelembapan: <b>${data.kelembapan ?? '-'}%</b>`);
                 const precipEl = createDetailEl('popup-precipitation', `Presipitasi: <b>${data.prob_presipitasi ?? '-'}%</b>`);
                 const windEl = createDetailEl('popup-wind', `Angin: <b>${data.kecepatan_angin_10m ?? '-'} m/s</b> dari arah ${data.arah_angin_10m ?? '-'}°`);
-
                 detailsWrapper.appendChild(tempDescEl);
                 detailsWrapper.appendChild(feelsLikeEl);
                 detailsWrapper.appendChild(humidityEl);
                 detailsWrapper.appendChild(precipEl);
                 detailsWrapper.appendChild(windEl);
-                
                 weatherWrapper.appendChild(iconEl);
                 weatherWrapper.appendChild(detailsWrapper);
-                
                 const actionsWrapper = document.createElement('div');
                 actionsWrapper.className = 'popup-actions';
-                
                 const button = document.createElement('button');
                 button.id = 'popup-sidebar-btn-dynamic';
                 button.textContent = 'Lihat Detail di Sidebar';
-                
-                // 3. Pasang event listener secara aman
                 button.addEventListener('click', () => {
                     sidebarManager.openSidebarFromPopup();
                 });
-                
                 actionsWrapper.appendChild(button);
-                
-                // 4. Gabungkan semua ke container
                 container.appendChild(namaEl);
                 container.appendChild(timeEl);
                 container.appendChild(weatherWrapper);
                 container.appendChild(actionsWrapper);
-                
                 return container;
              },
-             // --- Akhir Refaktor #2 ---
             
              // (Tidak ada perubahan di 'open', 'close', 'isOpen', 'getElement', 'getInstance', 'setHTML', 'setDOMContent')
             open: function(lngLat, content, options = { maxWidth: '260px' }) {
@@ -379,11 +376,8 @@
             setHTML: function(htmlContent) { if (this._currentInstance && this._currentInstance.isOpen() && typeof htmlContent === 'string') { try { this._currentInstance.setHTML(htmlContent); } catch (e) { console.error("Err setHTML:", e); } } },
             setDOMContent: function(domElement) { if (this._currentInstance && this._currentInstance.isOpen() && domElement instanceof HTMLElement) { try { this._currentInstance.setDOMContent(domElement); } catch (e) { console.error("Err setDOMContent:", e); } } },
             
-            /** * [BARU] Memperbarui konten popup (jika terbuka) untuk waktu yang dipilih.
-             * Ini berisi logika yang SEBELUMNYA ada di timeManager.updateDynamicUI.
-             */
+            /** Memperbarui konten popup (jika terbuka) untuk waktu yang dipilih. */
             updateUIForTime: function(idxGlobal, localTimeString) {
-                // (Tidak ada perubahan)
                 if (!this.isOpen()) return;
                 const popupEl = this.getElement();
                 if (!popupEl) return;
@@ -395,16 +389,12 @@
                             const hourly = activeData.hourly;
                             if (idxGlobal >= hourly.time.length) return; 
                             const formattedTime = utils.formatLocalTimestampString(localTimeString); 
-                            const dataPoint = {
-                                is_day: hourly.is_day?.[idxGlobal],
-                                weather_code: hourly.weather_code?.[idxGlobal],
-                                suhu: hourly.temperature_2m?.[idxGlobal],
-                                terasa: hourly.apparent_temperature?.[idxGlobal],
-                                kelembapan: hourly.relative_humidity_2m?.[idxGlobal],
-                                prob_presipitasi: hourly.precipitation_probability?.[idxGlobal],
-                                kecepatan_angin_10m: hourly.wind_speed_10m?.[idxGlobal],
-                                arah_angin_10m: hourly.wind_direction_10m?.[idxGlobal],
-                            };
+                            
+                            // --- REFAKTOR (DRY) ---
+                            // Menggunakan helper terpusat
+                            const dataPoint = utils.extractHourlyDataPoint(hourly, idxGlobal);
+                            // --- Akhir Refaktor ---
+                            
                             const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
                             const timeEl = singlePopup.querySelector('#popup-time'); if (timeEl) timeEl.textContent = formattedTime;
                             const iconEl = singlePopup.querySelector('#popup-icon'); if (iconEl) iconEl.className = ikon;
@@ -428,13 +418,16 @@
                             if (!itemData?.hourly?.time) return;
                             if (idxGlobal >= itemData.hourly.time.length) return; 
                             const itemHourly = itemData.hourly;
-                            const suhu = itemHourly.temperature_2m[idxGlobal];
-                            const code = itemHourly.weather_code[idxGlobal];
-                            const is_day = itemHourly.is_day[idxGlobal];
-                            const { deskripsi: itemDeskripsi } = utils.getWeatherInfo(code, is_day); 
+                            
+                            // --- REFAKTOR (DRY) ---
+                            // Menggunakan helper terpusat
+                            const itemDataPoint = utils.extractHourlyDataPoint(itemHourly, idxGlobal);
+                            // --- Akhir Refaktor ---
+
+                            const { deskripsi: itemDeskripsi } = utils.getWeatherInfo(itemDataPoint.weather_code, itemDataPoint.is_day); 
                             const suhuEl = item.querySelector('.item-suhu');
                             const descEl = item.querySelector('.item-desc');
-                            if (suhuEl) suhuEl.textContent = `${suhu?.toFixed(1) ?? '-'}°C`;
+                            if (suhuEl) suhuEl.textContent = `${itemDataPoint.suhu?.toFixed(1) ?? '-'}°C`;
                             if (descEl) descEl.textContent = itemDeskripsi;
                         });
                     } catch (e) { console.warn("Error updating cluster popup DOM:", e); }
@@ -744,7 +737,8 @@
 
         /** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
         const sidebarManager = { 
-            // (Tidak ada perubahan di ronde refaktor ini)
+            // (Tidak ada perubahan di 'isOpen', 'openSidebar', 'closeSidebar', 'toggleSidebar', 'openSidebarFromPopup')
+            // (Tidak ada perubahan di renderer: _hideAllSidebarSections, _renderSidebarLoadingState, _renderSidebarPlaceholderState, _renderSidebarErrorState, _renderSidebarProvinceState, _createDailyForecastItem, _renderSidebarWeatherState, renderSidebarContent)
             _isSidebarOpen: false,
             _timeEl: null, _iconEl: null, _tempEl: null, _descEl: null,
             _feelsLikeEl: null, _humidityEl: null, _precipEl: null, _windEl: null,
@@ -912,7 +906,10 @@
                      this._renderSidebarErrorState('Terjadi kesalahan.');
                 }
             },
+            
+            /** Memperbarui elemen DOM kondisi saat ini. */
             updateCurrentConditions: function(dataPoint, formattedTime, weatherInfo) {
+                // (Tidak ada perubahan)
                 if (dataPoint && formattedTime && weatherInfo) {
                     this._timeEl.textContent = formattedTime;
                     this._iconEl.className = weatherInfo.ikon;
@@ -933,33 +930,35 @@
                     this._windEl.textContent = 'Angin: ... m/s';
                 }
             },
+            
+            /** Wrapper yang dipanggil oleh timeManager.updateUIWithRealData. */
             updateUIForTime: function(idxGlobal, localTimeString, activeData) {
                 if (!this._isSidebarOpen || !activeData || !activeData.hourly?.time) {
                     return;
                 }
+                
                 try {
                     const hourly = activeData.hourly;
                     if (idxGlobal >= hourly.time.length) return; 
+                    
                     const formattedTime = utils.formatLocalTimestampString(localTimeString); 
-                    const dataPoint = {
-                        is_day: hourly.is_day?.[idxGlobal],
-                        weather_code: hourly.weather_code?.[idxGlobal],
-                        suhu: hourly.temperature_2m?.[idxGlobal],
-                        terasa: hourly.apparent_temperature?.[idxGlobal],
-                        kelembapan: hourly.relative_humidity_2m?.[idxGlobal],
-                        prob_presipitasi: hourly.precipitation_probability?.[idxGlobal],
-                        kecepatan_angin_10m: hourly.wind_speed_10m?.[idxGlobal],
-                        arah_angin_10m: hourly.wind_direction_10m?.[idxGlobal],
-                    };
+                    
+                    // --- REFAKTOR (DRY) ---
+                    // Menggunakan helper terpusat
+                    const dataPoint = utils.extractHourlyDataPoint(hourly, idxGlobal);
+                    // --- Akhir Refaktor ---
+                    
                     const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
+
                     this.updateCurrentConditions(dataPoint, formattedTime, { deskripsi, ikon });
+                    
                 } catch (e) { console.warn("Error updating sidebar DOM:", e); }
             }
         };
 
         /** 🗺️ MAP MANAGER: Mengelola semua logika terkait peta, layer, dan interaksi */
         const mapManager = { 
-            // (Tidak ada perubahan di getter, highlight, reset, perbaruiPetaGeo, fetch, processData)
+            // (Tidak ada perubahan di getter, highlight, reset, perbaruiPetaGeo, fetch, processData, updateMapState)
             _isLoading: false, 
             _isClickLoading: false, 
             _activeLocationId: null,
@@ -1208,17 +1207,13 @@
                         .then(dataDetailCuaca => {
                             if (popupManager.getInstance() !== loadingPopupRef) { return; } 
                             
-                            // --- REFAKTOR #2 ---
-                            // Membuat DOM secara terprogram
                             const popupContent = document.createElement('div');
                             popupContent.className = 'cluster-popup-content'; 
                             popupContent.id = `cluster-popup-${clusterId}`;
-                            
                             const title = document.createElement('b');
                             title.textContent = `${leaves.length} Lokasi:`;
                             popupContent.appendChild(title);
                             popupContent.appendChild(document.createElement('hr'));
-                            // --- Akhir Refaktor #2 ---
                             
                             let itemsAdded = 0;
                             const idxDisplay = timeManager.getSelectedTimeIndex();
@@ -1243,32 +1238,34 @@
                                       continue; 
                                  }
                                  this._updateMapStateForFeature(id, data, false);
+                                 
+                                 // --- REFAKTOR (DRY) ---
+                                 // Menggunakan helper terpusat
+                                 const extractedData = utils.extractHourlyDataPoint(data.hourly, idxDisplay);
+                                 
+                                 // Buat displayData HANYA dengan apa yang kita butuhkan
                                  const displayData = { 
                                      nama_simpel: data.nama_simpel, 
-                                     suhu: data.hourly.temperature_2m[idxDisplay], 
-                                     code: data.hourly.weather_code[idxDisplay], 
-                                     is_day: data.hourly.is_day[idxDisplay] 
+                                     suhu: extractedData.suhu, 
+                                     code: extractedData.weather_code, 
+                                     is_day: extractedData.is_day 
                                  };
+                                 // --- Akhir Refaktor ---
+                                 
                                  const { deskripsi } = utils.getWeatherInfo(displayData.code, displayData.is_day); 
                                  
-                                 // --- REFAKTOR #2 ---
-                                 // Membuat item DOM, bukan innerHTML
                                  const item = document.createElement('div');
                                  item.className = 'cluster-item'; 
                                  item.dataset.id = id; 
-                                 
                                  const namaSpan = document.createElement('span');
                                  namaSpan.className = 'item-nama';
                                  namaSpan.textContent = displayData.nama_simpel;
-                                 
                                  const suhuSpan = document.createElement('span');
                                  suhuSpan.className = 'item-suhu';
                                  suhuSpan.textContent = `${displayData.suhu?.toFixed(1) ?? '-'}°C`;
-                                 
                                  const descSpan = document.createElement('span');
                                  descSpan.className = 'item-desc';
                                  descSpan.textContent = deskripsi;
-                                 
                                  item.appendChild(namaSpan);
                                  item.appendChild(document.createTextNode(' ('));
                                  item.appendChild(suhuSpan);
@@ -1276,9 +1273,7 @@
                                  item.appendChild(descSpan);
                                  item.appendChild(document.createTextNode(')'));
                                  
-                                 // Pasang listener secara aman
                                  item.addEventListener('click', (event) => {
-                                 // --- Akhir Refaktor #2 ---
                                      event.stopPropagation();
                                      if (popupManager.getInstance() === loadingPopupRef) {
                                           popupManager.close(true); 
@@ -1307,6 +1302,7 @@
 
             /** Menangani klik pada marker provinsi. */
             handleProvinceClick: function(props, coordinates) {
+                // (Tidak ada perubahan)
                 console.log("Handling Province Click:", props.nama_label); 
                 popupManager.close(true);
                 const previousId = this._activeLocationId;
@@ -1319,9 +1315,6 @@
                     this.removeActiveMarkerHighlight(previousId); 
                 }
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent(); 
-
-                // --- REFAKTOR #2 ---
-                // Membuat DOM secara terprogram
                 const popupContent = document.createElement('div');
                 const title = document.createElement('b');
                 title.textContent = 'Provinsi:';
@@ -1329,13 +1322,9 @@
                 popupContent.appendChild(document.createElement('br'));
                 popupContent.appendChild(document.createTextNode(props.nama_simpel));
                 popupContent.appendChild(document.createElement('br'));
-                
                 const zoomButton = document.createElement('button');
                 zoomButton.textContent = 'Zoom ke Provinsi';
-                
-                // Pasang listener secara aman
                 zoomButton.addEventListener('click', () => {
-                // --- Akhir Refaktor #2 ---
                     if (map) {
                         map.easeTo({ center: coordinates, zoom: 8 });
                     }
@@ -1386,7 +1375,6 @@
 
             /** FASE 2: Helper untuk kasus cache hit */
             _handleCacheHit: function(props, data, coordinates) {
-                // (Tidak ada perubahan)
                 console.log(`Cache hit for ${props.id}.`);
                 this._activeLocationData = data;                    
                 this._isClickLoading = false;
@@ -1396,16 +1384,12 @@
                 const localTimeString = hasGlobalTimeData ? timeManager.getGlobalTimeLookup()[idxLocal] : null;
                 if (hasGlobalTimeData && localTimeString && data.hourly?.time && idxLocal < data.hourly.time.length) {
                     const hourly = data.hourly;
-                    const popupData = { 
-                        is_day: hourly.is_day?.[idxLocal],
-                        weather_code: hourly.weather_code?.[idxLocal],
-                        suhu: hourly.temperature_2m?.[idxLocal],
-                        terasa: hourly.apparent_temperature?.[idxLocal],
-                        kelembapan: hourly.relative_humidity_2m?.[idxLocal],
-                        prob_presipitasi: hourly.precipitation_probability?.[idxLocal],
-                        kecepatan_angin_10m: hourly.wind_speed_10m?.[idxLocal],
-                        arah_angin_10m: hourly.wind_direction_10m?.[idxLocal]
-                     };
+                    
+                    // --- REFAKTOR (DRY) ---
+                    // Menggunakan helper terpusat
+                    const popupData = utils.extractHourlyDataPoint(hourly, idxLocal);
+                    // --- Akhir Refaktor ---
+                    
                     const { deskripsi, ikon } = utils.getWeatherInfo(popupData.weather_code, popupData.is_day);
                     const formattedTime = utils.formatLocalTimestampString(localTimeString); 
                     const popupElement = popupManager.generatePopupContent(this._activeLocationSimpleName, popupData, deskripsi, ikon, formattedTime);
@@ -1417,7 +1401,6 @@
 
             /** FASE 2: Helper untuk kasus cache miss (fetch baru). */
             _handleCacheMiss: async function(props, coordinates) {
-                // (Tidak ada perubahan)
                 const { id, nama_simpel, nama_label } = props; 
                 console.log(`Cache miss for ${id}. Fetching...`);
                 this._activeLocationData = null; 
@@ -1447,16 +1430,12 @@
                         const localTimeStringNow = hasGlobalTimeDataNow ? timeManager.getGlobalTimeLookup()[idxLocal] : null;
                         if (hasGlobalTimeDataNow && localTimeStringNow && data.hourly?.time && idxLocal < data.hourly.time.length) {
                              if (popupManager.getInstance() === loadingPopupRef) {
-                                const popupData = { 
-                                     is_day: data.hourly.is_day?.[idxLocal],
-                                     weather_code: data.hourly.weather_code?.[idxLocal],
-                                     suhu: data.hourly.temperature_2m?.[idxLocal],
-                                     terasa: data.hourly.apparent_temperature?.[idxLocal],
-                                     kelembapan: data.hourly.relative_humidity_2m?.[idxLocal],
-                                     prob_presipitasi: data.hourly.precipitation_probability?.[idxLocal],
-                                     kecepatan_angin_10m: data.hourly.wind_speed_10m?.[idxLocal],
-                                     arah_angin_10m: data.hourly.wind_direction_10m?.[idxLocal]
-                                };
+                                
+                                // --- REFAKTOR (DRY) ---
+                                // Menggunakan helper terpusat
+                                const popupData = utils.extractHourlyDataPoint(data.hourly, idxLocal);
+                                // --- Akhir Refaktor ---
+                                
                                 const { deskripsi, ikon } = utils.getWeatherInfo(popupData.weather_code, popupData.is_day);
                                 const formattedTime = utils.formatLocalTimestampString(localTimeStringNow); 
                                 const popupElement = popupManager.generatePopupContent(data.nama_simpel, popupData, deskripsi, ikon, formattedTime);
@@ -1671,7 +1650,7 @@
             // ================================================================
             // 3. Pasang Event Listener
             // ================================================================
-            // (Tidak ada perubahan, listener tombol cari sudah ada dari refaktor sebelumnya)
+            // (Tidak ada perubahan)
 
             prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 24));
             nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 24));
