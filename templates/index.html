@@ -97,6 +97,64 @@
         const hostname = window.location.hostname;
         const port = '5000';
         const baseUrl = `${protocol}//${hostname}:${port}`;
+        
+        // --- REFAKTOR (Rencana 3.1) ---
+        // Definisi style peta dipindahkan ke sini agar lebih bersih
+        const MAP_STYLE = { 
+            version: 8,
+            glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+            sources: { 
+                'cartodb-positron-nolabels': { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png'], tileSize: 256, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' },
+                'batas-wilayah-vector': { type: 'vector', tiles: [`${baseUrl}/tiles/{z}/{x}/{y}.pbf`], minzoom: 4, maxzoom: 14, attribution: 'Data Batas Wilayah BIG' },
+                'data-cuaca-source': { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, cluster: true, clusterMaxZoom: 13, clusterRadius: 80, promoteId: 'id' },
+                'provinsi-source': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+            },
+            layers: [ 
+                { id: 'cartodb-positron-layer', type: 'raster', source: 'cartodb-positron-nolabels' },
+                { id: 'batas-provinsi-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_provinsi', minzoom: 5, maxzoom: 7.99, paint: { 'line-color': '#A0522D', 'line-width': 1.5, 'line-opacity': 0.7 }},
+                { id: 'batas-kabupaten-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_kabupatenkota', minzoom: 8, maxzoom: 10.99, paint: { 'line-color': '#4682B4', 'line-width': 1, 'line-opacity': 0.6 }},
+                { id: 'batas-kecamatan-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_kecamatandistrik', minzoom: 11, maxzoom: 14, paint: { 'line-color': '#556B2F', 'line-width': 0.8, 'line-opacity': 0.5 }},
+                { id: 'provinsi-point-circle', type: 'circle', source: 'provinsi-source', paint: { 'circle-radius': 7, 'circle-color': 'rgba(255, 255, 255, 0.6)', 'circle-stroke-color': '#333', 'circle-stroke-width': 1 }},
+                { 
+                    id: 'provinsi-point-label', 
+                    type: 'symbol', 
+                    source: 'provinsi-source', 
+                    layout: { 'text-field': ['get', 'nama_simpel'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-optional': true }, 
+                    paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1.2 }
+                },
+                { id: 'cluster-background-layer', type: 'circle', source: 'data-cuaca-source', filter: ['has', 'point_count'], paint: { 'circle-radius': ['step', ['get', 'point_count'], 18, 50, 22, 200, 26], 'circle-color': ['step', ['get', 'point_count'], '#51bbd6', 50, '#f1f075', 200, '#f28cb1'], 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff', 'circle-opacity': 0.9 }},
+                { id: 'cluster-count-layer', type: 'symbol', source: 'data-cuaca-source', filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-font': ['Noto Sans Regular'], 'text-size': 12 }, paint: {'text-color': '#333333', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5, 'text-halo-blur': 1 } },
+                {
+                    id: 'unclustered-point-temp-circle', type: 'circle', source: 'data-cuaca-source', filter: ['!', ['has', 'point_count']],
+                    paint: {
+                        'circle-color': ['case', ['boolean', ['feature-state', 'hasData'], false], ['step', ['feature-state', 'suhu'], '#0d47a1', 15, '#1e88e5', 20, '#4caf50', 25, '#ffeb3b', 30, '#fb8c00', 35, '#e53935'], '#bdbdbd'],
+                        'circle-radius': ['case', ['boolean', ['feature-state', 'active'], false], 8, 6],
+                        'circle-stroke-width': ['case', ['boolean', ['feature-state', 'active'], false], 2.5, 1],
+                        'circle-stroke-color': ['case', ['boolean', ['feature-state', 'active'], false], '#000000', '#ffffff'],
+                        'circle-opacity': 0.95
+                    }
+                },
+                {
+                    id: 'unclustered-point-precip-ring', type: 'circle', source: 'data-cuaca-source', filter: ['!', ['has', 'point_count']],
+                    paint: {
+                        'circle-radius': ['case', ['boolean', ['feature-state', 'active'], false], 11, 9],
+                        'circle-color': '#1e88e5',
+                        'circle-opacity': ['case', ['any', ['==', ['feature-state', 'precip'], -1], ['!', ['boolean', ['feature-state', 'hasData'], false]]], 0.0, ['interpolate', ['linear'], ['feature-state', 'precip'], 10, 0.0, 50, 0.5, 100, 0.8]],
+                        'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
+                        'circle-stroke-opacity': ['case', ['all', ['>', ['feature-state', 'precip'], 10], ['!=', ['feature-state', 'precip'], -1]], ['case', ['boolean', ['feature-state', 'active'], false], 1.0, 0.7], 0.0]
+                    }
+                },
+                {
+                    id: 'unclustered-point-label', 
+                    type: 'symbol', 
+                    source: 'data-cuaca-source', 
+                    filter: ['!', ['has', 'point_count']],
+                    layout: { 'text-field': ['get', 'nama_simpel'], 'text-font': ['Noto Sans Regular'], 'text-size': 9.5, 'text-anchor': 'top', 'text-offset': [0, 0.9], 'text-optional': true },
+                    paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1 }
+                }
+            ]
+        };
+        // --- Akhir Refaktor ---
 
         let WMO_CODE_MAP = {};
 
@@ -286,11 +344,12 @@
 
         /** 팝-업 PENGELOLA POPUP TERPUSAT */
         const popupManager = { 
-            // (Tidak ada perubahan di ronde refaktor ini)
             _currentInstance: null,
             _internalCloseFlag: false,
 
+            /** Membuat konten DOM untuk popup (Bukan string HTML) */
             generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
+                // (Se bagian besar tidak berubah, kecuali event listener)
                 const container = document.createElement('div');
                 container.className = 'weather-popup-content';
                 const namaEl = document.createElement('b');
@@ -329,9 +388,15 @@
                 const button = document.createElement('button');
                 button.id = 'popup-sidebar-btn-dynamic';
                 button.textContent = 'Lihat Detail di Sidebar';
+                
+                // --- REFAKTOR (Proyek 2.2) ---
+                // Dekopling: Memancarkan event, alih-alih memanggil sidebarManager
                 button.addEventListener('click', () => {
-                    sidebarManager.openSidebarFromPopup();
+                    // sidebarManager.openSidebarFromPopup(); // <-- Dihapus
+                    document.dispatchEvent(new CustomEvent('requestSidebarDetail'));
                 });
+                // --- Akhir Refaktor ---
+                
                 actionsWrapper.appendChild(button);
                 container.appendChild(namaEl);
                 container.appendChild(timeEl);
@@ -339,6 +404,8 @@
                 container.appendChild(actionsWrapper);
                 return container;
              },
+            
+             // (Tidak ada perubahan di 'open', 'close', 'isOpen', 'getElement', 'getInstance', 'setHTML', 'setDOMContent')
             open: function(lngLat, content, options = { maxWidth: '260px' }) {
                 this.close(true);
                 if (!Array.isArray(lngLat) || lngLat.length !== 2 || typeof lngLat[0] !== 'number' || typeof lngLat[1] !== 'number' || isNaN(lngLat[0]) || isNaN(lngLat[1])) { console.error("Invalid lngLat:", lngLat); return null; }
@@ -390,6 +457,8 @@
             getInstance: function() { return this._currentInstance; },
             setHTML: function(htmlContent) { if (this._currentInstance && this._currentInstance.isOpen() && typeof htmlContent === 'string') { try { this._currentInstance.setHTML(htmlContent); } catch (e) { console.error("Err setHTML:", e); } } },
             setDOMContent: function(domElement) { if (this._currentInstance && this._currentInstance.isOpen() && domElement instanceof HTMLElement) { try { this._currentInstance.setDOMContent(domElement); } catch (e) { console.error("Err setDOMContent:", e); } } },
+            
+            /** Memperbarui konten popup (jika terbuka) untuk waktu yang dipilih. */
             updateUIForTime: function(idxGlobal, localTimeString) {
                 if (!this.isOpen()) return;
                 const popupEl = this.getElement();
@@ -440,29 +509,28 @@
         
         /** 🗓️ CALENDAR MANAGER: Mengelola semua logika kalender */
         const calendarManager = { 
-            // (Tidak ada perubahan di ronde refaktor ini)
             _displayMonth: new Date().getMonth(),
             _displayYear: new Date().getFullYear(),
+
+            // --- REFAKTOR (Rencana 3.2.2) ---
+            // Logika listener dipindahkan ke global
             toggleCalendar: function() {
                 if (!calendarPopup) return;
                 const isOpen = calendarPopup.style.display === 'block';
                 if (isOpen) {
                     calendarPopup.style.display = 'none';
-                    document.removeEventListener('click', this.closeCalendarOnClickOutside);
+                    // document.removeEventListener('click', this.closeCalendarOnClickOutside); // <-- Hapus
                 } else {
                     this.renderCalendar(); 
                     calendarPopup.style.display = 'block';
-                    setTimeout(() => { document.addEventListener('click', this.closeCalendarOnClickOutside.bind(this), { once: true }); }, 0);
+                    // setTimeout(...); // <-- Hapus
                 }
             },
-            closeCalendarOnClickOutside: function(event) {
-                 if (calendarPopup && calendarPopup.style.display === 'block' &&
-                     !calendarPopup.contains(event.target) && event.target !== calendarBtn) {
-                     calendarPopup.style.display = 'none';
-                 } else if (calendarPopup && calendarPopup.style.display === 'block') {
-                      setTimeout(() => { document.addEventListener('click', this.closeCalendarOnClickOutside.bind(this), { once: true }); }, 0);
-                 }
-            },
+            
+            // Hapus fungsi closeCalendarOnClickOutside, diganti listener global
+            // closeCalendarOnClickOutside: function(event) { ... },
+            // --- Akhir Refaktor ---
+            
             renderCalendar: function() {
                  if (!calendarGrid || !calendarMonthYear) return;
                  const predictedStartDate = timeManager.getPredictedStartDate();
@@ -580,8 +648,12 @@
                 const currentHourInDay = timeManager.getSelectedTimeIndex() >= 0 ? (timeManager.getSelectedTimeIndex() % 24) : new Date().getHours(); 
                 const targetDayIndex = Math.floor(targetIndex / 24); 
                 const newIndex = (targetDayIndex * 24) + currentHourInDay;
-                calendarPopup.style.display = 'none'; 
-                document.removeEventListener('click', this.closeCalendarOnClickOutside.bind(this));
+                
+                // --- REFAKTOR (Rencana 3.2.2) ---
+                // Panggil toggleCalendar alih-alih memanipulasi style secara manual
+                this.toggleCalendar();
+                // --- Akhir Refaktor ---
+                
                 timeManager.handleTimeChange(newIndex); 
             },
             changeCalendarMonth: function(direction) {
@@ -603,7 +675,7 @@
             _selectedTimeIndex: -1, 
             _globalTimeLocalLookup: [], 
             _predictedStartDate: null,
-            _userHasChangedTime: false, // <-- REFAKTOR (Bug Fix)
+            _userHasChangedTime: false, 
             
             /** [BARU] Menghitung indeks jam saat ini (disentralisasi) */
             calculateCurrentHourIndex: function(startDate) {
@@ -618,19 +690,40 @@
                 const correctedIndex = (diffDays * 24) + roundedHour;
                 return Math.max(0, Math.min(335, correctedIndex));
             },
+
+            // --- REFAKTOR (Proyek 2.1) ---
+            /** [BARU] Logika terpusat untuk menyinkronkan waktu saat data asli tiba */
+            initializeOrSync: function(realStartDate) {
+                console.log(`Menyinkronkan waktu dengan data asli...`);
+                // Selalu sinkronkan tanggal mulai
+                timeManager.setPredictedStartDate(realStartDate);
+                
+                // Cek apakah pengguna sudah mengubah waktu
+                if (!timeManager._userHasChangedTime) {
+                    // Belum, jadi sinkronkan ke jam saat ini
+                    console.log("Menyinkronkan jam ke data asli.");
+                    const correctedIndex = timeManager.calculateCurrentHourIndex(realStartDate);
+                    // Gunakan _selectedTimeIndex secara langsung alih-alih handleTimeChange
+                    // untuk menghindari penandaan _userHasChangedTime = true
+                    this._selectedTimeIndex = correctedIndex;
+                    this.updateUIWithRealData(); // Perbarui semua UI ke indeks yang baru disinkronkan
+                } else {
+                    // Sudah, hormati pilihan pengguna
+                    console.log("Data asli dimuat, pilihan pengguna (Indeks " + timeManager.getSelectedTimeIndex() + ") dipertahankan.");
+                    // Cukup perbarui UI dengan data baru di indeks yang sudah dipilih pengguna.
+                    this.updateUIWithRealData();
+                }
+            },
+            // --- Akhir Refaktor ---
             
             init: function() {
-                // Fungsionalitas fallback ini tetap ada (sesuai Proyek 2)
                 const now = new Date();
                 this._predictedStartDate = new Date(now);
                 this._predictedStartDate.setDate(now.getDate() - 7); 
                 this._predictedStartDate.setHours(0, 0, 0, 0); 
                 console.log(`Tanggal mulai prediksi dihitung: ${this._predictedStartDate.toISOString()}`);
                 
-                // --- REFAKTOR (Proyek 2.1) ---
-                // Menggunakan fungsi terpusat
                 this._selectedTimeIndex = this.calculateCurrentHourIndex(this._predictedStartDate);
-                // --- Akhir Refaktor ---
                 
                 console.log(`Indeks awal diprediksi: ${this._selectedTimeIndex}`);
                 this.updateTimePickerDisplayOnly(); 
@@ -742,12 +835,7 @@
             handleTimeChange: function(newIndex) {
                 newIndex = Math.max(0, Math.min(335, newIndex)); // Clamp
                 if (newIndex !== this._selectedTimeIndex) {
-                    
-                    // --- REFAKTOR (Bug Fix) ---
-                    // Tandai bahwa pengguna telah mengubah waktu secara manual
                     this._userHasChangedTime = true;
-                    // --- Akhir Refaktor ---
-                    
                     this._selectedTimeIndex = newIndex;
                     console.log(`Indeks waktu diubah ke: ${newIndex}`);
                     this.updateTimePickerDisplayOnly(this._globalTimeLocalLookup.length > 0); 
@@ -1151,31 +1239,16 @@
                     console.warn(`Data kosong diterima untuk ${id}`);
                     return false; 
                 }
-                
                 cacheManager.set(id, data);
-                
                 const isFirstLoad = (timeManager.getGlobalTimeLookup().length === 0);
                 let didInitTime = false;
-
-                // --- REFAKTOR (Bug Fix & Proyek 2.1) ---
+                
+                // --- REFAKTOR (Proyek 2.1) ---
+                // Logika inisialisasi dipindahkan ke timeManager
                 if (isFirstLoad && data.hourly?.time?.length > 0) {
-                    console.log(`INISIALISASI WAKTU: Menggunakan data dari ${id}`);
                     timeManager.setGlobalTimeLookup(data.hourly.time);
                     const realStartDate = new Date(data.hourly.time[0]);
-                    timeManager.setPredictedStartDate(realStartDate);
-                    
-                    // Cek apakah pengguna sudah mengubah waktu
-                    if (!timeManager._userHasChangedTime) {
-                        // Belum, jadi sinkronkan ke jam saat ini
-                        console.log("Menyinkronkan jam ke data asli.");
-                        const correctedIndex = timeManager.calculateCurrentHourIndex(realStartDate);
-                        timeManager.handleTimeChange(correctedIndex); 
-                    } else {
-                        // Sudah, hormati pilihan pengguna
-                        console.log("Data asli dimuat, pilihan pengguna (Indeks " + timeManager.getSelectedTimeIndex() + ") dipertahankan.");
-                        timeManager.updateUIWithRealData();
-                    }
-                    
+                    timeManager.initializeOrSync(realStartDate); // Memanggil fungsi terpusat
                     didInitTime = true;
                 }
                 // --- Akhir Refaktor ---
@@ -1218,10 +1291,9 @@
                  popupManager.close(true);
                  const clusterId = feature.properties.cluster_id;
                  const source = map.getSource('data-cuaca-source'); 
-                 
                  const pointCount = feature.properties.point_count;
-                 // Menggunakan batas 100 (dari Proyek 1)
-                 source.getClusterLeaves(clusterId, 100, 0, (err, leaves) => {
+                 
+                 source.getClusterLeaves(clusterId, 100, 0, (err, leaves) => { // (Sudah direfaktor di Proyek 1)
                      if (err) { console.error("Error getting cluster leaves:", err); return; }
                      const loadingPopupRef = popupManager.open(coordinates, 'Memuat data klaster...');
                      if (!loadingPopupRef) return;
@@ -1251,12 +1323,16 @@
                             const idxDisplay = timeManager.getSelectedTimeIndex();
                             
                             // --- REFAKTOR (Proyek 2.1) ---
-                            // Logika inisialisasi waktu disentralisasi ke _processIncomingData
+                            // Logika inisialisasi disentralisasi
                             if (timeManager.getGlobalTimeLookup().length === 0) { 
                                  const firstId = Object.keys(dataDetailCuaca)[0];
                                  if (firstId && dataDetailCuaca[firstId]) {
-                                     // Memanggil 'master' function, yang sudah berisi perbaikan bug
-                                     this._processIncomingData(firstId, dataDetailCuaca[firstId]);
+                                     const data = dataDetailCuaca[firstId];
+                                     if (data.hourly?.time?.length > 0) {
+                                         timeManager.setGlobalTimeLookup(data.hourly.time);
+                                         const realStartDate = new Date(data.hourly.time[0]);
+                                         timeManager.initializeOrSync(realStartDate); // PANGGILAN BARU
+                                     }
                                  } else {
                                      popupManager.setHTML("Data waktu belum siap."); 
                                      return; 
@@ -1523,7 +1599,6 @@
         }
 
         // --- FUNGSI-FUNGSI UNTUK SEARCH BAR ---
-        // (Tidak ada perubahan)
 
         /** 🔍 Mengambil data lokasi dari backend */
         async function fetchLokasi(query) {
@@ -1603,10 +1678,15 @@
             if (mapManager) {
                 setTimeout(() => {
                      mapManager.handleUnclusteredClick(props);
+                     
+                     // --- REFAKTOR (Proyek 2.2) ---
+                     // Dekopling: Memancarkan event, alih-alih memanggil sidebarManager
                      if (!sidebarManager.isOpen() && sidebarManager) {
-                        console.log("Search click: Forcing sidebar open.");
-                        sidebarManager.openSidebar();
+                        console.log("Search click: Meminta sidebar dibuka.");
+                        // sidebarManager.openSidebar(); // <-- Dihapus
+                        document.dispatchEvent(new CustomEvent('requestSidebarOpen'));
                      }
+                     // --- Akhir Refaktor ---
                 }, 500); 
             }
         }
@@ -1672,7 +1752,7 @@
             // ================================================================
             // 3. Pasang Event Listener
             // ================================================================
-            // (Tidak ada perubahan)
+            // (Tidak ada perubahan di listener tombol waktu)
 
             prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 24));
             nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 24));
@@ -1681,7 +1761,14 @@
             nextHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 1));
             nextThreeHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 3));
             
-            calendarBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.toggleCalendar(); });
+            // --- REFAKTOR (Rencana 3.2.2) ---
+            // Menambahkan stopPropagation agar listener global tidak langsung menutupnya
+            calendarBtn.addEventListener('click', (e) => { 
+                e.stopPropagation(); 
+                calendarManager.toggleCalendar(); 
+            });
+            // --- Akhir Refaktor ---
+            
             calendarPrevMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(-1); });
             calendarNextMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(1); });
 
@@ -1706,12 +1793,26 @@
                     fetchLokasi(query); 
                 }
             });
+            
+            // --- REFAKTOR (Rencana 3.2.2) ---
+            // Listener global untuk menutup dropdown pencarian DAN kalender
             document.addEventListener('click', function(e) {
+                // Logika penutup search
                 const wrapper = document.getElementById('search-wrapper');
                 if (wrapper && !wrapper.contains(e.target)) {
                     suggestionsDropdown.style.display = 'none';
                 }
+                
+                // Logika penutup kalender
+                if (calendarPopup && calendarPopup.style.display === 'block') {
+                    // Jika klik BUKAN di dalam kalender DAN BUKAN di tombol kalender
+                    if (!calendarPopup.contains(e.target) && e.target !== calendarBtn) {
+                        calendarManager.toggleCalendar(); // Panggil toggle untuk menutup
+                    }
+                }
             });
+            // --- Akhir Refaktor ---
+            
             document.getElementById('search-btn').addEventListener('click', () => {
                 const query = searchInput.value;
                 if (query.length < 3) {
@@ -1723,66 +1824,30 @@
                 searchInput.focus();
             });
 
+            // --- REFAKTOR (Proyek 2.2) ---
+            // [BARU] Event listener terpusat (Pub/Sub) untuk dekopling
+            document.addEventListener('requestSidebarDetail', () => {
+                console.log("Event 'requestSidebarDetail' diterima.");
+                sidebarManager.openSidebarFromPopup();
+            });
+            document.addEventListener('requestSidebarOpen', () => {
+                console.log("Event 'requestSidebarOpen' diterima.");
+                if (!sidebarManager.isOpen()) {
+                    sidebarManager.openSidebar();
+                }
+            });
+            // --- Akhir Refaktor ---
+
             // ================================================================
             // 4. Inisialisasi Peta & Event Peta
             // ================================================================
-            // (Tidak ada perubahan di seluruh bagian inisialisasi Peta)
+            
             map = new maplibregl.Map({ 
                 container: 'map',
-                 style: { 
-                    version: 8,
-                    glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
-                    sources: { 
-                        'cartodb-positron-nolabels': { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png'], tileSize: 256, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' },
-                        'batas-wilayah-vector': { type: 'vector', tiles: [`${baseUrl}/tiles/{z}/{x}/{y}.pbf`], minzoom: 4, maxzoom: 14, attribution: 'Data Batas Wilayah BIG' },
-                        'data-cuaca-source': { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, cluster: true, clusterMaxZoom: 13, clusterRadius: 80, promoteId: 'id' },
-                        'provinsi-source': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
-                    },
-                    layers: [ 
-                        { id: 'cartodb-positron-layer', type: 'raster', source: 'cartodb-positron-nolabels' },
-                        { id: 'batas-provinsi-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_provinsi', minzoom: 5, maxzoom: 7.99, paint: { 'line-color': '#A0522D', 'line-width': 1.5, 'line-opacity': 0.7 }},
-                        { id: 'batas-kabupaten-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_kabupatenkota', minzoom: 8, maxzoom: 10.99, paint: { 'line-color': '#4682B4', 'line-width': 1, 'line-opacity': 0.6 }},
-                        { id: 'batas-kecamatan-layer', type: 'line', source: 'batas-wilayah-vector', 'source-layer': 'batas_kecamatandistrik', minzoom: 11, maxzoom: 14, paint: { 'line-color': '#556B2F', 'line-width': 0.8, 'line-opacity': 0.5 }},
-                        { id: 'provinsi-point-circle', type: 'circle', source: 'provinsi-source', paint: { 'circle-radius': 7, 'circle-color': 'rgba(255, 255, 255, 0.6)', 'circle-stroke-color': '#333', 'circle-stroke-width': 1 }},
-                        { 
-                            id: 'provinsi-point-label', 
-                            type: 'symbol', 
-                            source: 'provinsi-source', 
-                            layout: { 'text-field': ['get', 'nama_simpel'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-optional': true }, 
-                            paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1.2 }
-                        },
-                        { id: 'cluster-background-layer', type: 'circle', source: 'data-cuaca-source', filter: ['has', 'point_count'], paint: { 'circle-radius': ['step', ['get', 'point_count'], 18, 50, 22, 200, 26], 'circle-color': ['step', ['get', 'point_count'], '#51bbd6', 50, '#f1f075', 200, '#f28cb1'], 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff', 'circle-opacity': 0.9 }},
-                        { id: 'cluster-count-layer', type: 'symbol', source: 'data-cuaca-source', filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-font': ['Noto Sans Regular'], 'text-size': 12 }, paint: {'text-color': '#333333', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5, 'text-halo-blur': 1 } },
-                        {
-                            id: 'unclustered-point-temp-circle', type: 'circle', source: 'data-cuaca-source', filter: ['!', ['has', 'point_count']],
-                            paint: {
-                                'circle-color': ['case', ['boolean', ['feature-state', 'hasData'], false], ['step', ['feature-state', 'suhu'], '#0d47a1', 15, '#1e88e5', 20, '#4caf50', 25, '#ffeb3b', 30, '#fb8c00', 35, '#e53935'], '#bdbdbd'],
-                                'circle-radius': ['case', ['boolean', ['feature-state', 'active'], false], 8, 6],
-                                'circle-stroke-width': ['case', ['boolean', ['feature-state', 'active'], false], 2.5, 1],
-                                'circle-stroke-color': ['case', ['boolean', ['feature-state', 'active'], false], '#000000', '#ffffff'],
-                                'circle-opacity': 0.95
-                            }
-                        },
-                        {
-                            id: 'unclustered-point-precip-ring', type: 'circle', source: 'data-cuaca-source', filter: ['!', ['has', 'point_count']],
-                            paint: {
-                                'circle-radius': ['case', ['boolean', ['feature-state', 'active'], false], 11, 9],
-                                'circle-color': '#1e88e5',
-                                'circle-opacity': ['case', ['any', ['==', ['feature-state', 'precip'], -1], ['!', ['boolean', ['feature-state', 'hasData'], false]]], 0.0, ['interpolate', ['linear'], ['feature-state', 'precip'], 10, 0.0, 50, 0.5, 100, 0.8]],
-                                'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
-                                'circle-stroke-opacity': ['case', ['all', ['>', ['feature-state', 'precip'], 10], ['!=', ['feature-state', 'precip'], -1]], ['case', ['boolean', ['feature-state', 'active'], false], 1.0, 0.7], 0.0]
-                            }
-                        },
-                        {
-                            id: 'unclustered-point-label', 
-                            type: 'symbol', 
-                            source: 'data-cuaca-source', 
-                            filter: ['!', ['has', 'point_count']],
-                            layout: { 'text-field': ['get', 'nama_simpel'], 'text-font': ['Noto Sans Regular'], 'text-size': 9.5, 'text-anchor': 'top', 'text-offset': [0, 0.9], 'text-optional': true },
-                            paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 1 }
-                        }
-                    ]
-                },
+                // --- REFAKTOR (Rencana 3.1) ---
+                // Menggunakan konstanta global
+                style: MAP_STYLE,
+                // --- Akhir Refaktor ---
                 center: [118.0149, -2.5489], zoom: 4.5, minZoom: 4, maxZoom: 14,
                 maxBounds: [[90, -15], [145, 10]]
             });
@@ -1811,6 +1876,9 @@
                 map.on('click', (e) => {
                     const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
 
+                    // --- REFAKTOR (Rencana 3.2.1) ---
+                    // Logika ini DIBIARKAN seperti semula karena sudah kuat.
+                    // Ini menangani klik pada "kanvas peta kosong" untuk menutup sidebar.
                     if (sidebarManager.isOpen() && !features.length) { 
                         const sidebarClicked = e.originalEvent.target.closest('#detail-sidebar');
                         const popupClicked = e.originalEvent.target.closest('.maplibregl-popup');
@@ -1820,10 +1888,12 @@
                         const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
                         const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
 
+                        // Jika klik BUKAN pada salah satu elemen UI ini, baru tutup.
                         if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked) {
                             sidebarManager.closeSidebar(); 
                         }
                     }
+                    // --- Akhir Refaktor ---
 
                     if (!features.length) { 
                         popupManager.close();
