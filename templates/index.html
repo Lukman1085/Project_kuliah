@@ -143,17 +143,9 @@
                 return predictedDate;
             },
 
-            /** Fungsi untuk mendapatkan string YYYY-MM-DDTHH:MM yang diprediksi */
-            getPredictedTimeString: function(index) {
-                // (Tidak ada perubahan)
-                const date = this.getPredictedDateFromIndex(index); 
-                if (!date) return null;
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                const hours = String(date.getHours()).padStart(2, '0');
-                return `${year}-${month}-${day}T${hours}:00`;
-            },
+            // --- REFAKTOR #5 ---
+            // Menghapus fungsi utils.getPredictedTimeString yang tidak terpakai
+            // --- Akhir Refaktor #5 ---
 
             /** Helper untuk memformat "YYYY-MM-DDTHH:MM" (dari data asli) */
             formatLocalTimestampString: function(localTimeString) {
@@ -191,19 +183,14 @@
                 } catch (e) { console.error("Error formatting predicted date object:", dateObject, e); return "Error Waktu"; }
             },
 
-            // --- REFAKTOR #4 ---
             /** Helper untuk memformat "YYYY-MM-DD" (dari data asli) */
             formatDateDisplayFromString: function(localDateString) {
+                 // (Tidak ada perubahan)
                  if (!localDateString) return "Error Tgl";
                 try {
-                    // Buat objek Date. Penting: tambahkan T12:00 untuk menghindari masalah TZ
                     const date = new Date(localDateString + "T12:00:00"); 
                     if (isNaN(date.getTime())) throw new Error("Invalid Date");
-                    
-                    // Panggil fungsi master (formatDateDisplayFromDateObject)
-                    // 'this' merujuk ke objek 'utils'
                     return this.formatDateDisplayFromDateObject(date);
-                    
                 } catch (e) { 
                     console.error("Error formatting date display string:", localDateString, e); 
                     return "Error Tgl"; 
@@ -212,8 +199,7 @@
             
             /** Helper untuk memformat objek Date (diprediksi). Ini adalah "master function". */
             formatDateDisplayFromDateObject: function(dateObject) {
-                // (Fungsi ini tidak berubah, sekarang menjadi "master"
-                // untuk logika "Hari Ini", "Kemarin", "Besok")
+                // (Tidak ada perubahan)
                 if (!dateObject || isNaN(dateObject.getTime())) return "Error Tgl";
                 try {
                     const now = new Date();
@@ -235,7 +221,6 @@
                     return new Intl.DateTimeFormat('id-ID', options).format(dateObject);
                 } catch (e) { console.error("Error formatting date display object:", dateObject, e); return "Error Tgl"; }
             },
-            // --- Akhir Refaktor #4 ---
 
             /** Memformat YYYY-MM-DD ke nama hari & tanggal lokal */
             formatDayOnly: function(dateString, timeZone) {
@@ -268,35 +253,78 @@
             _currentInstance: null,
             _internalCloseFlag: false,
 
-            // (Tidak ada perubahan di 'generatePopupContent')
+            // --- REFAKTOR #2 ---
+            /** Membuat konten DOM untuk popup (Bukan string HTML) */
             generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
+                // 1. Buat elemen container
                 const container = document.createElement('div');
                 container.className = 'weather-popup-content';
-                const innerHTML = `
-                    <b>${nama}</b>
-                    <div id="popup-time" style="font-size: 12px; color: #555;">${formattedTime}</div>
-                    <div class="popup-current-weather">
-                        <i id="popup-icon" class="${ikon}"></i>
-                        <div class="popup-details">
-                            <div><b id="popup-temp">${data.suhu?.toFixed(1) ?? '-'}°C</b> <span id="popup-desc">(${deskripsi})</span></div>
-                            <div id="popup-feelslike">Terasa: <b>${data.terasa?.toFixed(1) ?? '-'}°C</b></div>
-                            <div id="popup-humidity">Kelembapan: <b>${data.kelembapan ?? '-'}%</b></div>
-                            <div id="popup-precipitation">Presipitasi: <b>${data.prob_presipitasi ?? '-'}%</b></div>
-                            <div id="popup-wind">Angin: <b>${data.kecepatan_angin_10m ?? '-'} m/s</b> dari arah ${data.arah_angin_10m ?? '-'}°</div>
-                        </div>
-                    </div>
-                    <div class="popup-actions">
-                        <button id="popup-sidebar-btn-dynamic">Lihat Detail di Sidebar</button>
-                    </div>`;
-                container.innerHTML = innerHTML;
-                const button = container.querySelector('#popup-sidebar-btn-dynamic');
-                if (button) {
-                    button.addEventListener('click', () => {
-                        sidebarManager.openSidebarFromPopup();
-                    });
-                }
+                
+                // 2. Buat elemen anak
+                const namaEl = document.createElement('b');
+                namaEl.textContent = nama;
+                
+                const timeEl = document.createElement('div');
+                timeEl.id = 'popup-time';
+                timeEl.style.cssText = 'font-size: 12px; color: #555;';
+                timeEl.textContent = formattedTime;
+                
+                const weatherWrapper = document.createElement('div');
+                weatherWrapper.className = 'popup-current-weather';
+                
+                const iconEl = document.createElement('i');
+                iconEl.id = 'popup-icon';
+                iconEl.className = ikon;
+                
+                const detailsWrapper = document.createElement('div');
+                detailsWrapper.className = 'popup-details';
+                
+                // --- Helper untuk membuat elemen detail ---
+                const createDetailEl = (id, htmlContent) => {
+                    const el = document.createElement('div');
+                    if (id) el.id = id;
+                    el.innerHTML = htmlContent;
+                    return el;
+                };
+                
+                const tempDescEl = createDetailEl(null, `<b id="popup-temp">${data.suhu?.toFixed(1) ?? '-'}°C</b> <span id="popup-desc">(${deskripsi})</span>`);
+                const feelsLikeEl = createDetailEl('popup-feelslike', `Terasa: <b>${data.terasa?.toFixed(1) ?? '-'}°C</b>`);
+                const humidityEl = createDetailEl('popup-humidity', `Kelembapan: <b>${data.kelembapan ?? '-'}%</b>`);
+                const precipEl = createDetailEl('popup-precipitation', `Presipitasi: <b>${data.prob_presipitasi ?? '-'}%</b>`);
+                const windEl = createDetailEl('popup-wind', `Angin: <b>${data.kecepatan_angin_10m ?? '-'} m/s</b> dari arah ${data.arah_angin_10m ?? '-'}°`);
+
+                detailsWrapper.appendChild(tempDescEl);
+                detailsWrapper.appendChild(feelsLikeEl);
+                detailsWrapper.appendChild(humidityEl);
+                detailsWrapper.appendChild(precipEl);
+                detailsWrapper.appendChild(windEl);
+                
+                weatherWrapper.appendChild(iconEl);
+                weatherWrapper.appendChild(detailsWrapper);
+                
+                const actionsWrapper = document.createElement('div');
+                actionsWrapper.className = 'popup-actions';
+                
+                const button = document.createElement('button');
+                button.id = 'popup-sidebar-btn-dynamic';
+                button.textContent = 'Lihat Detail di Sidebar';
+                
+                // 3. Pasang event listener secara aman
+                button.addEventListener('click', () => {
+                    sidebarManager.openSidebarFromPopup();
+                });
+                
+                actionsWrapper.appendChild(button);
+                
+                // 4. Gabungkan semua ke container
+                container.appendChild(namaEl);
+                container.appendChild(timeEl);
+                container.appendChild(weatherWrapper);
+                container.appendChild(actionsWrapper);
+                
                 return container;
              },
+             // --- Akhir Refaktor #2 ---
             
              // (Tidak ada perubahan di 'open', 'close', 'isOpen', 'getElement', 'getInstance', 'setHTML', 'setDOMContent')
             open: function(lngLat, content, options = { maxWidth: '260px' }) {
@@ -351,27 +379,21 @@
             setHTML: function(htmlContent) { if (this._currentInstance && this._currentInstance.isOpen() && typeof htmlContent === 'string') { try { this._currentInstance.setHTML(htmlContent); } catch (e) { console.error("Err setHTML:", e); } } },
             setDOMContent: function(domElement) { if (this._currentInstance && this._currentInstance.isOpen() && domElement instanceof HTMLElement) { try { this._currentInstance.setDOMContent(domElement); } catch (e) { console.error("Err setDOMContent:", e); } } },
             
-            // --- REFAKTOR #2 ---
-            // Method baru untuk menangani pembaruan UI Popup.
-            // Ini dipanggil oleh timeManager.updateUIWithRealData
             /** * [BARU] Memperbarui konten popup (jika terbuka) untuk waktu yang dipilih.
              * Ini berisi logika yang SEBELUMNYA ada di timeManager.updateDynamicUI.
              */
             updateUIForTime: function(idxGlobal, localTimeString) {
-                if (!this.isOpen()) return; // Jika popup tidak terbuka, tidak ada yang perlu dilakukan.
-
+                // (Tidak ada perubahan)
+                if (!this.isOpen()) return;
                 const popupEl = this.getElement();
                 if (!popupEl) return;
-                
-                // Coba update popup tunggal (jika ada)
                 const singlePopup = popupEl.querySelector('.weather-popup-content');
                 if (singlePopup) {
-                    const activeData = mapManager.getActiveLocationData(); // Ambil data aktif
+                    const activeData = mapManager.getActiveLocationData();
                     if (activeData && activeData.hourly?.time) {
                         try {
                             const hourly = activeData.hourly;
                             if (idxGlobal >= hourly.time.length) return; 
-
                             const formattedTime = utils.formatLocalTimestampString(localTimeString); 
                             const dataPoint = {
                                 is_day: hourly.is_day?.[idxGlobal],
@@ -384,7 +406,6 @@
                                 arah_angin_10m: hourly.wind_direction_10m?.[idxGlobal],
                             };
                             const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
-
                             const timeEl = singlePopup.querySelector('#popup-time'); if (timeEl) timeEl.textContent = formattedTime;
                             const iconEl = singlePopup.querySelector('#popup-icon'); if (iconEl) iconEl.className = ikon;
                             const tempEl = singlePopup.querySelector('#popup-temp'); if (tempEl) tempEl.textContent = `${dataPoint.suhu?.toFixed(1) ?? "-"}°C`;
@@ -396,8 +417,6 @@
                         } catch (e) { console.warn("Error updating single popup DOM:", e); }
                     }
                 }
-                
-                // Coba update popup klaster (jika ada)
                 const clusterPopup = popupEl.querySelector('.cluster-popup-content');
                 if (clusterPopup) {
                     try {
@@ -405,16 +424,14 @@
                         clusterItems.forEach(item => {
                             const id = item.dataset.id;
                             if (!id) return;
-                            const itemData = clientWeatherCache.get(id); // Ambil dari cache
+                            const itemData = clientWeatherCache.get(id);
                             if (!itemData?.hourly?.time) return;
                             if (idxGlobal >= itemData.hourly.time.length) return; 
-
                             const itemHourly = itemData.hourly;
                             const suhu = itemHourly.temperature_2m[idxGlobal];
                             const code = itemHourly.weather_code[idxGlobal];
                             const is_day = itemHourly.is_day[idxGlobal];
                             const { deskripsi: itemDeskripsi } = utils.getWeatherInfo(code, is_day); 
-
                             const suhuEl = item.querySelector('.item-suhu');
                             const descEl = item.querySelector('.item-desc');
                             if (suhuEl) suhuEl.textContent = `${suhu?.toFixed(1) ?? '-'}°C`;
@@ -423,17 +440,14 @@
                     } catch (e) { console.warn("Error updating cluster popup DOM:", e); }
                 }
             }
-            // --- Akhir Refaktor #2 ---
         };
         
         /** 🗓️ CALENDAR MANAGER: Mengelola semua logika kalender */
         const calendarManager = { 
+            // (Tidak ada perubahan di ronde refaktor ini)
             _displayMonth: new Date().getMonth(),
             _displayYear: new Date().getFullYear(),
-
-            /** Menampilkan atau menyembunyikan popup kalender */
             toggleCalendar: function() {
-                // (Tidak ada perubahan)
                 if (!calendarPopup) return;
                 const isOpen = calendarPopup.style.display === 'block';
                 if (isOpen) {
@@ -445,10 +459,7 @@
                     setTimeout(() => { document.addEventListener('click', this.closeCalendarOnClickOutside.bind(this), { once: true }); }, 0);
                 }
             },
-
-            /** Menutup kalender jika klik terjadi di luar elemennya */
             closeCalendarOnClickOutside: function(event) {
-                // (Tidak ada perubahan)
                  if (calendarPopup && calendarPopup.style.display === 'block' &&
                      !calendarPopup.contains(event.target) && event.target !== calendarBtn) {
                      calendarPopup.style.display = 'none';
@@ -456,10 +467,7 @@
                       setTimeout(() => { document.addEventListener('click', this.closeCalendarOnClickOutside.bind(this), { once: true }); }, 0);
                  }
             },
-            
-            /** Merender isi kalender (independen dari data backend) */
             renderCalendar: function() {
-                 // (Tidak ada perubahan)
                  if (!calendarGrid || !calendarMonthYear) return;
                  const predictedStartDate = timeManager.getPredictedStartDate();
                  if (!predictedStartDate) {
@@ -471,14 +479,10 @@
                  const displayDate = new Date(displayYear, displayMonth, 1);
                  calendarMonthYear.textContent = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(displayDate);
                  calendarGrid.innerHTML = '';
-                 
                  this._buildCalendarHeaders();
                  this._buildCalendarGrid();
             },
-
-            /** FASE 2: Membangun header 'Min, Sen, ...' */
             _buildCalendarHeaders: function() {
-                 // (Tidak ada perubahan)
                  const daysHeader = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
                  daysHeader.forEach(day => { 
                      const h = document.createElement('div'); 
@@ -487,27 +491,21 @@
                      calendarGrid.appendChild(h); 
                  });
             },
-
-            /** FASE 2: Membangun semua sel tanggal */
             _buildCalendarGrid: function() {
                  const displayMonth = this._displayMonth;
                  const displayYear = this._displayYear;
                  const lookup = timeManager.getGlobalTimeLookup();
                  const predictedStartDate = timeManager.getPredictedStartDate();
                  const selectedTimeIndex = timeManager.getSelectedTimeIndex();
-                 
                  const useRealData = lookup.length > 0;
                  const getLocalDateString = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                 
                  const startDate = useRealData ? new Date(lookup[0].split('T')[0] + "T00:00:00") : new Date(predictedStartDate);
                  const endDate = useRealData ? new Date(lookup[lookup.length - 1].split('T')[0] + "T00:00:00") : new Date(predictedStartDate);
                  if (!useRealData) {
                      endDate.setHours(endDate.getHours() + 335); 
                  }
-
                  const startDateStr = getLocalDateString(startDate);
                  const endDateStr = getLocalDateString(endDate);
-                 
                  let selectedDateStr;
                  if (useRealData && selectedTimeIndex >= 0 && selectedTimeIndex < lookup.length) {
                      selectedDateStr = lookup[selectedTimeIndex].split('T')[0];
@@ -515,61 +513,36 @@
                      const predDate = utils.getPredictedDateFromIndex(selectedTimeIndex);
                      selectedDateStr = predDate ? getLocalDateString(predDate) : null;
                  }
-                 
                  const todayStr = getLocalDateString(new Date());
-
                  const firstOfMonth = new Date(displayYear, displayMonth, 1);
                  const dayOfWeek = firstOfMonth.getDay(); 
                  const lastDayPrevMonth = new Date(displayYear, displayMonth, 0).getDate();
-                 
-                 // --- REFAKTOR #3 ---
-                 // Buat DocumentFragment untuk menampung semua sel
                  const fragment = document.createDocumentFragment();
-                 // --- Akhir Refaktor ---
-
-                 // Loop 1: Hari bulan sebelumnya
                  for (let i = dayOfWeek - 1; i >= 0; i--) {
                      const day = lastDayPrevMonth - i;
                      const cell = document.createElement('div');
                      cell.className = 'calendar-date other-month disabled';
                      cell.textContent = day;
-                     // --- REFAKTOR #3 ---
-                     fragment.appendChild(cell); // Tambahkan ke fragment
-                     // --- Akhir Refaktor ---
+                     fragment.appendChild(cell);
                  }
-                 
-                 // Loop 2: Hari bulan ini
                  const daysInMonth = new Date(displayYear, displayMonth + 1, 0).getDate();
                  for (let day = 1; day <= daysInMonth; day++) {
                      const dateStr = `${displayYear}-${String(displayMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                      const dateButton = this._createCalendarCell(day, dateStr, startDateStr, endDateStr, todayStr, selectedDateStr, lookup, useRealData, predictedStartDate);
-                     // --- REFAKTOR #3 ---
-                     fragment.appendChild(dateButton); // Tambahkan ke fragment
-                     // --- Akhir Refaktor ---
+                     fragment.appendChild(dateButton);
                  }
-                 
-                 // Loop 3: Hari bulan berikutnya
                  const totalCells = dayOfWeek + daysInMonth;
                  const remainingCells = Math.max(0, (7 * 6) - totalCells); 
                  for (let day = 1; day <= remainingCells; day++) {
                      const cell = document.createElement('div');
                      cell.className = 'calendar-date other-month disabled';
                      cell.textContent = day;
-                     // --- REFAKTOR #3 ---
-                     fragment.appendChild(cell); // Tambahkan ke fragment
-                     // --- Akhir Refaktor ---
-                      if (fragment.children.length >= 42) break; // Cek total sel di fragment
+                     fragment.appendChild(cell);
+                      if (fragment.children.length >= 42) break;
                  }
-                 
-                 // --- REFAKTOR #3 ---
-                 // Tambahkan fragment ke DOM HANYA SEKALI
                  calendarGrid.appendChild(fragment);
-                 // --- Akhir Refaktor ---
             },
-
-            /** FASE 2: Membuat satu sel tombol tanggal */
             _createCalendarCell: function(day, dateStr, startDateStr, endDateStr, todayStr, selectedDateStr, lookup, useRealData, predictedStartDate) {
-                // (Tidak ada perubahan)
                 const dateButton = document.createElement('button');
                 dateButton.className = 'calendar-date';
                 dateButton.textContent = day;
@@ -586,10 +559,10 @@
                     }
                     if (targetIndex >= 0 && targetIndex < 336) { 
                         dateButton.dataset.index = targetIndex; 
-                        dateButton.onclick = (e) => { 
+                        dateButton.addEventListener('click', (e) => { // Menggunakan addEventListener
                             e.stopPropagation(); 
                             this.handleCalendarDateClick(targetIndex); 
-                        };
+                        });
                     } else {
                         dateButton.classList.add('disabled'); 
                         dateButton.disabled = true;
@@ -606,11 +579,7 @@
                 }
                 return dateButton;
             },
-
-
-            /** Menangani klik kalender, memanggil handleTimeChange */
             handleCalendarDateClick: function(targetIndex) {
-                // (Tidak ada perubahan)
                 console.log("Calendar date clicked, target index (predicted for ~12:00):", targetIndex);
                 const currentHourInDay = timeManager.getSelectedTimeIndex() >= 0 ? (timeManager.getSelectedTimeIndex() % 24) : new Date().getHours(); 
                 const targetDayIndex = Math.floor(targetIndex / 24); 
@@ -619,10 +588,7 @@
                 document.removeEventListener('click', this.closeCalendarOnClickOutside.bind(this));
                 timeManager.handleTimeChange(newIndex); 
             },
-
-            /** Mengubah bulan yang ditampilkan di kalender */
             changeCalendarMonth: function(direction) {
-                // (Tidak ada perubahan)
                 let newMonth = this._displayMonth + direction;
                 let newYear = this._displayYear;
                 if (newMonth < 0) {
@@ -638,44 +604,31 @@
 
         /** ⏰ TIME MANAGER: Mengelola state waktu dan update UI terkait waktu */
         const timeManager = {
-            // --- REFAKTOR #1 ---
-            // State waktu sekarang dikelola di sini
+            // (Tidak ada perubahan di ronde refaktor ini)
             _selectedTimeIndex: -1, 
             _globalTimeLocalLookup: [], 
             _predictedStartDate: null,
-            
-            // Inisialisasi state waktu
             init: function() {
                 const now = new Date();
-                // Hitung tanggal mulai prediksi (7 hari yang lalu)
                 this._predictedStartDate = new Date(now);
                 this._predictedStartDate.setDate(now.getDate() - 7); 
                 this._predictedStartDate.setHours(0, 0, 0, 0); 
                 console.log(`Tanggal mulai prediksi dihitung: ${this._predictedStartDate.toISOString()}`);
-
                 let hourOfDay = now.getHours();
                 if (now.getMinutes() >= 30) { hourOfDay = (hourOfDay + 1); } 
-                
                 const roundedHour = hourOfDay % 24;
                 const todayAtMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const startAtMidnight = new Date(this._predictedStartDate.getFullYear(), this._predictedStartDate.getMonth(), this._predictedStartDate.getDate());
                 const diffDays = Math.round((todayAtMidnight.getTime() - startAtMidnight.getTime()) / (1000 * 60 * 60 * 24));
-                
                 const correctedIndex = (diffDays * 24) + roundedHour;
-
                 this._selectedTimeIndex = Math.max(0, Math.min(335, correctedIndex));
                 console.log(`Indeks awal diprediksi: ${this._selectedTimeIndex}`);
-                
-                // Panggil update UI awal
                 this.updateTimePickerDisplayOnly(); 
                 this.updateNavigationButtonsState(this._selectedTimeIndex); 
             },
-
-            // Getter & Setter untuk state internal
             getSelectedTimeIndex: function() { return this._selectedTimeIndex; },
             getGlobalTimeLookup: function() { return this._globalTimeLocalLookup; },
             getPredictedStartDate: function() { return this._predictedStartDate; },
-            
             setGlobalTimeLookup: function(lookupArray) {
                 this._globalTimeLocalLookup = lookupArray;
                 console.log(`Lookup waktu asli di-set (Total: ${this._globalTimeLocalLookup.length} jam)`);
@@ -684,11 +637,7 @@
                 this._predictedStartDate = date;
                 console.log(`Tanggal mulai prediksi DISINKRONKAN ke data asli: ${date.toISOString()}`);
             },
-            // --- Akhir Refaktor ---
-
-            /** Fungsi terpisah untuk update status disabled tombol navigasi */
             updateNavigationButtonsState: function(currentIndex) {
-                // (Tidak ada perubahan)
                 if (prevDayBtn) prevDayBtn.disabled = (currentIndex < 24);
                 if (nextDayBtn) nextDayBtn.disabled = (currentIndex >= 312); 
                 if (prevThreeHourBtn) prevThreeHourBtn.disabled = (currentIndex < 3);
@@ -696,21 +645,13 @@
                 if (nextHourBtn) nextHourBtn.disabled = (currentIndex >= 335);
                 if (nextThreeHourBtn) nextThreeHourBtn.disabled = (currentIndex >= 333); 
             },
-
-            /** Fungsi terpisah HANYA untuk update teks date/hour display */
             updateTimePickerDisplayOnly: function(useRealData = false) {
                  if (!dateDisplay || !hourDisplay) return;
-                 
-                 // --- REFAKTOR #1 ---
                  const idx = this._selectedTimeIndex;
-                 // --- Akhir Refaktor ---
                  let dateToShow;
                  let hourToShow = "--:--";
-
-                 // --- REFAKTOR #1 ---
                  if (useRealData && this._globalTimeLocalLookup.length > idx && idx >= 0) {
                      const realTimeString = this._globalTimeLocalLookup[idx];
-                 // --- Akhir Refaktor ---
                      const [datePart, timePart] = realTimeString.split('T');
                      dateToShow = utils.formatDateDisplayFromString(datePart); 
                      hourToShow = timePart;
@@ -723,19 +664,10 @@
                          dateToShow = "Memuat..."; 
                      }
                  }
-                 
                  dateDisplay.textContent = dateToShow;
                  hourDisplay.textContent = hourToShow;
             },
-
-            // --- REFAKTOR #2 ---
-            // updateDynamicUI DIHAPUS. Logikanya dipindahkan ke
-            // popupManager.updateUIForTime dan sidebarManager.updateUIForTime
-            // --- Akhir Refaktor ---
-
-            /** Mengupdate state visual semua marker di peta */
             updateMapFeaturesForTime: function(idxGlobal) {
-                 // --- REFAKTOR #1 ---
                 if (this._globalTimeLocalLookup.length === 0) {
                      console.warn("Attempted to update map features before real data loaded.");
                      return;
@@ -745,27 +677,20 @@
                     idxGlobal = this._selectedTimeIndex; 
                 }
                 if (idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) return; 
-                // --- Akhir Refaktor ---
-
                 const sourceFeatures = map.querySourceFeatures('data-cuaca-source', { filter: ['!', ['has', 'point_count']] }); 
                 const processedIds = new Set();
-
                 for (const [id, data] of clientWeatherCache.entries()) {
                     processedIds.add(id);
                     let stateData = { hasData: false }; 
-                    
                     if (data?.hourly?.time && idxGlobal < data.hourly.time.length) {
                         const hourly = data.hourly;
                         const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: id }); 
-                        // --- REFAKTOR #1 ---
-                        // Periksa ID aktif dari mapManager
                         const isActive = (String(id) === String(mapManager.getActiveLocationId()));
-                        // --- Akhir Refaktor ---
                         stateData = {
                             hasData: true,
                             suhu: hourly.temperature_2m?.[idxGlobal] ?? -999, 
                             precip: hourly.precipitation_probability?.[idxGlobal] ?? -1, 
-                            active: isActive // Gunakan status aktif yang diperbarui
+                            active: isActive 
                         };
                     }
                     try {
@@ -774,7 +699,6 @@
                          console.warn(`Gagal set state (updateMapFeaturesForTime) untuk ${id}:`, e.message);
                     }
                 }
-
                 for (const feature of sourceFeatures) {
                     if (feature.id && !processedIds.has(feature.id)) {
                         try {
@@ -785,13 +709,9 @@
                     }
                 }
             },
-
-            /** Fungsi ini HANYA dipanggil jika data backend SUDAH ada. */
             updateUIWithRealData: function() {
-                 // --- REFAKTOR #1 ---
                 const idx = this._selectedTimeIndex;
                 console.log(`UI Update (Real Data) triggered for Index: ${idx}`);
-                
                 if (this._globalTimeLocalLookup.length === 0) { 
                     console.error("updateUIWithRealData dipanggil secara tidak benar (data belum siap).");
                     return;
@@ -801,189 +721,106 @@
                      return;
                 }
                 const localTimeString = this._globalTimeLocalLookup[idx];
-                // --- Akhir Refaktor ---
-                
-                // Ambil data aktif sekali saja
                 const activeData = mapManager.getActiveLocationData();
-
                 this.updateTimePickerDisplayOnly(true); 
                 this.updateMapFeaturesForTime(idx); 
-                
-                // --- REFAKTOR #2 ---
-                // Delegasikan pembaruan UI ke manajer yang relevan
-                popupManager.updateUIForTime(idx, localTimeString); // Popup mengurus logikanya sendiri
-                sidebarManager.updateUIForTime(idx, localTimeString, activeData); // Kirim data yang relevan ke sidebar
-                // --- Akhir Refaktor ---
-                
+                popupManager.updateUIForTime(idx, localTimeString); 
+                sidebarManager.updateUIForTime(idx, localTimeString, activeData); 
                 this.updateNavigationButtonsState(idx); 
             },
-            
-            /** Wrapper untuk menangani perubahan waktu */
             handleTimeChange: function(newIndex) {
                 newIndex = Math.max(0, Math.min(335, newIndex)); // Clamp
-                // --- REFAKTOR #1 ---
                 if (newIndex !== this._selectedTimeIndex) {
                     this._selectedTimeIndex = newIndex;
                     console.log(`Indeks waktu diubah ke: ${newIndex}`);
-                    
                     this.updateTimePickerDisplayOnly(this._globalTimeLocalLookup.length > 0); 
                     this.updateNavigationButtonsState(newIndex); 
-
                     if (this._globalTimeLocalLookup.length > 0) {
                         this.updateUIWithRealData(); 
                     }
                 }
-                // --- Akhir Refaktor ---
             }
         };
 
         /** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
         const sidebarManager = { 
-            // --- REFAKTOR #1 ---
+            // (Tidak ada perubahan di ronde refaktor ini)
             _isSidebarOpen: false,
-            // --- Akhir Refaktor ---
-            
-            // --- REFAKTOR #2 (Optimalisasi) ---
-            // Cache elemen UI internal
             _timeEl: null, _iconEl: null, _tempEl: null, _descEl: null,
             _feelsLikeEl: null, _humidityEl: null, _precipEl: null, _windEl: null,
             _dailyListEl: null,
-            // --- Akhir Refaktor ---
-
-            // --- REFAKTOR #1 ---
-            // Getter publik untuk state internal
             isOpen: function() {
                 return this._isSidebarOpen;
             },
-            // --- Akhir Refaktor ---
-
             openSidebar: function() {
-                // --- REFAKTOR #1 ---
                 if (!sidebarEl || !toggleBtnEl || this._isSidebarOpen) return;
-                // --- Akhir Refaktor ---
-                
                 mapManager.removeActiveMarkerHighlight(); 
                 sidebarEl.classList.add('sidebar-open');
-                
-                // --- REFAKTOR #1 ---
                 this._isSidebarOpen = true;
-                // --- Akhir Refaktor ---
-                
                 toggleBtnEl.innerHTML = '&lt;';
                 toggleBtnEl.setAttribute('aria-label', 'Tutup detail lokasi');
                 this.renderSidebarContent(); 
-                
-                // --- REFAKTOR #1 ---
-                // Baca ID dari mapManager
                 mapManager.setActiveMarkerHighlight(mapManager.getActiveLocationId()); 
-                // --- Akhir Refaktor ---
             },
-
             closeSidebar: function() {
-                // --- REFAKTOR #1 ---
                 if (!sidebarEl || !toggleBtnEl || !this._isSidebarOpen) return;
-                // --- Akhir Refaktor ---
-                
                 sidebarEl.classList.remove('sidebar-open');
-                
-                // --- REFAKTOR #1 ---
                 this._isSidebarOpen = false;
-                // --- Akhir Refaktor ---
-                
                 toggleBtnEl.innerHTML = '&gt;';
                 toggleBtnEl.setAttribute('aria-label', 'Buka detail lokasi');
-                
-                // --- REFAKTOR #1 ---
-                // Baca ID dari mapManager
                 const activeId = mapManager.getActiveLocationId();
                 if (!activeId) { return } 
                 mapManager.removeActiveMarkerHighlight(activeId); 
-                // --- Akhir Refaktor ---
             },
-
             toggleSidebar: function() { 
-                // --- REFAKTOR #1 ---
                 if (this._isSidebarOpen) this.closeSidebar(); else this.openSidebar(); 
-                // --- Akhir Refaktor ---
             },
-
              openSidebarFromPopup: function() {
-                 // --- REFAKTOR #1 ---
                  if (!this._isSidebarOpen) { this.openSidebar(); } 
-                 // --- Akhir Refaktor ---
                  else { if (sidebarContentEl) sidebarContentEl.scrollTop = 0; }
                  popupManager.close(true); 
              },
-
-            /** FASE 2: Menyembunyikan semua bagian konten sidebar */
             _hideAllSidebarSections: function() {
-                // (Tidak ada perubahan)
                 sidebarPlaceholderEl.style.display = 'none';
                 sidebarLoadingEl.style.display = 'none';
                 sidebarWeatherDetailsEl.style.display = 'none';
                 sidebarProvinceDetailsEl.style.display = 'none';
             },
-
-            /** FASE 2: Merender status loading */
             _renderSidebarLoadingState: function() {
                 sidebarLoadingEl.style.display = 'block';
-                // --- REFAKTOR #1 ---
-                // Baca nama dari mapManager
                 sidebarLocationNameEl.textContent = `Memuat ${mapManager.getActiveLocationSimpleName() || 'lokasi'}...`;
-                // --- Akhir Refaktor ---
             },
-
-            /** FASE 2: Merender status placeholder (default) */
             _renderSidebarPlaceholderState: function() {
-                // (Tidak ada perubahan)
                 sidebarPlaceholderEl.textContent = 'Pilih satu wilayah di peta.';
                 sidebarPlaceholderEl.style.display = 'block';
                 sidebarLocationNameEl.textContent = 'Detail Lokasi';
             },
-            
-            /** FASE 2: Merender status error/data tidak ada */
             _renderSidebarErrorState: function(message) {
-                 // --- REFAKTOR #1 ---
-                 // Baca nama dari mapManager
                  sidebarPlaceholderEl.textContent = message || `Data cuaca untuk ${mapManager.getActiveLocationLabel()} belum dimuat atau tidak lengkap.`;
                  sidebarPlaceholderEl.style.display = 'block';
                  sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName() || 'Detail Lokasi';
                  if (!mapManager.getActiveLocationId()) {
-                 // --- Akhir Refaktor ---
                      sidebarLocationNameEl.textContent = 'Detail Lokasi';
                      sidebarPlaceholderEl.textContent = 'Terjadi kesalahan.';
                  }
             },
-
-            /** FASE 2: Merender detail provinsi */
             _renderSidebarProvinceState: function() {
                  const container = sidebarProvinceDetailsEl;
                  container.innerHTML = ''; 
-
                  const labelEl = document.createElement('div');
                  labelEl.className = 'location-label-subtitle'; 
                  labelEl.id = 'sidebar-location-label-province'; 
-                 // --- REFAKTOR #1 ---
                  labelEl.textContent = mapManager.getActiveLocationLabel();
-                 // --- Akhir Refaktor ---
                  container.appendChild(labelEl);
-
                  const infoEl = document.createElement('p');
                  infoEl.textContent = '(Detail informasi provinsi akan ditampilkan di sini.)';
                  infoEl.style.textAlign = 'center';
                  infoEl.style.marginTop = '20px';
                  container.appendChild(infoEl);
-                 
                  container.style.display = 'block';
-                 
-                 // --- REFAKTOR #1 ---
                  sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName();
-                 // --- Akhir Refaktor ---
             },
-
-            /** FASE 3: Membuat satu elemen DOM untuk prakiraan harian */
             _createDailyForecastItem: function(date, code, maxT, minT, timeZone) {
-                // (Tidak ada perubahan)
                 const { deskripsi, ikon } = utils.getWeatherInfo(code, 1);
                 const item = document.createElement('div');
                 item.className = 'daily-forecast-item';
@@ -1004,18 +841,13 @@
                 item.appendChild(tempSpan);
                 return item;
             },
-
-            /** FASE 2 & 3: Merender detail cuaca */
             _renderSidebarWeatherState: function() {
                 sidebarWeatherDetailsEl.style.display = 'block';
-                
-                // --- REFAKTOR #1 ---
                 sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName();
                 const labelEl = sidebarEl.querySelector('#sidebar-location-label-weather');
                 if (labelEl) {
                     labelEl.textContent = mapManager.getActiveLocationLabel();
                 }
-                
                 const activeData = mapManager.getActiveLocationData();
                 if (!activeData) {
                     this._renderSidebarErrorState("Data lokasi aktif tidak ditemukan.");
@@ -1023,14 +855,8 @@
                 }
                 const daily = activeData.daily;
                 const timeZone = activeData.timezone;
-                // --- Akhir Refaktor ---
-                
-                // --- REFAKTOR #2 (Optimalisasi) ---
-                // Gunakan elemen list yang di-cache
                 const listContainer = this._dailyListEl;
-                // --- Akhir Refaktor ---
                 listContainer.innerHTML = ''; 
-
                 if (daily?.time) {
                     const getLocalDateString = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     const todayStr = getLocalDateString(new Date());
@@ -1041,7 +867,6 @@
                     for (let i = startIndex; i < endIndex; i++) {
                         const date = daily.time[i], code = daily.weather_code?.[i], maxT = daily.temperature_2m_max?.[i], minT = daily.temperature_2m_min?.[i];
                         if (date === undefined || code === undefined || maxT === undefined || minT === undefined) continue;
-                        
                         const itemEl = this._createDailyForecastItem(date, code, maxT, minT, timeZone);
                         fragment.appendChild(itemEl);
                     }
@@ -1053,38 +878,23 @@
                     p.appendChild(i);
                     listContainer.appendChild(p);
                 }
-                
-                // --- REFAKTOR #1 & #2 ---
-                // Panggil timeManager untuk mendapatkan info, lalu panggil
-                // method update internal kita sendiri.
                 const idx = timeManager.getSelectedTimeIndex();
                 const lookup = timeManager.getGlobalTimeLookup();
                  if (idx >= 0 && idx < lookup.length) {
                       const timeStr = lookup[idx];
-                      // Panggil updateUIForTime untuk menyinkronkan data saat ini
                       this.updateUIForTime(idx, timeStr, activeData);
                  } else {
-                       // Atur ulang tampilan waktu saat ini
                        this.updateCurrentConditions(null, null, null);
                  }
-                // --- Akhir Refaktor ---
             },
-
-            /** FASE 2: Fungsi render utama, sekarang menjadi "controller" */
             renderSidebarContent: function() {
-                 // --- REFAKTOR #1 ---
                  if (!this._isSidebarOpen || !sidebarContentEl || !sidebarPlaceholderEl || !sidebarLoadingEl || !sidebarWeatherDetailsEl || !sidebarProvinceDetailsEl || !sidebarLocationNameEl) { return; }
-                 // --- Akhir Refaktor ---
-
                 this._hideAllSidebarSections();
                 sidebarLocationNameEl.textContent = 'Detail Lokasi'; // Default
                 const lblWeather = sidebarEl.querySelector('#sidebar-location-label-weather');
                 const lblProvince = sidebarEl.querySelector('#sidebar-location-label-province');
                 if (lblWeather) lblWeather.textContent = '';
                 if (lblProvince) lblProvince.textContent = '';
-
-                // --- REFAKTOR #1 ---
-                // Baca semua state dari manajer yang relevan
                 if (mapManager.getIsClickLoading()) { 
                     this._renderSidebarLoadingState();
                 } else if (!mapManager.getActiveLocationId()) { 
@@ -1101,15 +911,8 @@
                 } else { 
                      this._renderSidebarErrorState('Terjadi kesalahan.');
                 }
-                // --- Akhir Refaktor ---
             },
-
-            // --- REFAKTOR #2 ---
-            /** * [BARU] Memperbarui elemen DOM kondisi saat ini.
-             * Dipanggil oleh timeManager (via updateUIForTime) dan renderSidebarWeatherState.
-             */
             updateCurrentConditions: function(dataPoint, formattedTime, weatherInfo) {
-                // Gunakan elemen yang di-cache
                 if (dataPoint && formattedTime && weatherInfo) {
                     this._timeEl.textContent = formattedTime;
                     this._iconEl.className = weatherInfo.ikon;
@@ -1120,7 +923,6 @@
                     this._precipEl.textContent = `Presipitasi: ${dataPoint.prob_presipitasi ?? '-'}%`;
                     this._windEl.textContent = `Angin: ${dataPoint.kecepatan_angin_10m ?? '-'} m/s dari arah ${dataPoint.arah_angin_10m ?? '-'}°`;
                 } else {
-                    // Reset ke placeholder
                     this._timeEl.textContent = '...';
                     this._iconEl.className = 'wi wi-na';
                     this._tempEl.textContent = '-°C';
@@ -1131,20 +933,13 @@
                     this._windEl.textContent = 'Angin: ... m/s';
                 }
             },
-            
-            /** * [BARU] Wrapper yang dipanggil oleh timeManager.updateUIWithRealData.
-             * Ini adalah implementasi Rencana #2.
-             */
             updateUIForTime: function(idxGlobal, localTimeString, activeData) {
-                // Hanya update jika sidebar terbuka dan data aktif ada
                 if (!this._isSidebarOpen || !activeData || !activeData.hourly?.time) {
                     return;
                 }
-                
                 try {
                     const hourly = activeData.hourly;
                     if (idxGlobal >= hourly.time.length) return; 
-                    
                     const formattedTime = utils.formatLocalTimestampString(localTimeString); 
                     const dataPoint = {
                         is_day: hourly.is_day?.[idxGlobal],
@@ -1157,37 +952,27 @@
                         arah_angin_10m: hourly.wind_direction_10m?.[idxGlobal],
                     };
                     const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
-
-                    // Panggil method internal untuk update DOM
                     this.updateCurrentConditions(dataPoint, formattedTime, { deskripsi, ikon });
-                    
                 } catch (e) { console.warn("Error updating sidebar DOM:", e); }
             }
-            // --- Akhir Refaktor #2 ---
         };
 
         /** 🗺️ MAP MANAGER: Mengelola semua logika terkait peta, layer, dan interaksi */
-        const mapManager = {
-            // --- REFAKTOR #1 ---
-            // State peta internal
-            _isLoading: false, // Loading data di background
-            _isClickLoading: false, // Loading data dari klik pengguna
+        const mapManager = { 
+            // (Tidak ada perubahan di getter, highlight, reset, perbaruiPetaGeo, fetch, processData)
+            _isLoading: false, 
+            _isClickLoading: false, 
             _activeLocationId: null,
             _activeLocationSimpleName: null, 
             _activeLocationLabel: null, 
             _activeLocationData: null,
-            _previousActiveLocationId: null, // Untuk de-highlight
-            
-            // Getter publik untuk state internal
+            _previousActiveLocationId: null, 
             getIsLoading: function() { return this._isLoading; },
             getIsClickLoading: function() { return this._isClickLoading; },
             getActiveLocationId: function() { return this._activeLocationId; },
             getActiveLocationSimpleName: function() { return this._activeLocationSimpleName; },
             getActiveLocationLabel: function() { return this._activeLocationLabel; },
             getActiveLocationData: function() { return this._activeLocationData; },
-            // --- Akhir Refaktor ---
-
-            /** Menyorot marker yang aktif di peta */
             setActiveMarkerHighlight: function(id) {
                  if (!id || !map || !map.getSource('data-cuaca-source')) return;
                  console.log("Highlighting:", id);
@@ -1204,12 +989,8 @@
                     }
                  } catch (e) { console.error("Error setting active highlight:", e); }
             },
-
-            /** Menghapus sorotan dari marker yang sebelumnya aktif */
             removeActiveMarkerHighlight: function(idToRemove = null) { 
-                // --- REFAKTOR #1 ---
                 const targetId = idToRemove || this._previousActiveLocationId;
-                // --- Akhir Refaktor ---
                 if (targetId && map && map.getSource('data-cuaca-source')) {
                     console.log("Removing highlight from:", targetId);
                     try {
@@ -1226,16 +1007,11 @@
                     } catch (e) { console.error("Error removing highlight:", e); }
                 }
                  if (!idToRemove) {
-                    // --- REFAKTOR #1 ---
                     this._previousActiveLocationId = null;
-                    // --- Akhir Refaktor ---
                  }
             },
-            
-            /** Mereset state aplikasi terkait lokasi aktif. */
             resetActiveLocationState: function() {
                 console.log("Resetting active location state...");
-                // --- REFAKTOR #1 ---
                 const idToReset = this._activeLocationId;
                 if (idToReset) { this.removeActiveMarkerHighlight(idToReset); } 
                 this._activeLocationId = null;
@@ -1244,32 +1020,21 @@
                 this._activeLocationData = null;
                 this._isClickLoading = false;
                 this._previousActiveLocationId = null;
-                
-                // Panggil getter dari sidebar/time manager
                 if (sidebarManager.isOpen()) { sidebarManager.renderSidebarContent(); } 
-                
                 if (timeManager.getGlobalTimeLookup().length > 0) {
                      timeManager.updateUIWithRealData(); 
                 } else {
                      timeManager.updateTimePickerDisplayOnly(); 
                 }
-                // --- Akhir Refaktor ---
             },
-
-            // --- Fungsi dari map.on('load') ---
             dataController: null, 
-            
-            /** Memperbarui fitur-fitur GeoJSON di peta (HANYA geografi) */
             perbaruiPetaGeo: async function() {
-                 // (Tidak ada perubahan)
                  if (this.dataController) this.dataController.abort();
                  this.dataController = new AbortController();
                  const signal = this.dataController.signal;
                  const zoom = map.getZoom();
-                 
                  const cuacaSource = () => map.getSource('data-cuaca-source');
                  const provinsiSource = () => map.getSource('provinsi-source');
-
                  if (zoom <= 7.99) { 
                      if (cuacaSource()) cuacaSource().setData({ type: 'FeatureCollection', features: [] });
                      try {
@@ -1312,23 +1077,12 @@
                      } catch (e) { if (e.name !== 'AbortError') console.error('Gagal ambil geo only data:', e); }
                  }
             }, 
-
-            /**
-             * [REFAKTOR] Mengambil data cuaca untuk marker yang terlihat di peta.
-             * Ini adalah "Alur B" (Otomatis/Idle).
-             */
             fetchDataForVisibleMarkers: async function() {
-                // --- REFAKTOR #1 ---
                 const zoom = map.getZoom();
-                if (zoom <= 7.99 || this._isLoading) return; // Gunakan state internal
-                
+                if (zoom <= 7.99 || this._isLoading) return;
                 const visibleFeatures = map.queryRenderedFeatures({ layers: ['unclustered-point-temp-circle'] });
                 const idsToFetch = visibleFeatures.map(f => f.id).filter(id => id && !clientWeatherCache.has(id) && !inflightIds.has(id));
-                
-                // Gunakan getter timeManager
                 let isFirstLoad = (timeManager.getGlobalTimeLookup().length === 0); 
-                // --- Akhir Refaktor ---
-                
                 if (isFirstLoad && !idsToFetch.length && visibleFeatures.length > 0) {
                     const firstVisibleId = visibleFeatures[0].id;
                     if (firstVisibleId && !inflightIds.has(firstVisibleId)) {
@@ -1338,23 +1092,17 @@
                 } else if (!idsToFetch.length) {
                     return; 
                 }
-
                 idsToFetch.forEach(id => inflightIds.add(id));
-                // --- REFAKTOR #1 ---
-                this._isLoading = true; // Gunakan state internal
-                // --- Akhir Refaktor ---
+                this._isLoading = true; 
                 if (!isFirstLoad) {
                     loadingSpinner.style.display = 'block';
                 }
-                
                 const featuresInSource = map.querySourceFeatures('data-cuaca-source');
                 const currentSourceIds = new Set(featuresInSource.map(f => String(f.id))); 
-
                 try {
                     const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`);
                     if (!resp.ok) throw new Error(`Network error ${resp.status}`);
                     const dataMap = await resp.json();
-
                     for (const id in dataMap) {
                         const data = dataMap[id];
                         if (!currentSourceIds.has(String(id))) { 
@@ -1362,108 +1110,62 @@
                             this._processIncomingData(id, data); 
                             continue;
                         }
-                        
                         const didInitTime = this._processIncomingData(id, data); 
                         if (isFirstLoad && didInitTime) {
                             isFirstLoad = false; 
                         }
-                        
-                        // --- REFAKTOR #1 ---
-                        // Periksa state internal
                         const isActive = (String(id) === String(this._activeLocationId)); 
                         this._updateMapStateForFeature(id, data, isActive); 
-
-                        // Cek state internal
                         if (isActive && this._isClickLoading) {
                             console.log(`Data for clicked inflight item ${id} has arrived via background fetch.`);
                             this._isClickLoading = false;
                             this._activeLocationData = data;
-                            
-                            // Panggil getter sidebarManager
                             if (sidebarManager.isOpen()) {
                                 sidebarManager.renderSidebarContent();
                             }
                         }
-                        // --- Akhir Refaktor ---
                     }
-
                 } catch (e) { console.error("Gagal BBOX fetch:", e); }
                 finally {
                     idsToFetch.forEach(id => inflightIds.delete(id));
-                    // --- REFAKTOR #1 ---
-                    this._isLoading = false; // Gunakan state internal
-                    // --- Akhir Refaktor ---
+                    this._isLoading = false; 
                     loadingSpinner.style.display = 'none';
-                    
                     if (!isFirstLoad) { 
-                       // --- REFAKTOR #1 ---
-                       // Panggil getter timeManager
                        timeManager.updateMapFeaturesForTime(timeManager.getSelectedTimeIndex());
-                       // --- Akhir Refaktor ---
                     }
                 }
             }, 
-
-            /**
-             * [BARU] Helper terpusat untuk memproses data yang masuk (dari Alur A atau B).
-             */
             _processIncomingData: function(id, data) {
                 if (!data) {
                     console.warn(`Data kosong diterima untuk ${id}`);
-                    return false; // Tidak melakukan apa-apa
+                    return false; 
                 }
-                
                 clientWeatherCache.set(id, data);
-                
-                // --- REFAKTOR #1 ---
-                // Panggil getter timeManager
                 const isFirstLoad = (timeManager.getGlobalTimeLookup().length === 0);
-                // --- Akhir Refaktor ---
                 let didInitTime = false;
-
                 if (isFirstLoad && data.hourly?.time?.length > 0) {
                     console.log(`INISIALISASI WAKTU: Menggunakan data dari ${id}`);
-                    
-                    // --- REFAKTOR #1 ---
-                    // Gunakan setter timeManager
                     timeManager.setGlobalTimeLookup(data.hourly.time);
-                    
                     const realStartDate = new Date(data.hourly.time[0]);
                     timeManager.setPredictedStartDate(realStartDate);
-                    // --- Akhir Refaktor ---
-                    
                     const now = new Date();
                     let hourOfDay = now.getHours();
                     if (now.getMinutes() >= 30) { hourOfDay = (hourOfDay + 1); }
                     const roundedHour = hourOfDay % 24;
-                    
                     const todayAtMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                     const startAtMidnight = new Date(realStartDate.getFullYear(), realStartDate.getMonth(), realStartDate.getDate());
                     const diffDays = Math.round((todayAtMidnight.getTime() - startAtMidnight.getTime()) / (1000 * 60 * 60 * 24));
-                    
                     const correctedIndex = (diffDays * 24) + roundedHour;
-                    
                     timeManager.handleTimeChange(Math.max(0, Math.min(335, correctedIndex))); 
-                    
                     didInitTime = true;
                 }
-
                 return didInitTime; 
             },
-
-            /**
-             * [BARU] Helper terpusat untuk memperbarui state visual feature di peta.
-             */
             _updateMapStateForFeature: function(id, data, isActive) {
-                 // --- REFAKTOR #1 ---
-                 // Panggil getter timeManager
                 const idxSaatIni = timeManager.getSelectedTimeIndex();
-                // --- Akhir Refaktor ---
-                
                 if (data?.hourly?.time && idxSaatIni >= 0 && idxSaatIni < data.hourly.time.length) {
                     const suhu = data.hourly.temperature_2m?.[idxSaatIni];
                     const precip = data.hourly.precipitation_probability?.[idxSaatIni];
-
                     try {
                         map.setFeatureState(
                             { source: 'data-cuaca-source', id: id },
@@ -1505,16 +1207,22 @@
                         .then(response => response.json())
                         .then(dataDetailCuaca => {
                             if (popupManager.getInstance() !== loadingPopupRef) { return; } 
+                            
+                            // --- REFAKTOR #2 ---
+                            // Membuat DOM secara terprogram
                             const popupContent = document.createElement('div');
                             popupContent.className = 'cluster-popup-content'; 
                             popupContent.id = `cluster-popup-${clusterId}`;
-                            popupContent.innerHTML = `<b>${leaves.length} Lokasi:</b><hr>`;
-                            let itemsAdded = 0;
                             
-                            // --- REFAKTOR #1 ---
+                            const title = document.createElement('b');
+                            title.textContent = `${leaves.length} Lokasi:`;
+                            popupContent.appendChild(title);
+                            popupContent.appendChild(document.createElement('hr'));
+                            // --- Akhir Refaktor #2 ---
+                            
+                            let itemsAdded = 0;
                             const idxDisplay = timeManager.getSelectedTimeIndex();
                             if (timeManager.getGlobalTimeLookup().length === 0) { 
-                            // --- Akhir Refaktor ---
                                  const firstId = Object.keys(dataDetailCuaca)[0];
                                  if (firstId && dataDetailCuaca[firstId]) {
                                      this._processIncomingData(firstId, dataDetailCuaca[firstId]);
@@ -1530,14 +1238,11 @@
                                  if (!clientWeatherCache.has(id)) {
                                      this._processIncomingData(id, data);
                                  }
-                                 
                                  if (!data.hourly?.time || idxDisplay >= data.hourly.time.length) {
                                       this._updateMapStateForFeature(id, data, false); 
                                       continue; 
                                  }
-                                 
                                  this._updateMapStateForFeature(id, data, false);
-
                                  const displayData = { 
                                      nama_simpel: data.nama_simpel, 
                                      suhu: data.hourly.temperature_2m[idxDisplay], 
@@ -1545,11 +1250,35 @@
                                      is_day: data.hourly.is_day[idxDisplay] 
                                  };
                                  const { deskripsi } = utils.getWeatherInfo(displayData.code, displayData.is_day); 
+                                 
+                                 // --- REFAKTOR #2 ---
+                                 // Membuat item DOM, bukan innerHTML
                                  const item = document.createElement('div');
                                  item.className = 'cluster-item'; 
                                  item.dataset.id = id; 
-                                 item.innerHTML = `<span class="item-nama">${displayData.nama_simpel}</span> (<span class="item-suhu">${displayData.suhu?.toFixed(1) ?? '-'}°C</span>, <span class="item-desc">${deskripsi}</span>)`;
-                                 item.onclick = (event) => {
+                                 
+                                 const namaSpan = document.createElement('span');
+                                 namaSpan.className = 'item-nama';
+                                 namaSpan.textContent = displayData.nama_simpel;
+                                 
+                                 const suhuSpan = document.createElement('span');
+                                 suhuSpan.className = 'item-suhu';
+                                 suhuSpan.textContent = `${displayData.suhu?.toFixed(1) ?? '-'}°C`;
+                                 
+                                 const descSpan = document.createElement('span');
+                                 descSpan.className = 'item-desc';
+                                 descSpan.textContent = deskripsi;
+                                 
+                                 item.appendChild(namaSpan);
+                                 item.appendChild(document.createTextNode(' ('));
+                                 item.appendChild(suhuSpan);
+                                 item.appendChild(document.createTextNode(', '));
+                                 item.appendChild(descSpan);
+                                 item.appendChild(document.createTextNode(')'));
+                                 
+                                 // Pasang listener secara aman
+                                 item.addEventListener('click', (event) => {
+                                 // --- Akhir Refaktor #2 ---
                                      event.stopPropagation();
                                      if (popupManager.getInstance() === loadingPopupRef) {
                                           popupManager.close(true); 
@@ -1562,7 +1291,7 @@
                                          lon: data.longitude
                                      };
                                      this.handleUnclusteredClick(clickProps); 
-                                 };
+                                 });
                                  popupContent.appendChild(item);
                                  itemsAdded++;
                             }
@@ -1580,58 +1309,56 @@
             handleProvinceClick: function(props, coordinates) {
                 console.log("Handling Province Click:", props.nama_label); 
                 popupManager.close(true);
-                // --- REFAKTOR #1 ---
-                // Set state internal
                 const previousId = this._activeLocationId;
                 this._activeLocationId = props.id;
                 this._activeLocationSimpleName = props.nama_simpel; 
                 this._activeLocationLabel = props.nama_label; 
                 this._activeLocationData = { type: 'provinsi' }; 
                 this._previousActiveLocationId = previousId;
-                // --- Akhir Refaktor ---
-                
                 if (previousId && clientWeatherCache.has(previousId)) { 
                     this.removeActiveMarkerHighlight(previousId); 
                 }
-                
-                // --- REFAKTOR #1 ---
-                // Panggil getter sidebarManager
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent(); 
-                // --- Akhir Refaktor ---
 
+                // --- REFAKTOR #2 ---
+                // Membuat DOM secara terprogram
                 const popupContent = document.createElement('div');
-                popupContent.innerHTML = `<b>Provinsi:</b><br>${props.nama_simpel}<br>`;
+                const title = document.createElement('b');
+                title.textContent = 'Provinsi:';
+                popupContent.appendChild(title);
+                popupContent.appendChild(document.createElement('br'));
+                popupContent.appendChild(document.createTextNode(props.nama_simpel));
+                popupContent.appendChild(document.createElement('br'));
+                
                 const zoomButton = document.createElement('button');
                 zoomButton.textContent = 'Zoom ke Provinsi';
-                zoomButton.onclick = () => {
+                
+                // Pasang listener secara aman
+                zoomButton.addEventListener('click', () => {
+                // --- Akhir Refaktor #2 ---
                     if (map) {
                         map.easeTo({ center: coordinates, zoom: 8 });
                     }
-                };
+                });
                 popupContent.appendChild(zoomButton);
                 popupManager.open(coordinates, popupContent);
             }, 
 
             /** FASE 2: Menangani klik pada marker unclustered (Fungsi Kontroler Utama) */
             handleUnclusteredClick: function(props) {
+                // (Tidak ada perubahan)
                 const { id, nama_simpel, nama_label, lat, lon } = props; 
                 const coordinates = [lon, lat];
                 if (!coordinates || isNaN(coordinates[0]) || isNaN(coordinates[1])) { return; }
                 console.log("Handling Unclustered Click:", nama_label, id); 
-                
                 popupManager.close(true);
-                // --- REFAKTOR #1 ---
-                // Set state internal
                 const previousId = this._activeLocationId;
                 this._activeLocationId = id;
                 this._activeLocationSimpleName = nama_simpel; 
                 this._activeLocationLabel = nama_label; 
                 this._previousActiveLocationId = previousId;
-                // --- Akhir Refaktor ---
-                
                 if (previousId) { this.removeActiveMarkerHighlight(previousId); } 
                 this.setActiveMarkerHighlight(id); 
-
                 if (inflightIds.has(id)) {
                     this._handleInflightState(props, coordinates);
                 } else if (clientWeatherCache.has(id)) { 
@@ -1649,32 +1376,24 @@
 
             /** FASE 2: Helper untuk kasus data sedang di-fetch */
             _handleInflightState: function(props, coordinates) {
+                // (Tidak ada perubahan)
                 console.log(`Data for ${props.id} is inflight. Setting loading state.`);
-                // --- REFAKTOR #1 ---
                 this._activeLocationData = null; 
                 this._isClickLoading = true;
-                // --- Akhir Refaktor ---
                 popupManager.open(coordinates, `<b>${props.nama_simpel}</b><br>Memuat data...`);
-                // --- REFAKTOR #1 ---
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
-                // --- Akhir Refaktor ---
             },
 
             /** FASE 2: Helper untuk kasus cache hit */
             _handleCacheHit: function(props, data, coordinates) {
+                // (Tidak ada perubahan)
                 console.log(`Cache hit for ${props.id}.`);
-                // --- REFAKTOR #1 ---
                 this._activeLocationData = data;                    
                 this._isClickLoading = false;
-                
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
-
-                // Baca state dari timeManager
                 const idxLocal = timeManager.getSelectedTimeIndex();
                 const hasGlobalTimeData = timeManager.getGlobalTimeLookup().length > 0; 
                 const localTimeString = hasGlobalTimeData ? timeManager.getGlobalTimeLookup()[idxLocal] : null;
-                // --- Akhir Refaktor ---
-
                 if (hasGlobalTimeData && localTimeString && data.hourly?.time && idxLocal < data.hourly.time.length) {
                     const hourly = data.hourly;
                     const popupData = { 
@@ -1689,67 +1408,43 @@
                      };
                     const { deskripsi, ikon } = utils.getWeatherInfo(popupData.weather_code, popupData.is_day);
                     const formattedTime = utils.formatLocalTimestampString(localTimeString); 
-                    
-                    // --- REFAKTOR #1 ---
                     const popupElement = popupManager.generatePopupContent(this._activeLocationSimpleName, popupData, deskripsi, ikon, formattedTime);
-                    // --- Akhir Refaktor ---
                     popupManager.open(coordinates, popupElement);
                 } else {
-                     // --- REFAKTOR #1 ---
                      popupManager.open(coordinates, `<b>${this._activeLocationSimpleName}</b><br>${hasGlobalTimeData ? 'Data cuaca tidak valid.' : 'Data waktu belum siap.'}`);
-                     // --- Akhir Refaktor ---
                 }
             },
 
             /** FASE 2: Helper untuk kasus cache miss (fetch baru). */
             _handleCacheMiss: async function(props, coordinates) {
+                // (Tidak ada perubahan)
                 const { id, nama_simpel, nama_label } = props; 
                 console.log(`Cache miss for ${id}. Fetching...`);
-                // --- REFAKTOR #1 ---
                 this._activeLocationData = null; 
                 this._isClickLoading = true; 
-                // --- Akhir Refaktor ---
                 inflightIds.add(id);
-                
                 const loadingPopupRef = popupManager.open(coordinates, `<b>${nama_simpel}</b><br>Memuat...`);
                 if (!loadingPopupRef) { 
                     inflightIds.delete(id); 
-                    // --- REFAKTOR #1 ---
                     this._isClickLoading = false; 
-                    // --- Akhir Refaktor ---
                     return; 
                 }
-                // --- REFAKTOR #1 ---
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent(); 
-                // --- Akhir Refaktor ---
-
                 try {
                     const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${id}`);
                     if (!resp.ok) throw new Error(`Network error ${resp.status}`);
                     const dataMap = await resp.json();
                     if (!dataMap?.[id]) throw new Error("Data lokasi tidak ditemukan");
                     const data = dataMap[id];
-                    
                     console.log(`Fetch success for ${id}.`);
-                    
                     this._processIncomingData(id, data);
-                    
-                    // --- REFAKTOR #1 ---
-                    // Cek state internal
                     if (this._activeLocationId === id) {
                         this._activeLocationData = data;
                         this._isClickLoading = false;
-                    // --- Akhir Refaktor ---
-
                         this._updateMapStateForFeature(id, data, true); 
-
-                        // --- REFAKTOR #1 ---
-                        // Baca state dari timeManager
                         const idxLocal = timeManager.getSelectedTimeIndex();
                         const hasGlobalTimeDataNow = timeManager.getGlobalTimeLookup().length > 0;
                         const localTimeStringNow = hasGlobalTimeDataNow ? timeManager.getGlobalTimeLookup()[idxLocal] : null;
-                        // --- Akhir Refaktor ---
-
                         if (hasGlobalTimeDataNow && localTimeStringNow && data.hourly?.time && idxLocal < data.hourly.time.length) {
                              if (popupManager.getInstance() === loadingPopupRef) {
                                 const popupData = { 
@@ -1764,25 +1459,18 @@
                                 };
                                 const { deskripsi, ikon } = utils.getWeatherInfo(popupData.weather_code, popupData.is_day);
                                 const formattedTime = utils.formatLocalTimestampString(localTimeStringNow); 
-                                
                                 const popupElement = popupManager.generatePopupContent(data.nama_simpel, popupData, deskripsi, ikon, formattedTime);
                                 popupManager.setDOMContent(popupElement);
                              }
                         } else if (popupManager.getInstance() === loadingPopupRef) {
                              popupManager.setHTML(`<b>${data.nama_simpel}</b><br>${hasGlobalTimeDataNow ? 'Data cuaca tidak valid.' : 'Data waktu belum siap.'}`);
                         }
-                        
-                        // --- REFAKTOR #1 ---
                         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
-                        // --- Akhir Refaktor ---
-
                     } else {
                          this._updateMapStateForFeature(id, data, false); 
                     }
-                    
                 } catch (e) { 
                     console.error(`Fetch failed for ${id}:`, e);
-                    // --- REFAKTOR #1 ---
                     if (this._activeLocationId === id) { 
                         this._isClickLoading = false; 
                         this._activeLocationData = null;
@@ -1791,7 +1479,6 @@
                         }
                         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent(); 
                     }
-                    // --- Akhir Refaktor ---
                 } finally { 
                     inflightIds.delete(id);
                 }
@@ -1932,6 +1619,7 @@
             // ================================================================
             // 1. Ambil Elemen UI
             // ================================================================
+            // (Tidak ada perubahan)
             sidebarEl = document.getElementById('detail-sidebar');
             toggleBtnEl = document.getElementById('sidebar-toggle-btn');
             closeBtnEl = document.getElementById('close-sidebar-btn');
@@ -1959,7 +1647,6 @@
             searchInput = document.getElementById('search-bar');
             suggestionsDropdown = document.getElementById('suggestions-dropdown');
 
-            // Cache elemen internal sidebar sekali saat load
             sidebarManager._timeEl = document.getElementById('sidebar-current-time');
             sidebarManager._iconEl = document.getElementById('sidebar-current-icon');
             sidebarManager._tempEl = document.getElementById('sidebar-current-temp');
@@ -1973,6 +1660,7 @@
             // ================================================================
             // 2. Logika Inisialisasi Awal
             // ================================================================
+            // (Tidak ada perubahan)
             fetch(`${baseUrl}/api/wmo-codes`)
                 .then(res => res.ok ? res.json() : Promise.reject(`Error ${res.status}`))
                 .then(data => { WMO_CODE_MAP = data; })
@@ -1983,8 +1671,8 @@
             // ================================================================
             // 3. Pasang Event Listener
             // ================================================================
+            // (Tidak ada perubahan, listener tombol cari sudah ada dari refaktor sebelumnya)
 
-            // Listener Waktu
             prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 24));
             nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 24));
             prevThreeHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 3));
@@ -1992,16 +1680,13 @@
             nextHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 1));
             nextThreeHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 3));
             
-            // Listener Kalender
             calendarBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.toggleCalendar(); });
             calendarPrevMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(-1); });
             calendarNextMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(1); });
 
-            // Listener Sidebar
             toggleBtnEl.addEventListener('click', () => sidebarManager.toggleSidebar());
             closeBtnEl.addEventListener('click', () => sidebarManager.closeSidebar());
 
-            // Listener Search Bar
             searchInput.addEventListener('input', () => {
                 clearTimeout(searchDebounceTimer);
                 const query = searchInput.value;
@@ -2014,36 +1699,28 @@
                     fetchLokasi(query); 
                 }, 350); 
             });
-
             searchInput.addEventListener('focus', () => {
                 const query = searchInput.value;
                 if (query.length >= 3) {
                     fetchLokasi(query); 
                 }
             });
-
             document.addEventListener('click', function(e) {
                 const wrapper = document.getElementById('search-wrapper');
                 if (wrapper && !wrapper.contains(e.target)) {
                     suggestionsDropdown.style.display = 'none';
                 }
             });
-            
-            // --- REFAKTOR #5 ---
-            // Listener untuk tombol search-btn
             document.getElementById('search-btn').addEventListener('click', () => {
                 const query = searchInput.value;
                 if (query.length < 3) {
                     console.log("Kueri pencarian terlalu pendek untuk diklik");
-                    // Mungkin tambahkan efek visual "gagal" di sini
                     return;
                 }
-                clearTimeout(searchDebounceTimer); // Hentikan timer debounce yang mungkin berjalan
-                fetchLokasi(query); // Jalankan pencarian segera
-                searchInput.focus(); // Fokuskan kembali ke input
+                clearTimeout(searchDebounceTimer);
+                fetchLokasi(query);
+                searchInput.focus();
             });
-            // --- Akhir Refaktor #5 ---
-
 
             // ================================================================
             // 4. Inisialisasi Peta & Event Peta
