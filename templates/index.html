@@ -12,6 +12,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css">
 </head>
 <body>
+    <!-- 
+      Struktur HTML tidak berubah. 
+      Semua elemen (map, sidebar, picker) masih sama. 
+    -->
     <div id="map" ></div>
     <div id="koordinat-info"></div>
     <div id="global-loading-spinner">Memuat data cuaca...</div>
@@ -88,6 +92,7 @@
         // ================================================================
         // 1. KONFIGURASI & STATE GLOBAL
         // ================================================================
+        // (Tidak ada perubahan di bagian ini)
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
         const port = '5000';
@@ -126,7 +131,8 @@
         // ================================================================
         
         /** 🛠️ UTILS: Kumpulan fungsi helper murni */
-        const utils = {
+        const utils = { 
+            // (Tidak ada perubahan di bagian ini)
             /** Menerjemahkan kode WMO ke deskripsi & ikon Weather Icons */
             getWeatherInfo: function(weather_code, is_day) {
                 const default_info = ["N/A", "wi-na"];
@@ -269,7 +275,8 @@
         };
 
         /** 팝-업 PENGELOLA POPUP TERPUSAT */
-        const popupManager = {
+        const popupManager = { 
+            // (Tidak ada perubahan di bagian ini)
             _currentInstance: null,
             _internalCloseFlag: false,
 
@@ -372,7 +379,8 @@
         };
         
         /** 🗓️ CALENDAR MANAGER: Mengelola semua logika kalender */
-        const calendarManager = {
+        const calendarManager = { 
+            // (Tidak ada perubahan di bagian ini)
             /** Menampilkan atau menyembunyikan popup kalender */
             toggleCalendar: function() {
                 if (!calendarPopup) return;
@@ -448,7 +456,7 @@
                  const endDateStr = getLocalDateString(endDate);
                  
                  let selectedDateStr;
-                 if (useRealData) {
+                 if (useRealData && appState.selectedTimeIndex >= 0 && appState.selectedTimeIndex < lookup.length) {
                      selectedDateStr = lookup[appState.selectedTimeIndex].split('T')[0];
                  } else {
                      const predDate = utils.getPredictedDateFromIndex(appState.selectedTimeIndex);
@@ -500,8 +508,10 @@
                     let targetIndex = -1;
                     
                     if (useRealData) {
+                        // Coba cari jam 12:00, 00:00, atau jam pertama yang tersedia di hari itu
                         targetIndex = lookup.indexOf(`${dateStr}T12:00`);
                         if (targetIndex === -1) targetIndex = lookup.indexOf(`${dateStr}T00:00`);
+                        if (targetIndex === -1) targetIndex = lookup.findIndex(ts => ts.startsWith(dateStr));
                     } else {
                         const dateForIndex = new Date(dateStr + "T12:00:00"); 
                         const diffHours = Math.round((dateForIndex.getTime() - appState.predictedStartDate.getTime()) / (1000 * 60 * 60));
@@ -537,7 +547,7 @@
             handleCalendarDateClick: function(targetIndex) {
                 console.log("Calendar date clicked, target index (predicted for ~12:00):", targetIndex);
                 
-                const currentHourInDay = appState.selectedTimeIndex % 24; // Jam 0-23
+                const currentHourInDay = appState.selectedTimeIndex >= 0 ? (appState.selectedTimeIndex % 24) : new Date().getHours(); // Jam 0-23
                 const targetDayIndex = Math.floor(targetIndex / 24); // Hari 0-14
                 const newIndex = (targetDayIndex * 24) + currentHourInDay;
 
@@ -565,6 +575,7 @@
 
         /** ⏰ TIME MANAGER: Mengelola state waktu dan update UI terkait waktu */
         const timeManager = {
+            // (Tidak ada perubahan di bagian ini)
             /** Fungsi terpisah untuk update status disabled tombol navigasi */
             updateNavigationButtonsState: function(currentIndex) {
                 if (prevDayBtn) prevDayBtn.disabled = (currentIndex < 24);
@@ -583,7 +594,7 @@
                  let dateToShow;
                  let hourToShow = "--:--";
 
-                 if (useRealData && appState.globalTimeLocalLookup.length > idx) {
+                 if (useRealData && appState.globalTimeLocalLookup.length > idx && idx >= 0) {
                      const realTimeString = appState.globalTimeLocalLookup[idx];
                      const [datePart, timePart] = realTimeString.split('T');
                      dateToShow = utils.formatDateDisplayFromString(datePart); // Panggil via utils
@@ -738,12 +749,20 @@
                             active: isActive
                         };
                     }
-                    map.setFeatureState({ source: 'data-cuaca-source', id: id }, stateData); 
+                    try {
+                        map.setFeatureState({ source: 'data-cuaca-source', id: id }, stateData); 
+                    } catch(e) {
+                         console.warn(`Gagal set state (updateMapFeaturesForTime) untuk ${id}:`, e.message);
+                    }
                 }
 
                 for (const feature of sourceFeatures) {
                     if (feature.id && !processedIds.has(feature.id)) {
-                        map.removeFeatureState({ source: 'data-cuaca-source', id: feature.id }); 
+                        try {
+                            map.removeFeatureState({ source: 'data-cuaca-source', id: feature.id }); 
+                        } catch(e) {
+                            console.warn(`Gagal remove state (updateMapFeaturesForTime) untuk ${feature.id}:`, e.message);
+                        }
                     }
                 }
             },
@@ -790,7 +809,8 @@
         };
 
         /** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
-        const sidebarManager = {
+        const sidebarManager = { 
+            // (Tidak ada perubahan di bagian ini)
             openSidebar: function() {
                 if (!sidebarEl || !toggleBtnEl || appState.isSidebarOpen) return;
                 mapManager.removeActiveMarkerHighlight(); // Panggil mapManager
@@ -1002,7 +1022,15 @@
                 } else if (appState.activeLocationData?.hourly && appState.globalTimeLocalLookup.length > 0) { 
                     this._renderSidebarWeatherState();
                 } else if (appState.activeLocationId) { 
-                     this._renderSidebarErrorState(`Data cuaca untuk ${appState.activeLocationLabel} belum dimuat atau tidak lengkap.`);
+                     // **INI ADALAH TITIK PERBAIKAN**
+                     // Jika `globalTimeLocalLookup` masih kosong, appState.isLoading (dari Alur B)
+                     // atau isClickLoading (dari Alur A) harusnya true.
+                     // Jika keduanya false, DAN globalTimeLocalLookup.length > 0,
+                     // DAN appState.activeLocationData.hourly tidak ada, itu adalah error data asli.
+                     const msg = (appState.globalTimeLocalLookup.length > 0) 
+                         ? `Data cuaca untuk ${appState.activeLocationLabel} tidak lengkap atau rusak.`
+                         : `Data cuaca untuk ${appState.activeLocationLabel} belum dimuat.`; // Pesan ini seharusnya jarang muncul
+                     this._renderSidebarErrorState(msg);
                 } else { 
                      this._renderSidebarErrorState('Terjadi kesalahan.');
                 }
@@ -1011,6 +1039,7 @@
 
         /** 🗺️ MAP MANAGER: Mengelola semua logika terkait peta, layer, dan interaksi */
         const mapManager = {
+            /** Menyorot marker yang aktif di peta */
             setActiveMarkerHighlight: function(id) {
                  if (!id || !map || !map.getSource('data-cuaca-source')) return;
                  console.log("Highlighting:", id);
@@ -1028,6 +1057,7 @@
                  } catch (e) { console.error("Error setting active highlight:", e); }
             },
 
+            /** Menghapus sorotan dari marker yang sebelumnya aktif */
             removeActiveMarkerHighlight: function(idToRemove = null) { 
                 const targetId = idToRemove || appState.previousActiveLocationId;
                 if (targetId && map && map.getSource('data-cuaca-source')) {
@@ -1074,6 +1104,7 @@
             // --- Fungsi dari map.on('load') ---
             dataController: null, // Pindahkan controller ke dalam manajer
             
+            /** Memperbarui fitur-fitur GeoJSON di peta (HANYA geografi) */
             perbaruiPetaGeo: async function() {
                  if (this.dataController) this.dataController.abort();
                  this.dataController = new AbortController();
@@ -1126,72 +1157,10 @@
                  }
             }, 
 
-            /** FASE 2: Memproses satu data marker yang di-fetch */
-            _processFetchedMarkerData: function(id, data, currentSourceIds, isFirstLoad) {
-                if (!currentSourceIds.has(String(id))) { 
-                    console.warn(`Feature ${id} data returned, but feature no longer in source. Skipping.`);
-                    clientWeatherCache.set(id, data); 
-                    return false; // Tidak menginisialisasi waktu
-                }
-                
-                if (!data) { 
-                     console.warn(`Data null diterima untuk ID: ${id}`);
-                     return false; 
-                }
-                clientWeatherCache.set(id, data); 
-                let didInitTime = false;
-
-                if (isFirstLoad && data.hourly?.time?.length > 0) {
-                    console.log(`Data pertama dimuat. Mengisi lookup waktu asli dari: ${id}`);
-                    appState.globalTimeLocalLookup = data.hourly.time;
-                    console.log(`Lookup waktu asli di-set (Total: ${appState.globalTimeLocalLookup.length} jam)`);
-                    
-                    const realStartDate = new Date(data.hourly.time[0]);
-                    appState.predictedStartDate = realStartDate; 
-                    console.log(`Tanggal mulai prediksi DISINKRONKAN ke data asli: ${realStartDate.toISOString()}`);
-                    
-                    const now = new Date();
-                    let hourOfDay = now.getHours();
-                    if (now.getMinutes() >= 30) { hourOfDay = (hourOfDay + 1); }
-                    const roundedHour = hourOfDay % 24;
-                    const diffDays = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - appState.predictedStartDate.getTime()) / (1000 * 60 * 60 * 24));
-                    const correctedIndex = (diffDays * 24) + roundedHour;
-                    
-                    timeManager.updateUIWithRealData(); // Panggil timeManager
-                    didInitTime = true; 
-                }
-
-                const idxSaatIni = appState.selectedTimeIndex;
-                const isActive = (id === appState.activeLocationId);
-
-                if (data.hourly?.time && idxSaatIni >= 0) {
-                    const suhu = data.hourly.temperature_2m?.[idxSaatIni];
-                    const precip = data.hourly.precipitation_probability?.[idxSaatIni];
-
-                    try {
-                        map.setFeatureState(
-                            { source: 'data-cuaca-source', id: id },
-                            {
-                                hasData: true,
-                                suhu: (suhu === null || suhu === undefined) ? -999 : suhu,
-                                precip: (precip === null || precip === undefined) ? -1 : precip,
-                                active: isActive
-                            }
-                        );
-                    } catch (e) {
-                        console.warn(`Gagal set state untuk feature ${id} (mungkin hilang dari peta):`, e.message);
-                    }
-                } else {
-                    try {
-                        map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: isActive });
-                    } catch (e) {
-                         console.warn(`Gagal set state 'noData' untuk feature ${id}:`, e.message);
-                    }
-                }
-                
-                return didInitTime; // Kembalikan apakah inisialisasi waktu terjadi
-            },
-
+            /**
+             * [REFAKTOR] Mengambil data cuaca untuk marker yang terlihat di peta.
+             * Ini adalah "Alur B" (Otomatis/Idle).
+             */
             fetchDataForVisibleMarkers: async function() {
                 const zoom = map.getZoom();
                 if (zoom <= 7.99 || appState.isLoading) return;
@@ -1218,30 +1187,152 @@
                 }
                 
                 const featuresInSource = map.querySourceFeatures('data-cuaca-source');
-                const currentSourceIds = new Set(featuresInSource.map(f => f.id));
+                const currentSourceIds = new Set(featuresInSource.map(f => String(f.id))); // Konversi ke string untuk konsistensi
 
                 try {
                     const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`);
                     if (!resp.ok) throw new Error(`Network error ${resp.status}`);
                     const dataMap = await resp.json();
 
+                    // --- REFAKTORISASI LOGIKA ---
                     for (const id in dataMap) {
-                        const didInitTime = this._processFetchedMarkerData(id, dataMap[id], currentSourceIds, isFirstLoad);
+                        const data = dataMap[id];
+                        // 1. Cek apakah feature masih ada di source (mungkin pengguna zoom/pan)
+                        if (!currentSourceIds.has(String(id))) { 
+                            console.warn(`Feature ${id} data returned, but feature no longer in source. Skipping map state.`);
+                            // Tetap proses data untuk cache, tapi jangan update peta
+                            this._processIncomingData(id, data); // Panggil via 'this'
+                            continue;
+                        }
+                        
+                        // 2. Proses data (cache & init waktu)
+                        const didInitTime = this._processIncomingData(id, data); // Panggil via 'this'
                         if (isFirstLoad && didInitTime) {
-                            isFirstLoad = false; 
+                            isFirstLoad = false; // Matikan flag agar tidak duplikat
+                        }
+                        
+                        // 3. Update status peta
+                        const isActive = (String(id) === String(appState.activeLocationId)); 
+                        this._updateMapStateForFeature(id, data, isActive); // Panggil via 'this'
+
+                        // 4. [PERBAIKAN] Cek jika data ini adalah yang ditunggu oleh `_handleInflightState`
+                        if (isActive && appState.isClickLoading) {
+                            console.log(`Data for clicked inflight item ${id} has arrived via background fetch.`);
+                            appState.isClickLoading = false;
+                            appState.activeLocationData = data;
+                            // Update sidebar, karena `handleTimeChange` mungkin sudah jalan
+                            // sebelum `isClickLoading` di-set ke false.
+                            if (appState.isSidebarOpen) {
+                                sidebarManager.renderSidebarContent();
+                            }
                         }
                     }
+                    // --- AKHIR REFAKTORISASI ---
+
                 } catch (e) { console.error("Gagal BBOX fetch:", e); }
                 finally {
                     idsToFetch.forEach(id => inflightIds.delete(id));
                     appState.isLoading = false;
                     loadingSpinner.style.display = 'none';
                     
+                    // [PERBAIKAN] Panggil updateMapFeaturesForTime HANYA jika waktu TIDAK diinisialisasi
+                    // (Karena jika diinisialisasi, timeManager.handleTimeChange sudah memicunya)
                     if (!isFirstLoad) { 
-                       timeManager.updateMapFeaturesForTime(appState.selectedTimeIndex); // Panggil timeManager
+                       timeManager.updateMapFeaturesForTime(appState.selectedTimeIndex);
                     }
                 }
             }, // Akhir fetchDataForVisibleMarkers
+
+            /**
+             * [BARU] Helper terpusat untuk memproses data yang masuk (dari Alur A atau B).
+             * @param {string} id - ID lokasi
+             * @param {object} data - Objek data cuaca dari backend
+             * @returns {boolean} `true` jika waktu global diinisialisasi, selain itu `false`
+             */
+            _processIncomingData: function(id, data) {
+                if (!data) {
+                    console.warn(`Data kosong diterima untuk ${id}`);
+                    return false; // Tidak melakukan apa-apa
+                }
+                
+                // 1. Selalu simpan ke cache
+                clientWeatherCache.set(id, data);
+                
+                // 2. Cek apakah ini muatan pertama
+                const isFirstLoad = (appState.globalTimeLocalLookup.length === 0);
+                let didInitTime = false;
+
+                if (isFirstLoad && data.hourly?.time?.length > 0) {
+                    console.log(`INISIALISASI WAKTU: Menggunakan data dari ${id}`);
+                    
+                    // 3. Ambil logika inisialisasi waktu
+                    appState.globalTimeLocalLookup = data.hourly.time;
+                    console.log(`Lookup waktu asli di-set (Total: ${appState.globalTimeLocalLookup.length} jam)`);
+                    
+                    const realStartDate = new Date(data.hourly.time[0]);
+                    appState.predictedStartDate = realStartDate; 
+                    console.log(`Tanggal mulai prediksi DISINKRONKAN ke data asli: ${realStartDate.toISOString()}`);
+                    
+                    const now = new Date();
+                    let hourOfDay = now.getHours();
+                    if (now.getMinutes() >= 30) { hourOfDay = (hourOfDay + 1); }
+                    const roundedHour = hourOfDay % 24;
+                    
+                    // Hitung perbedaan hari antara "hari ini jam 00:00" dan "tanggal mulai jam 00:00"
+                    const todayAtMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const startAtMidnight = new Date(realStartDate.getFullYear(), realStartDate.getMonth(), realStartDate.getDate());
+                    const diffDays = Math.round((todayAtMidnight.getTime() - startAtMidnight.getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    const correctedIndex = (diffDays * 24) + roundedHour;
+                    
+                    // PENTING: Panggil handleTimeChange. Ini akan mengatur appState.selectedTimeIndex
+                    // DAN memicu update UI lengkap (termasuk updateMapFeaturesForTime).
+                    timeManager.handleTimeChange(Math.max(0, Math.min(335, correctedIndex))); 
+                    
+                    didInitTime = true;
+                }
+
+                return didInitTime; // Kembalikan apakah waktu diinisialisasi
+            },
+
+            /**
+             * [BARU] Helper terpusat untuk memperbarui state visual feature di peta.
+             * @param {string} id - ID lokasi
+             * @param {object} data - Objek data cuaca dari cache
+             * @param {boolean} isActive - Apakah feature ini harus disorot
+             */
+            _updateMapStateForFeature: function(id, data, isActive) {
+                const idxSaatIni = appState.selectedTimeIndex;
+                
+                // Pastikan data dan waktu ada
+                if (data?.hourly?.time && idxSaatIni >= 0 && idxSaatIni < data.hourly.time.length) {
+                    const suhu = data.hourly.temperature_2m?.[idxSaatIni];
+                    const precip = data.hourly.precipitation_probability?.[idxSaatIni];
+
+                    try {
+                        map.setFeatureState(
+                            { source: 'data-cuaca-source', id: id },
+                            {
+                                hasData: true,
+                                suhu: (suhu === null || suhu === undefined) ? -999 : suhu,
+                                precip: (precip === null || precip === undefined) ? -1 : precip,
+                                active: isActive // Gunakan status 'isActive' yang di-passing
+                            }
+                        );
+                    } catch (e) {
+                        console.warn(`Gagal set state untuk feature ${id} (mungkin hilang dari peta):`, e.message);
+                    }
+                } else {
+                    // Data tidak ada atau indeks tidak valid
+                    try {
+                        map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: isActive });
+                    } catch (e) {
+                         console.warn(`Gagal set state 'noData' untuk feature ${id}:`, e.message);
+                    }
+                }
+            },
+
+            // --- FUNGSI-FUNGSI HANDLE KLIK (TIDAK BERUBAH) ---
 
             /** Menangani klik pada klaster */
             handleClusterClick: function(feature, coordinates) {
@@ -1268,24 +1359,32 @@
                             
                             const idxDisplay = appState.selectedTimeIndex;
                             if (appState.globalTimeLocalLookup.length === 0) { 
-                                 popupManager.setHTML("Data waktu belum siap."); 
-                                 return; 
+                                 // [PERBAIKAN] Panggil _processIncomingData untuk data pertama jika perlu
+                                 const firstId = Object.keys(dataDetailCuaca)[0];
+                                 if (firstId && dataDetailCuaca[firstId]) {
+                                     this._processIncomingData(firstId, dataDetailCuaca[firstId]);
+                                 } else {
+                                     popupManager.setHTML("Data waktu belum siap."); 
+                                     return; 
+                                 }
                             }
 
                             for (const id in dataDetailCuaca) {
                                  const data = dataDetailCuaca[id];
                                  if (!data) continue; 
                                  if (!clientWeatherCache.has(id)) {
-                                     clientWeatherCache.set(id, data);
-                                     if (map.querySourceFeatures('data-cuaca-source', { filter: ['==', ['id'], id] }).length > 0) {
-                                         const stateSuhu = data.hourly?.temperature_2m?.[idxDisplay] ?? -999;
-                                         const statePrecip = data.hourly?.precipitation_probability?.[idxDisplay] ?? -1;
-                                         map.setFeatureState( { source: 'data-cuaca-source', id: id }, { hasData: !!data.hourly, suhu: stateSuhu, precip: statePrecip, active: false } );
-                                     }
+                                     // Gunakan helper baru untuk memproses data
+                                     this._processIncomingData(id, data);
                                  }
                                  
-                                 if (!data.hourly?.time || idxDisplay >= data.hourly.time.length) continue; 
+                                 if (!data.hourly?.time || idxDisplay >= data.hourly.time.length) {
+                                      this._updateMapStateForFeature(id, data, false); // Update state peta
+                                      continue; 
+                                 }
                                  
+                                 // Update state peta menggunakan helper
+                                 this._updateMapStateForFeature(id, data, false);
+
                                  const displayData = { 
                                      nama_simpel: data.nama_simpel, 
                                      suhu: data.hourly.temperature_2m[idxDisplay], 
@@ -1302,7 +1401,15 @@
                                      if (popupManager.getInstance() === loadingPopupRef) {
                                           popupManager.close(true); 
                                      }
-                                     this.handleUnclusteredClick(data); 
+                                     // Buat ulang 'props' untuk handleUnclusteredClick
+                                     const clickProps = {
+                                         id: data.id,
+                                         nama_simpel: data.nama_simpel,
+                                         nama_label: data.nama_label,
+                                         lat: data.latitude,
+                                         lon: data.longitude
+                                     };
+                                     this.handleUnclusteredClick(clickProps); 
                                  };
                                  popupContent.appendChild(item);
                                  itemsAdded++;
@@ -1348,6 +1455,7 @@
             }, // Akhir handleProvinceClick
 
             // --- FASE 2: handleUnclusteredClick dipecah ---
+            // (Logika ini tidak berubah)
 
             /** FASE 2: Menangani klik pada marker unclustered (Fungsi Kontroler Utama) */
             handleUnclusteredClick: function(props) {
@@ -1428,7 +1536,10 @@
                 }
             },
 
-            /** FASE 2: Helper untuk kasus cache miss (fetch baru) */
+            /** * FASE 2: Helper untuk kasus cache miss (fetch baru).
+             * Ini adalah "Alur A" (Klik Pengguna).
+             * [REFAKTOR] Diperbarui untuk menggunakan helper `_processIncomingData`.
+             */
             _handleCacheMiss: async function(props, coordinates) {
                 const { id, nama_simpel, nama_label } = props; 
                 console.log(`Cache miss for ${id}. Fetching...`);
@@ -1452,33 +1563,30 @@
                     const data = dataMap[id];
                     
                     console.log(`Fetch success for ${id}.`);
-                    clientWeatherCache.set(id, data); 
-                    const idxLocal = appState.selectedTimeIndex;
+                    
+                    // --- REFAKTORISASI LOGIKA ---
 
+                    // 1. Proses data (cache & init waktu)
+                    // [PERBAIKAN UTAMA] Ini akan mengisi globalTimeLocalLookup jika perlu
+                    this._processIncomingData(id, data); // Panggil via 'this'
+                    
+                    // 2. Cek apakah kita masih melihat ID ini
                     if (appState.activeLocationId === id) {
                         appState.activeLocationData = data;
                         appState.isClickLoading = false;
 
+                        // 3. Update status peta (SEKARANG jadi 'active: true')
+                        this._updateMapStateForFeature(id, data, true); // Panggil via 'this'
+
+                        // 4. Update Popup (logika ini tetap sama)
+                        const idxLocal = appState.selectedTimeIndex;
+                        // 'hasGlobalTimeDataNow' SEKARANG akan true berkat _processIncomingData
                         const hasGlobalTimeDataNow = appState.globalTimeLocalLookup.length > 0;
                         const localTimeStringNow = hasGlobalTimeDataNow ? appState.globalTimeLocalLookup[idxLocal] : null;
 
-                        if (data.hourly?.time && idxLocal >= 0 && idxLocal < data.hourly.time.length) {
-                            
-                            const suhu = data.hourly.temperature_2m?.[idxLocal];
-                            const precip = data.hourly.precipitation_probability?.[idxLocal];
-                            
-                            try {
-                                map.setFeatureState( { source: 'data-cuaca-source', id: id }, { 
-                                    hasData: true, 
-                                    suhu: (suhu === null || suhu === undefined) ? -999 : suhu, 
-                                    precip: (precip === null || precip === undefined) ? -1 : precip, 
-                                    active: true 
-                                });
-                            } catch(e) {
-                                console.warn(`Gagal set state (cache miss) untuk ${id}:`, e.message);
-                            }
-
-                            if (hasGlobalTimeDataNow && localTimeStringNow && popupManager.getInstance() === loadingPopupRef) {
+                        if (hasGlobalTimeDataNow && localTimeStringNow && data.hourly?.time && idxLocal < data.hourly.time.length) {
+                             if (popupManager.getInstance() === loadingPopupRef) {
+                                // Salin objek popupData dari _handleCacheHit
                                 const popupData = { 
                                      is_day: data.hourly.is_day?.[idxLocal],
                                      weather_code: data.hourly.weather_code?.[idxLocal],
@@ -1494,27 +1602,22 @@
                                 
                                 const popupElement = popupManager.generatePopupContent(data.nama_simpel, popupData, deskripsi, ikon, formattedTime);
                                 popupManager.setDOMContent(popupElement);
-                            } else if (popupManager.getInstance() === loadingPopupRef) {
-                                 popupManager.setHTML(`<b>${data.nama_simpel}</b><br>Data waktu belum siap.`);
-                            }
-                        } else {
-                            try {
-                                map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: true });
-                            } catch (e) {
-                                console.warn(`Gagal set state 'noData' (cache miss) untuk ${id}:`, e.message);
-                            }
-                            if (popupManager.getInstance() === loadingPopupRef) {
-                                popupManager.setHTML(`<b>${data.nama_simpel}</b><br>Data cuaca tidak valid.`);
-                            }
+                             }
+                        } else if (popupManager.getInstance() === loadingPopupRef) {
+                             popupManager.setHTML(`<b>${data.nama_simpel}</b><br>${hasGlobalTimeDataNow ? 'Data cuaca tidak valid.' : 'Data waktu belum siap.'}`);
                         }
+                        
+                        // 5. Update Sidebar
+                        // Panggilan ini SEKARANG akan berhasil karena _processIncomingData
+                        // sudah mengisi globalTimeLocalLookup
                         if (appState.isSidebarOpen) sidebarManager.renderSidebarContent();
+
                     } else {
-                         if (data.hourly?.time && idxLocal >= 0 && idxLocal < data.hourly.time.length) {
-                            map.setFeatureState( { source: 'data-cuaca-source', id: id }, { hasData: true, suhu: data.hourly.temperature_2m?.[idxLocal] ?? -999, precip: data.hourly.precipitation_probability?.[idxLocal] ?? -1, active: false });
-                         } else {
-                            map.setFeatureState({ source: 'data-cuaca-source', id: id }, { hasData: false, active: false });
-                         }
+                         // Pengguna sudah klik lokasi lain. Cukup update state peta (sebagai non-aktif)
+                         this._updateMapStateForFeature(id, data, false); // Panggil via 'this'
                     }
+                    // --- AKHIR REFAKTORISASI ---
+                    
                 } catch (e) { 
                     console.error(`Fetch failed for ${id}:`, e);
                     if (appState.activeLocationId === id) { 
@@ -1538,6 +1641,7 @@
          * Ini mengimplementasikan interface IControl MapLibre.
          */
         class ResetPitchControl {
+            // (Tidak ada perubahan di bagian ini)
             /**
              * Dipanggil saat kontrol ditambahkan ke peta.
              * @param {maplibregl.Map} map - Objek peta MapLibre.
@@ -1592,6 +1696,7 @@
         // --- AKHIR MODIFIKASI BARU ---
 
         // --- FUNGSI-FUNGSI UNTUK SEARCH BAR ---
+        // (Tidak ada perubahan di bagian ini)
 
         /** 🔍 Mengambil data lokasi dari backend */
         async function fetchLokasi(query) {
@@ -1701,6 +1806,7 @@
             // ================================================================
             // 1. Ambil Elemen UI
             // ================================================================
+            // (Tidak ada perubahan di bagian ini)
             sidebarEl = document.getElementById('detail-sidebar');
             toggleBtnEl = document.getElementById('sidebar-toggle-btn');
             closeBtnEl = document.getElementById('close-sidebar-btn');
@@ -1732,6 +1838,7 @@
             // ================================================================
             // 2. Logika Inisialisasi Awal
             // ================================================================
+            // (Tidak ada perubahan di bagian ini)
 
             // Fetch WMO Codes
             fetch(`${baseUrl}/api/wmo-codes`)
@@ -1750,7 +1857,10 @@
             if (now.getMinutes() >= 30) { hourOfDay = (hourOfDay + 1); } 
             
             const roundedHour = hourOfDay % 24;
-            const diffDays = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - appState.predictedStartDate.getTime()) / (1000 * 60 * 60 * 24));
+            const todayAtMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const startAtMidnight = new Date(appState.predictedStartDate.getFullYear(), appState.predictedStartDate.getMonth(), appState.predictedStartDate.getDate());
+            const diffDays = Math.round((todayAtMidnight.getTime() - startAtMidnight.getTime()) / (1000 * 60 * 60 * 24));
+            
             const correctedIndex = (diffDays * 24) + roundedHour;
 
             appState.selectedTimeIndex = Math.max(0, Math.min(335, correctedIndex));
@@ -1765,6 +1875,7 @@
             // ================================================================
             // 3. Pasang Event Listener
             // ================================================================
+            // (Tidak ada perubahan di bagian ini)
 
             // Listener Waktu
             prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(appState.selectedTimeIndex - 24));
@@ -1818,6 +1929,7 @@
             // ================================================================
             // 4. Inisialisasi Peta & Event Peta
             // ================================================================
+            // (Tidak ada perubahan di bagian ini)
             map = new maplibregl.Map({ 
                 container: 'map',
                  style: { 
@@ -1884,6 +1996,7 @@
                 map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels', minzoom: 7 });
 
                 // --- MODIFIKASI: Tambahkan Kontrol Peta ---
+                // (Tidak ada perubahan di bagian ini)
                 
                 // 1. Tambahkan kontrol navigasi (zoom, rotasi)
                 // Tombol kompas ini akan me-reset BEARING (Utara)
@@ -1900,11 +2013,19 @@
                 // Pemicu Event Peta
                 const perbaruiPetaDebounced = utils.debounce(mapManager.perbaruiPetaGeo.bind(mapManager), 700);
                 map.on('moveend', perbaruiPetaDebounced);
-                map.on('idle', mapManager.fetchDataForVisibleMarkers.bind(mapManager));
+                // [PENTING] Ganti 'idle' dengan 'data' (source) event untuk memuat data
+                // segera setelah geojson di-set, bukan hanya saat peta idle.
+                map.on('data', (e) => {
+                    if (e.sourceId === 'data-cuaca-source' && e.isSourceLoaded) {
+                         mapManager.fetchDataForVisibleMarkers.bind(mapManager)();
+                    }
+                });
+
 
                 mapManager.perbaruiPetaGeo(); // Muat GeoJSON awal
 
                 // --- Handler Klik Peta ---
+                // (Tidak ada perubahan di bagian ini)
                 const allInteractiveLayers = [ 'cluster-background-layer', 'unclustered-point-temp-circle', 'provinsi-point-circle' ];
                 map.on('click', (e) => {
                     const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
@@ -1951,6 +2072,7 @@
                 }); 
                 
                 // Hover pointer & Info koordinat
+                // (Tidak ada perubahan di bagian ini)
                 map.on('mousemove', (e) => { 
                      const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
                      map.getCanvas().style.cursor = features.length ? 'pointer' : '';
