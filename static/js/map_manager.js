@@ -149,7 +149,8 @@ export const mapManager = {
                         id: g.id, 
                         nama_simpel: g.nama_simpel || 'N/A', 
                         nama_label: g.nama_label || 'N/A', 
-                        type: 'kabkec' 
+                        type: 'kabkec',
+                        tipadm: g.tipadm // <-- MODIFIKASI: Tambahkan tipadm
                     } 
                 }));
                 if (cuacaSource()) cuacaSource().setData({ type: 'FeatureCollection', features: features });
@@ -387,7 +388,8 @@ export const mapManager = {
                                     nama_simpel: data.nama_simpel,
                                     nama_label: data.nama_label,
                                     lat: data.latitude,
-                                    lon: data.longitude
+                                    lon: data.longitude,
+                                    tipadm: data.tipadm
                                 };
                                 this.handleUnclusteredClick(clickProps); 
                             });
@@ -414,7 +416,7 @@ export const mapManager = {
         this._activeLocationId = props.id;
         this._activeLocationSimpleName = props.nama_simpel; 
         this._activeLocationLabel = props.nama_label; 
-        this._activeLocationData = { type: 'provinsi' }; 
+        this._activeLocationData = { type: 'provinsi', tipadm: 1 }; // <-- MODIFIKASI: Tambahkan tipadm: 1
         this._previousActiveLocationId = previousId;
         if (previousId && cacheManager.get(previousId)) { 
             this.removeActiveMarkerHighlight(previousId); 
@@ -440,10 +442,11 @@ export const mapManager = {
 
     /** FASE 2: Menangani klik pada marker unclustered (Fungsi Kontroler Utama) */
     handleUnclusteredClick: function(props) {
-        const { id, nama_simpel, nama_label, lat, lon } = props; 
+        // MODIFIKASI: Ambil 'tipadm' dari props
+        const { id, nama_simpel, nama_label, lat, lon, tipadm } = props; 
         const coordinates = [lon, lat];
         if (!coordinates || isNaN(coordinates[0]) || isNaN(coordinates[1])) { return; }
-        console.log("Handling Unclustered Click:", nama_label, id); 
+        console.log("Handling Unclustered Click:", nama_label, id, `(TIPADM: ${tipadm})`); // Log tipadm
         popupManager.close(true);
         const previousId = this._activeLocationId;
         this._activeLocationId = id;
@@ -453,6 +456,8 @@ export const mapManager = {
         if (previousId) { this.removeActiveMarkerHighlight(previousId); } 
         this.setActiveMarkerHighlight(id); 
         const cachedData = cacheManager.get(id);
+        
+        // 'props' (termasuk tipadm) akan diteruskan ke fungsi helper
         if (inflightIds.has(id)) {
             this._handleInflightState(props, coordinates);
         } else if (cachedData) { 
@@ -479,7 +484,9 @@ export const mapManager = {
             data.nama_label = props.nama_label;
             cacheManager.set(props.id, data);
         }
-        this._activeLocationData = data;                    
+        this._activeLocationData = data; 
+        // MODIFIKASI: Tambahkan tipadm dari klik (karena tidak ada di cache)
+        this._activeLocationData.tipadm = props.tipadm;                   
         this._isClickLoading = false;
         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
         const idxLocal = timeManager.getSelectedTimeIndex();
@@ -507,7 +514,7 @@ export const mapManager = {
         
         const { id, nama_simpel, nama_label } = props; 
         console.log(`Cache miss for ${id}. Fetching...`);
-        this._activeLocationData = null; 
+        this._activeLocationData = null;
         this._isClickLoading = true; 
         inflightIds.add(id);
         const loadingPopupRef = popupManager.open(coordinates, `<b>${nama_simpel}</b><br>Memuat...`);
@@ -527,6 +534,8 @@ export const mapManager = {
             this._processIncomingData(id, data);
             if (this._activeLocationId === id) {
                 this._activeLocationData = data;
+                // MODIFIKASI: Tambahkan tipadm dari klik
+                this._activeLocationData.tipadm = props.tipadm;
                 this._isClickLoading = false;
                 this._updateMapStateForFeature(id, data, true); 
                 const idxLocal = timeManager.getSelectedTimeIndex();

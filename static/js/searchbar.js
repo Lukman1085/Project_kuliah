@@ -52,7 +52,8 @@ export const searchBarManager = {
             nama_simpel: lokasi.nama_simpel,
             nama_label: lokasi.nama_label,
             lat: lokasi.lat,
-            lon: lokasi.lon
+            lon: lokasi.lon,
+            tipadm: lokasi.tipadm // <-- MODIFIKASI: Tambahkan tipadm
         };
         
         setTimeout(() => {
