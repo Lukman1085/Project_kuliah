@@ -1,0 +1,206 @@
+import { cacheManager } from "./cache_manager.js";
+import { utils } from "./utilities.js";
+import { popupManager } from "./popup_manager.js";
+import { sidebarManager } from "./sidebar_manager.js";
+import { mapManager } from "./map_manager.js";
+
+/** ⏰ TIME MANAGER: Mengelola state waktu dan update UI terkait waktu */
+export const timeManager = {
+    _selectedTimeIndex: -1, 
+    _globalTimeLocalLookup: [], 
+    _predictedStartDate: null,
+    _userHasChangedTime: false, 
+
+    // FUNGSI BARU: Tempat menyimpan referensi elemen DOM
+    elements: {},
+
+    // FUNGSI BARU: Dipanggil oleh main.js untuk 'menyuntikkan' elemen DOM
+    initDOM: function(domElements) {
+        this.elements = domElements;
+        // domElements akan berisi:
+        // { prevDayBtn, nextDayBtn, dateDisplay, hourDisplay, 
+        //   prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn }
+        console.log("Elemen DOM Waktu telah di-set di timeManager.");
+    },
+
+    // FUNGSI BARU (DIPINDAHKAN DARI UTILS.JS)
+    getPredictedDateFromIndex: function(index) {
+        const startDate = this.getPredictedStartDate(); // Gunakan 'this'
+        if (index < 0 || index > 335 || !startDate) {
+            return null;
+        }
+        const predictedDate = new Date(startDate);
+        predictedDate.setHours(predictedDate.getHours() + index);
+        return predictedDate;
+    },
+    
+    /** Menghitung indeks jam saat ini (disentralisasi) */
+    calculateCurrentHourIndex: function(startDate) {
+        const now = new Date();
+        let hourOfDay = now.getHours();
+        if (now.getMinutes() >= 30) { hourOfDay = (hourOfDay + 1); } 
+        const roundedHour = hourOfDay % 24;
+        const todayAtMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startAtMidnight = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+        const diffDays = Math.round((todayAtMidnight.getTime() - startAtMidnight.getTime()) / (1000 * 60 * 60 * 24));
+        const correctedIndex = (diffDays * 24) + roundedHour;
+        return Math.max(0, Math.min(335, correctedIndex));
+    },
+
+    /** Logika terpusat untuk menyinkronkan waktu saat data asli tiba */
+    initializeOrSync: function(realStartDate) {
+        console.log(`Menyinkronkan waktu dengan data asli...`);
+        this.setPredictedStartDate(realStartDate);
+        
+        if (!this._userHasChangedTime) {
+            console.log("Menyinkronkan jam ke data asli.");
+            const correctedIndex = this.calculateCurrentHourIndex(realStartDate);
+            this._selectedTimeIndex = correctedIndex;
+            this.updateUIWithRealData(); 
+        } else {
+            console.log("Data asli dimuat, pilihan pengguna (Indeks " + this.getSelectedTimeIndex() + ") dipertahankan.");
+            this.updateUIWithRealData();
+        }
+    },
+    
+    init: function() {
+        const now = new Date();
+        this._predictedStartDate = new Date(now);
+        this._predictedStartDate.setDate(now.getDate() - 7); 
+        this._predictedStartDate.setHours(0, 0, 0, 0); 
+        console.log(`Tanggal mulai prediksi dihitung: ${this._predictedStartDate.toISOString()}`);
+        
+        this._selectedTimeIndex = this.calculateCurrentHourIndex(this._predictedStartDate);
+        
+        console.log(`Indeks awal diprediksi: ${this._selectedTimeIndex}`);
+        
+        // Panggil fungsi-fungsi ini SETELAH initDOM dipanggil di main.js
+        this.updateTimePickerDisplayOnly(); 
+        this.updateNavigationButtonsState(this._selectedTimeIndex); 
+    },
+    getSelectedTimeIndex: function() { return this._selectedTimeIndex; },
+    getGlobalTimeLookup: function() { return this._globalTimeLocalLookup; },
+    getPredictedStartDate: function() { return this._predictedStartDate; },
+    setGlobalTimeLookup: function(lookupArray) {
+        this._globalTimeLocalLookup = lookupArray;
+        console.log(`Lookup waktu asli di-set (Total: ${this._globalTimeLocalLookup.length} jam)`);
+    },
+    setPredictedStartDate: function(date) {
+        this._predictedStartDate = date;
+        console.log(`Tanggal mulai prediksi DISINKRONKAN ke data asli: ${date.toISOString()}`);
+    },
+    updateNavigationButtonsState: function(currentIndex) {
+        // Ambil elemen dari properti 'elements'
+        const { prevDayBtn, nextDayBtn, prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn } = this.elements;
+
+        if (prevDayBtn) prevDayBtn.disabled = (currentIndex < 24);
+        if (nextDayBtn) nextDayBtn.disabled = (currentIndex >= 312); 
+        if (prevThreeHourBtn) prevThreeHourBtn.disabled = (currentIndex < 3);
+        if (prevHourBtn) prevHourBtn.disabled = (currentIndex <= 0);
+        if (nextHourBtn) nextHourBtn.disabled = (currentIndex >= 335);
+        if (nextThreeHourBtn) nextThreeHourBtn.disabled = (currentIndex >= 333); 
+    },
+    updateTimePickerDisplayOnly: function(useRealData = false) {
+            // Ambil elemen dari properti 'elements'
+            const { dateDisplay, hourDisplay } = this.elements;
+            if (!dateDisplay || !hourDisplay) return;
+            
+            const idx = this._selectedTimeIndex;
+            let dateToShow;
+            let hourToShow = "--:--";
+            if (useRealData && this._globalTimeLocalLookup.length > idx && idx >= 0) {
+                const realTimeString = this._globalTimeLocalLookup[idx];
+                const [datePart, timePart] = realTimeString.split('T');
+                dateToShow = utils.formatDateDisplayFromString(datePart); 
+                hourToShow = timePart;
+            } else {
+                const predictedDate = this.getPredictedDateFromIndex(idx); 
+                if (predictedDate) {
+                    dateToShow = utils.formatDateDisplayFromDateObject(predictedDate); 
+                    hourToShow = String(predictedDate.getHours()).padStart(2, '0') + ":00";
+                } else {
+                    dateToShow = "Memuat..."; 
+                }
+            }
+            dateDisplay.textContent = dateToShow;
+            hourDisplay.textContent = hourToShow;
+    },
+
+    /** Memperbarui state fitur peta berdasarkan waktu (loop efisien) */
+    updateMapFeaturesForTime: function(idxGlobal) {
+        // Ambil map melalui mapManager
+        const map = mapManager.getMap();
+        
+        if (this._globalTimeLocalLookup.length === 0) {
+                return;
+        }
+        if (!map || !map.getSource('data-cuaca-source')) return; 
+        
+        if (idxGlobal === undefined || idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) {
+            idxGlobal = this._selectedTimeIndex; 
+        }
+        if (idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) return; 
+        
+        const visibleFeatures = map.querySourceFeatures('data-cuaca-source', { 
+            filter: ['!', ['has', 'point_count']] 
+        });
+        const activeIdStr = String(mapManager.getActiveLocationId());
+        for (const feature of visibleFeatures) {
+            const featureId = feature.id;
+            const featureIdStr = String(featureId);
+            const cachedData = cacheManager.get(featureId);
+            const isActive = (featureIdStr === activeIdStr);
+            let stateData = { hasData: false, active: isActive }; 
+            if (cachedData && cachedData.hourly?.time && idxGlobal < cachedData.hourly.time.length) {
+                const hourly = cachedData.hourly;
+                stateData = {
+                    hasData: true,
+                    suhu: hourly.temperature_2m?.[idxGlobal] ?? -999, 
+                    precip: hourly.precipitation_probability?.[idxGlobal] ?? -1, 
+                    active: isActive 
+                };
+            }
+            try {
+                map.setFeatureState({ source: 'data-cuaca-source', id: featureId }, stateData); 
+            } catch(e) {
+                    // console.warn(`Gagal set state (updateMapFeaturesForTime) untuk ${featureId}:`, e.message);
+            }
+        }
+    },
+    
+    /** Memperbarui semua UI yang bergantung pada waktu */
+    updateUIWithRealData: function() {
+        const idx = this._selectedTimeIndex;
+        console.log(`UI Update (Real Data) triggered for Index: ${idx}`);
+        if (this._globalTimeLocalLookup.length === 0) { 
+            console.error("updateUIWithRealData dipanggil secara tidak benar (data belum siap).");
+            return;
+        }
+        if (idx < 0 || idx >= this._globalTimeLocalLookup.length) {
+                console.error(`Indeks ${idx} tidak valid untuk globalTimeLocalLookup`);
+                return;
+        }
+        const localTimeString = this._globalTimeLocalLookup[idx];
+        const activeData = mapManager.getActiveLocationData();
+        this.updateTimePickerDisplayOnly(true); 
+        this.updateMapFeaturesForTime(idx); 
+        popupManager.updateUIForTime(idx, localTimeString); 
+        sidebarManager.updateUIForTime(idx, localTimeString, activeData); 
+        this.updateNavigationButtonsState(idx); 
+    },
+
+    /** Handler utama saat waktu diubah oleh pengguna */
+    handleTimeChange: function(newIndex) {
+        newIndex = Math.max(0, Math.min(335, newIndex)); // Clamp
+        if (newIndex !== this._selectedTimeIndex) {
+            this._userHasChangedTime = true;
+            this._selectedTimeIndex = newIndex;
+            console.log(`Indeks waktu diubah ke: ${newIndex}`);
+            this.updateTimePickerDisplayOnly(this._globalTimeLocalLookup.length > 0); 
+            this.updateNavigationButtonsState(newIndex); 
+            if (this._globalTimeLocalLookup.length > 0) {
+                this.updateUIWithRealData(); 
+            }
+        }
+    }
+};
