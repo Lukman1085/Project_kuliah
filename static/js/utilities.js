@@ -1,7 +1,7 @@
-import { timeManager } from "./time_manager";
+import { timeManager } from "./time_manager.js";
 
 /** 🛠️ UTILS: Kumpulan fungsi helper murni */
-export const WMO_CODE_MAP = {};
+export let WMO_CODE_MAP = {};
 export const utils = { 
     // (Tidak ada perubahan di getWeatherInfo, getPredictedDateFromIndex, formatLocalTimestampString, formatPredictedDateObject)
     // (Tidak ada perubahan di formatDateDisplayFromString, formatDateDisplayFromDateObject, formatDayOnly, debounce)
@@ -17,15 +17,15 @@ export const utils = {
         const icon_class = useDayIcon ? (info[1] || info[2]) : (info[2] || info[1]);
         return { deskripsi: deskripsi, ikon: `wi ${icon_class || default_info[1]}` };
     },
-    getPredictedDateFromIndex: function(index) {
-        const startDate = timeManager.getPredictedStartDate();
-        if (index < 0 || index > 335 || !startDate) {
-            return null;
-        }
-        const predictedDate = new Date(startDate);
-        predictedDate.setHours(predictedDate.getHours() + index);
-        return predictedDate;
-    },
+    // getPredictedDateFromIndex: function(index) {
+    //     const startDate = timeManager.getPredictedStartDate();
+    //     if (index < 0 || index > 335 || !startDate) {
+    //         return null;
+    //     }
+    //     const predictedDate = new Date(startDate);
+    //     predictedDate.setHours(predictedDate.getHours() + index);
+    //     return predictedDate;
+    // },
     formatLocalTimestampString: function(localTimeString) {
         if (!localTimeString) return "Error Waktu";
         try {

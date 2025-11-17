@@ -1,6 +1,6 @@
-import { cacheManager } from "./cache_manager";
-import { utils } from "./utilities";
-import { mapManager } from "./map_manager";
+import { cacheManager } from "./cache_manager.js";
+import { utils } from "./utilities.js";
+import { mapManager } from "./map_manager.js";
 
 /** 팝-업 PENGELOLA POPUP TERPUSAT */
 export const popupManager = { 
@@ -9,7 +9,6 @@ export const popupManager = {
 
     /** Membuat konten DOM untuk popup (Bukan string HTML) */
     generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
-        // (Se bagian besar tidak berubah, kecuali event listener)
         const container = document.createElement('div');
         container.className = 'weather-popup-content';
         const namaEl = document.createElement('b');
@@ -49,13 +48,9 @@ export const popupManager = {
         button.id = 'popup-sidebar-btn-dynamic';
         button.textContent = 'Lihat Detail di Sidebar';
         
-        // --- REFAKTOR (Proyek 2.2) ---
-        // Dekopling: Memancarkan event, alih-alih memanggil sidebarManager
         button.addEventListener('click', () => {
-            // sidebarManager.openSidebarFromPopup(); // <-- Dihapus
             document.dispatchEvent(new CustomEvent('requestSidebarDetail'));
         });
-        // --- Akhir Refaktor ---
         
         actionsWrapper.appendChild(button);
         container.appendChild(namaEl);
@@ -65,31 +60,46 @@ export const popupManager = {
         return container;
         },
     
-        // (Tidak ada perubahan di 'open', 'close', 'isOpen', 'getElement', 'getInstance', 'setHTML', 'setDOMContent')
     open: function(lngLat, content, options = { maxWidth: '260px' }) {
+        // AMBIL MAP DARI mapManager, BUKAN GLOBAL
+        const map = mapManager.getMap(); 
+
         this.close(true);
+
+        // Tambahkan pengecekan jika map belum siap
+        if (!map) {
+            console.error("PopupManager.open() gagal: Map belum di-inisialisasi.");
+            return null;
+        }
+
         if (!Array.isArray(lngLat) || lngLat.length !== 2 || typeof lngLat[0] !== 'number' || typeof lngLat[1] !== 'number' || isNaN(lngLat[0]) || isNaN(lngLat[1])) { console.error("Invalid lngLat:", lngLat); return null; }
+        
         try {
             const newPopup = new maplibregl.Popup(options).setLngLat(lngLat);
             if (typeof content === 'string') { newPopup.setHTML(content); }
             else if (content instanceof HTMLElement) { newPopup.setDOMContent(content); } 
             else { newPopup.setHTML("Invalid content."); }
             this._currentInstance = newPopup;
+            
             newPopup.once('close', () => {
-                    const wasInternal = popupManager._internalCloseFlag;
-                    popupManager._internalCloseFlag = false;
-                    if (popupManager._currentInstance === newPopup) {
-                        popupManager._currentInstance = null;
+                    const wasInternal = this._internalCloseFlag; // 'this' bukan 'popupManager'
+                    this._internalCloseFlag = false;
+                    if (this._currentInstance === newPopup) {
+                        this._currentInstance = null;
                     } 
                     if (!wasInternal) {
                         mapManager.resetActiveLocationState(); 
                     }
             });
-            newPopup.addTo(map);
+
+            newPopup.addTo(map); // Gunakan variabel 'map' lokal
             return newPopup;
         } catch (e) {
                 console.error("Failed to create/add popup:", e, " LngLat:", lngLat);
-                if (this._currentInstance === newPopup) this._currentInstance = null;
+                // Pastikan _currentInstance di-reset jika error terjadi pada 'newPopup'
+                if (this._currentInstance && this._currentInstance.options === options) {
+                    this._currentInstance = null;
+                }
                 return null;
         }
     },

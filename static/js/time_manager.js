@@ -1,8 +1,8 @@
-import { cacheManager } from "./cache_manager";
-import { utils } from "./utilities";
-import { popupManager } from "./popup_manager";
-import { sidebarManager } from "./sidebar_manager";
-import { mapManager } from "./map_manager";
+import { cacheManager } from "./cache_manager.js";
+import { utils } from "./utilities.js";
+import { popupManager } from "./popup_manager.js";
+import { sidebarManager } from "./sidebar_manager.js";
+import { mapManager } from "./map_manager.js";
 
 /** ⏰ TIME MANAGER: Mengelola state waktu dan update UI terkait waktu */
 export const timeManager = {
@@ -10,10 +10,32 @@ export const timeManager = {
     _globalTimeLocalLookup: [], 
     _predictedStartDate: null,
     _userHasChangedTime: false, 
+
+    // FUNGSI BARU: Tempat menyimpan referensi elemen DOM
+    elements: {},
+
+    // FUNGSI BARU: Dipanggil oleh main.js untuk 'menyuntikkan' elemen DOM
+    initDOM: function(domElements) {
+        this.elements = domElements;
+        // domElements akan berisi:
+        // { prevDayBtn, nextDayBtn, dateDisplay, hourDisplay, 
+        //   prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn }
+        console.log("Elemen DOM Waktu telah di-set di timeManager.");
+    },
+
+    // FUNGSI BARU (DIPINDAHKAN DARI UTILS.JS)
+    getPredictedDateFromIndex: function(index) {
+        const startDate = this.getPredictedStartDate(); // Gunakan 'this'
+        if (index < 0 || index > 335 || !startDate) {
+            return null;
+        }
+        const predictedDate = new Date(startDate);
+        predictedDate.setHours(predictedDate.getHours() + index);
+        return predictedDate;
+    },
     
-    /** [BARU] Menghitung indeks jam saat ini (disentralisasi) */
+    /** Menghitung indeks jam saat ini (disentralisasi) */
     calculateCurrentHourIndex: function(startDate) {
-        // (Logika yang sebelumnya ada di init)
         const now = new Date();
         let hourOfDay = now.getHours();
         if (now.getMinutes() >= 30) { hourOfDay = (hourOfDay + 1); } 
@@ -25,30 +47,21 @@ export const timeManager = {
         return Math.max(0, Math.min(335, correctedIndex));
     },
 
-    // --- REFAKTOR (Proyek 2.1) ---
-    /** [BARU] Logika terpusat untuk menyinkronkan waktu saat data asli tiba */
+    /** Logika terpusat untuk menyinkronkan waktu saat data asli tiba */
     initializeOrSync: function(realStartDate) {
         console.log(`Menyinkronkan waktu dengan data asli...`);
-        // Selalu sinkronkan tanggal mulai
-        timeManager.setPredictedStartDate(realStartDate);
+        this.setPredictedStartDate(realStartDate);
         
-        // Cek apakah pengguna sudah mengubah waktu
-        if (!timeManager._userHasChangedTime) {
-            // Belum, jadi sinkronkan ke jam saat ini
+        if (!this._userHasChangedTime) {
             console.log("Menyinkronkan jam ke data asli.");
-            const correctedIndex = timeManager.calculateCurrentHourIndex(realStartDate);
-            // Gunakan _selectedTimeIndex secara langsung alih-alih handleTimeChange
-            // untuk menghindari penandaan _userHasChangedTime = true
+            const correctedIndex = this.calculateCurrentHourIndex(realStartDate);
             this._selectedTimeIndex = correctedIndex;
-            this.updateUIWithRealData(); // Perbarui semua UI ke indeks yang baru disinkronkan
+            this.updateUIWithRealData(); 
         } else {
-            // Sudah, hormati pilihan pengguna
-            console.log("Data asli dimuat, pilihan pengguna (Indeks " + timeManager.getSelectedTimeIndex() + ") dipertahankan.");
-            // Cukup perbarui UI dengan data baru di indeks yang sudah dipilih pengguna.
+            console.log("Data asli dimuat, pilihan pengguna (Indeks " + this.getSelectedTimeIndex() + ") dipertahankan.");
             this.updateUIWithRealData();
         }
     },
-    // --- Akhir Refaktor ---
     
     init: function() {
         const now = new Date();
@@ -60,6 +73,8 @@ export const timeManager = {
         this._selectedTimeIndex = this.calculateCurrentHourIndex(this._predictedStartDate);
         
         console.log(`Indeks awal diprediksi: ${this._selectedTimeIndex}`);
+        
+        // Panggil fungsi-fungsi ini SETELAH initDOM dipanggil di main.js
         this.updateTimePickerDisplayOnly(); 
         this.updateNavigationButtonsState(this._selectedTimeIndex); 
     },
@@ -75,6 +90,9 @@ export const timeManager = {
         console.log(`Tanggal mulai prediksi DISINKRONKAN ke data asli: ${date.toISOString()}`);
     },
     updateNavigationButtonsState: function(currentIndex) {
+        // Ambil elemen dari properti 'elements'
+        const { prevDayBtn, nextDayBtn, prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn } = this.elements;
+
         if (prevDayBtn) prevDayBtn.disabled = (currentIndex < 24);
         if (nextDayBtn) nextDayBtn.disabled = (currentIndex >= 312); 
         if (prevThreeHourBtn) prevThreeHourBtn.disabled = (currentIndex < 3);
@@ -83,7 +101,10 @@ export const timeManager = {
         if (nextThreeHourBtn) nextThreeHourBtn.disabled = (currentIndex >= 333); 
     },
     updateTimePickerDisplayOnly: function(useRealData = false) {
+            // Ambil elemen dari properti 'elements'
+            const { dateDisplay, hourDisplay } = this.elements;
             if (!dateDisplay || !hourDisplay) return;
+            
             const idx = this._selectedTimeIndex;
             let dateToShow;
             let hourToShow = "--:--";
@@ -93,7 +114,7 @@ export const timeManager = {
                 dateToShow = utils.formatDateDisplayFromString(datePart); 
                 hourToShow = timePart;
             } else {
-                const predictedDate = utils.getPredictedDateFromIndex(idx); 
+                const predictedDate = this.getPredictedDateFromIndex(idx); 
                 if (predictedDate) {
                     dateToShow = utils.formatDateDisplayFromDateObject(predictedDate); 
                     hourToShow = String(predictedDate.getHours()).padStart(2, '0') + ":00";
@@ -107,15 +128,19 @@ export const timeManager = {
 
     /** Memperbarui state fitur peta berdasarkan waktu (loop efisien) */
     updateMapFeaturesForTime: function(idxGlobal) {
-        // (Tidak ada perubahan, sudah direfaktor di Proyek 1)
+        // Ambil map melalui mapManager
+        const map = mapManager.getMap();
+        
         if (this._globalTimeLocalLookup.length === 0) {
                 return;
         }
         if (!map || !map.getSource('data-cuaca-source')) return; 
+        
         if (idxGlobal === undefined || idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) {
             idxGlobal = this._selectedTimeIndex; 
         }
         if (idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) return; 
+        
         const visibleFeatures = map.querySourceFeatures('data-cuaca-source', { 
             filter: ['!', ['has', 'point_count']] 
         });
@@ -145,7 +170,6 @@ export const timeManager = {
     
     /** Memperbarui semua UI yang bergantung pada waktu */
     updateUIWithRealData: function() {
-        // (Tidak ada perubahan)
         const idx = this._selectedTimeIndex;
         console.log(`UI Update (Real Data) triggered for Index: ${idx}`);
         if (this._globalTimeLocalLookup.length === 0) { 

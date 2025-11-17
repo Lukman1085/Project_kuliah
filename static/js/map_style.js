@@ -1,5 +1,10 @@
 // --- REFAKTOR (Rencana 3.1) ---
 // Definisi style peta dipindahkan ke sini agar lebih bersih
+const protocol = window.location.protocol;
+const hostname = window.location.hostname;
+const port = '5000';
+const baseUrl = `${protocol}//${hostname}:${port}`;
+
 export const MAP_STYLE = { 
     version: 8,
     glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",

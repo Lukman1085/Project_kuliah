@@ -1,13 +1,29 @@
-import { cacheManager } from "./cache_manager";
-import { utils } from "./utilities";
-import { popupManager } from "./popup_manager";
-import { timeManager } from "./time_manager";
-import { sidebarManager } from "./sidebar_manager";
+import { cacheManager } from "./cache_manager.js";
+import { utils } from "./utilities.js";
+import { popupManager } from "./popup_manager.js";
+import { timeManager } from "./time_manager.js";
+import { sidebarManager } from "./sidebar_manager.js";
 
 export const inflightIds = new Set();
 /** 🗺️ MAP MANAGER: Mengelola semua logika terkait peta, layer, dan interaksi */
 export const mapManager = { 
-    // (Tidak ada perubahan di getter, highlight, reset)
+    _map: null, // Properti internal untuk menyimpan instance map
+
+    // FUNGSI BARU: Untuk 'menyuntikkan' map dari main.js
+    setMap: function(mapInstance) {
+        this._map = mapInstance;
+        console.log("Map instance telah di-set di mapManager.");
+    },
+
+    // FUNGSI BARU: Helper internal untuk mendapatkan map dengan aman
+    getMap: function() {
+        if (!this._map) {
+            console.error("mapManager.getMap() dipanggil sebelum map di-set!");
+            return null;
+        }
+        return this._map;
+    },
+
     _isLoading: false, 
     _isClickLoading: false, 
     _activeLocationId: null,
@@ -15,14 +31,18 @@ export const mapManager = {
     _activeLocationLabel: null, 
     _activeLocationData: null,
     _previousActiveLocationId: null, 
+    
     getIsLoading: function() { return this._isLoading; },
     getIsClickLoading: function() { return this._isClickLoading; },
     getActiveLocationId: function() { return this._activeLocationId; },
     getActiveLocationSimpleName: function() { return this._activeLocationSimpleName; },
     getActiveLocationLabel: function() { return this._activeLocationLabel; },
     getActiveLocationData: function() { return this._activeLocationData; },
+    
     setActiveMarkerHighlight: function(id) {
+            const map = this.getMap(); // Ambil map
             if (!id || !map || !map.getSource('data-cuaca-source')) return;
+            
             console.log("Highlighting:", id);
             try {
             const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: id }) || {};
@@ -38,6 +58,7 @@ export const mapManager = {
             } catch (e) { console.error("Error setting active highlight:", e); }
     },
     removeActiveMarkerHighlight: function(idToRemove = null) { 
+        const map = this.getMap(); // Ambil map
         const targetId = idToRemove || this._previousActiveLocationId;
         if (targetId && map && map.getSource('data-cuaca-source')) {
             console.log("Removing highlight from:", targetId);
@@ -77,6 +98,15 @@ export const mapManager = {
     },
     dataController: null, 
     perbaruiPetaGeo: async function() {
+            const map = this.getMap(); // Ambil map
+            if (!map) return; // Jangan lakukan apapun jika map belum siap
+
+            // Definisikan baseUrl di dalam fungsi
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const port = '5000';
+            const baseUrl = `${protocol}//${hostname}:${port}`;
+
             if (this.dataController) this.dataController.abort();
             this.dataController = new AbortController();
             const signal = this.dataController.signal;
@@ -127,6 +157,16 @@ export const mapManager = {
             }
     }, 
     fetchDataForVisibleMarkers: async function() {
+        const map = this.getMap(); // Ambil map
+        if (!map) return;
+
+        // Definisikan baseUrl
+        const protocol = window.location.protocol;
+        const hostname = window.location.hostname;
+        const port = '5000';
+        const baseUrl = `${protocol}//${hostname}:${port}`;
+        const loadingSpinner = document.getElementById('global-loading-spinner'); // Ambil spinner
+
         const zoom = map.getZoom();
         if (zoom <= 7.99 || this._isLoading) return;
         const visibleFeatures = map.queryRenderedFeatures({ layers: ['unclustered-point-temp-circle'] });
@@ -143,7 +183,7 @@ export const mapManager = {
         }
         idsToFetch.forEach(id => inflightIds.add(id));
         this._isLoading = true; 
-        if (!isFirstLoad) {
+        if (!isFirstLoad && loadingSpinner) {
             loadingSpinner.style.display = 'block';
         }
         const featuresInSource = map.querySourceFeatures('data-cuaca-source');
@@ -178,7 +218,7 @@ export const mapManager = {
         finally {
             idsToFetch.forEach(id => inflightIds.delete(id));
             this._isLoading = false; 
-            loadingSpinner.style.display = 'none';
+            if (loadingSpinner) loadingSpinner.style.display = 'none';
             if (!isFirstLoad) { 
                 timeManager.updateMapFeaturesForTime(timeManager.getSelectedTimeIndex());
             }
@@ -195,20 +235,20 @@ export const mapManager = {
         const isFirstLoad = (timeManager.getGlobalTimeLookup().length === 0);
         let didInitTime = false;
         
-        // --- REFAKTOR (Proyek 2.1) ---
-        // Logika inisialisasi dipindahkan ke timeManager
         if (isFirstLoad && data.hourly?.time?.length > 0) {
             timeManager.setGlobalTimeLookup(data.hourly.time);
             const realStartDate = new Date(data.hourly.time[0]);
             timeManager.initializeOrSync(realStartDate); // Memanggil fungsi terpusat
             didInitTime = true;
         }
-        // --- Akhir Refaktor ---
         
         return didInitTime; 
     },
     
     _updateMapStateForFeature: function(id, data, isActive) {
+        const map = this.getMap(); // Ambil map
+        if (!map) return;
+
         const idxSaatIni = timeManager.getSelectedTimeIndex();
         if (data?.hourly?.time && idxSaatIni >= 0 && idxSaatIni < data.hourly.time.length) {
             const suhu = data.hourly.temperature_2m?.[idxSaatIni];
@@ -239,13 +279,22 @@ export const mapManager = {
 
     /** Menangani klik pada klaster */
     handleClusterClick: function(feature, coordinates) {
+            const map = this.getMap(); // Ambil map
+            if (!map) return;
+
+            // Definisikan baseUrl
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const port = '5000';
+            const baseUrl = `${protocol}//${hostname}:${port}`;
+
             console.log("Handling Cluster Click");
             popupManager.close(true);
             const clusterId = feature.properties.cluster_id;
             const source = map.getSource('data-cuaca-source'); 
             const pointCount = feature.properties.point_count;
             
-            source.getClusterLeaves(clusterId, 100, 0, (err, leaves) => { // (Sudah direfaktor di Proyek 1)
+            source.getClusterLeaves(clusterId, 100, 0, (err, leaves) => { 
                 if (err) { console.error("Error getting cluster leaves:", err); return; }
                 const loadingPopupRef = popupManager.open(coordinates, 'Memuat data klaster...');
                 if (!loadingPopupRef) return;
@@ -274,8 +323,6 @@ export const mapManager = {
                     let itemsAdded = 0;
                     const idxDisplay = timeManager.getSelectedTimeIndex();
                     
-                    // --- REFAKTOR (Proyek 2.1) ---
-                    // Logika inisialisasi disentralisasi
                     if (timeManager.getGlobalTimeLookup().length === 0) { 
                             const firstId = Object.keys(dataDetailCuaca)[0];
                             if (firstId && dataDetailCuaca[firstId]) {
@@ -283,14 +330,13 @@ export const mapManager = {
                                 if (data.hourly?.time?.length > 0) {
                                     timeManager.setGlobalTimeLookup(data.hourly.time);
                                     const realStartDate = new Date(data.hourly.time[0]);
-                                    timeManager.initializeOrSync(realStartDate); // PANGGILAN BARU
+                                    timeManager.initializeOrSync(realStartDate); 
                                 }
                             } else {
                                 popupManager.setHTML("Data waktu belum siap."); 
                                 return; 
                             }
                     }
-                    // --- Akhir Refaktor ---
 
                     for (const id in dataDetailCuaca) {
                             const data = dataDetailCuaca[id];
@@ -360,7 +406,8 @@ export const mapManager = {
 
     /** Menangani klik pada marker provinsi. */
     handleProvinceClick: function(props, coordinates) {
-        // (Tidak ada perubahan)
+        const map = this.getMap(); // Ambil map
+
         console.log("Handling Province Click:", props.nama_label); 
         popupManager.close(true);
         const previousId = this._activeLocationId;
@@ -383,7 +430,7 @@ export const mapManager = {
         const zoomButton = document.createElement('button');
         zoomButton.textContent = 'Zoom ke Provinsi';
         zoomButton.addEventListener('click', () => {
-            if (map) {
+            if (map) { // Gunakan map lokal
                 map.easeTo({ center: coordinates, zoom: 8 });
             }
         });
@@ -393,7 +440,6 @@ export const mapManager = {
 
     /** FASE 2: Menangani klik pada marker unclustered (Fungsi Kontroler Utama) */
     handleUnclusteredClick: function(props) {
-        // (Tidak ada perubahan)
         const { id, nama_simpel, nama_label, lat, lon } = props; 
         const coordinates = [lon, lat];
         if (!coordinates || isNaN(coordinates[0]) || isNaN(coordinates[1])) { return; }
@@ -418,7 +464,6 @@ export const mapManager = {
 
     /** FASE 2: Helper untuk kasus data sedang di-fetch */
     _handleInflightState: function(props, coordinates) {
-        // (Tidak ada perubahan)
         console.log(`Data for ${props.id} is inflight. Setting loading state.`);
         this._activeLocationData = null; 
         this._isClickLoading = true;
@@ -428,7 +473,6 @@ export const mapManager = {
 
     /** FASE 2: Helper untuk kasus cache hit */
     _handleCacheHit: function(props, data, coordinates) {
-        // (Tidak ada perubahan)
         console.log(`Cache hit for ${props.id}.`);
         if (!data.nama_simpel || !data.nama_label) {
             data.nama_simpel = props.nama_simpel;
@@ -455,7 +499,12 @@ export const mapManager = {
 
     /** FASE 2: Helper untuk kasus cache miss (fetch baru). */
     _handleCacheMiss: async function(props, coordinates) {
-        // (Tidak ada perubahan)
+        // Definisikan baseUrl
+        const protocol = window.location.protocol;
+        const hostname = window.location.hostname;
+        const port = '5000';
+        const baseUrl = `${protocol}//${hostname}:${port}`;
+        
         const { id, nama_simpel, nama_label } = props; 
         console.log(`Cache miss for ${id}. Fetching...`);
         this._activeLocationData = null; 

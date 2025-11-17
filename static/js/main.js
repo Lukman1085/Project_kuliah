@@ -1,7 +1,7 @@
 // ================================================================
 // 1. IMPORT EKSTERNAL
 // ================================================================
-import { mapManager, inflightIds } from './map_manager.js';
+import { mapManager } from './map_manager.js';
 import { sidebarManager } from './sidebar_manager.js';
 import { timeManager } from './time_manager.js';
 import { popupManager } from './popup_manager.js';
@@ -9,7 +9,8 @@ import { utils, WMO_CODE_MAP } from './utilities.js';
 import { MAP_STYLE } from './map_style.js';
 import { ResetPitchControl } from './reset_pitch_ctrl.js';
 import { calendarManager } from './calender_manager.js';
-import { fetchLokasi, } from './searchbar.js';
+// PERUBAHAN: Impor seluruh manajer, bukan fungsi lepas
+import { searchBarManager } from './searchbar.js';
 
 // ================================================================
 // 2. KONFIGURASI & STATE GLOBAL
@@ -21,12 +22,8 @@ const port = '5000';
 const baseUrl = `${protocol}//${hostname}:${port}`;
 
 // Variabel elemen UI
-let sidebarEl, toggleBtnEl, closeBtnEl, sidebarContentEl, sidebarLocationNameEl;
-let sidebarPlaceholderEl, sidebarLoadingEl, sidebarWeatherDetailsEl, sidebarProvinceDetailsEl;
-let prevDayBtn, nextDayBtn, dateDisplay, calendarBtn, prevHourBtn, nextHourBtn, prevThreeHourBtn, nextThreeHourBtn, hourDisplay;
-let calendarPopup, calendarGrid, calendarMonthYear, calendarPrevMonthBtn, calendarNextMonthBtn, loadingSpinner;
 let map; 
-let searchInput, suggestionsDropdown, searchDebounceTimer; 
+let searchDebounceTimer; 
 
 // ================================================================
 // 3. TITIK MASUK APLIKASI (APPLICATION ENTRYPOINT)
@@ -34,61 +31,106 @@ let searchInput, suggestionsDropdown, searchDebounceTimer;
 document.addEventListener('DOMContentLoaded', function() {
 
     // ================================================================
-    // 1. Ambil Elemen UI
+    // 1. Ambil Elemen UI (Semua dikumpulkan di sini)
     // ================================================================
-    // (Tidak ada perubahan)
-    sidebarEl = document.getElementById('detail-sidebar');
-    toggleBtnEl = document.getElementById('sidebar-toggle-btn');
-    closeBtnEl = document.getElementById('close-sidebar-btn');
-    sidebarContentEl = document.getElementById('sidebar-content');
-    sidebarLocationNameEl = document.getElementById('sidebar-location-name');
-    sidebarPlaceholderEl = document.getElementById('sidebar-placeholder');
-    sidebarLoadingEl = document.getElementById('sidebar-loading');
-    sidebarWeatherDetailsEl = document.getElementById('sidebar-weather-details');
-    sidebarProvinceDetailsEl = document.getElementById('sidebar-province-details');
-    prevDayBtn = document.getElementById('prev-day-btn');
-    nextDayBtn = document.getElementById('next-day-btn');
-    dateDisplay = document.getElementById('date-display');
-    calendarBtn = document.getElementById('calendar-btn');
-    prevThreeHourBtn = document.getElementById('prev-three-hour-btn');
-    prevHourBtn = document.getElementById('prev-hour-btn');
-    nextHourBtn = document.getElementById('next-hour-btn');
-    nextThreeHourBtn = document.getElementById('next-three-hour-btn');
-    hourDisplay = document.getElementById('hour-display');
-    calendarPopup = document.getElementById('calendar-popup');
-    calendarGrid = document.getElementById('calendar-grid');
-    calendarMonthYear = document.getElementById('calendar-month-year');
-    loadingSpinner = document.getElementById('global-loading-spinner');
-    calendarPrevMonthBtn = document.getElementById('calendar-prev-month'); 
-    calendarNextMonthBtn = document.getElementById('calendar-next-month'); 
-    searchInput = document.getElementById('search-bar');
-    suggestionsDropdown = document.getElementById('suggestions-dropdown');
-
-    sidebarManager._timeEl = document.getElementById('sidebar-current-time');
-    sidebarManager._iconEl = document.getElementById('sidebar-current-icon');
-    sidebarManager._tempEl = document.getElementById('sidebar-current-temp');
-    sidebarManager._descEl = document.getElementById('sidebar-current-desc');
-    sidebarManager._feelsLikeEl = document.getElementById('sidebar-current-feelslike');
-    sidebarManager._humidityEl = document.getElementById('sidebar-current-humidity');
-    sidebarManager._precipEl = document.getElementById('sidebar-current-precipitation');
-    sidebarManager._windEl = document.getElementById('sidebar-current-wind');
-    sidebarManager._dailyListEl = document.getElementById('sidebar-daily-forecast-list');
+    const sidebarEl = document.getElementById('detail-sidebar');
+    const toggleBtnEl = document.getElementById('sidebar-toggle-btn');
+    const closeBtnEl = document.getElementById('close-sidebar-btn');
+    const sidebarContentEl = document.getElementById('sidebar-content');
+    const sidebarLocationNameEl = document.getElementById('sidebar-location-name');
+    const sidebarPlaceholderEl = document.getElementById('sidebar-placeholder');
+    const sidebarLoadingEl = document.getElementById('sidebar-loading');
+    const sidebarWeatherDetailsEl = document.getElementById('sidebar-weather-details');
+    const sidebarProvinceDetailsEl = document.getElementById('sidebar-province-details');
     
+    const prevDayBtn = document.getElementById('prev-day-btn');
+    const nextDayBtn = document.getElementById('next-day-btn');
+    const dateDisplay = document.getElementById('date-display');
+    const calendarBtn = document.getElementById('calendar-btn');
+    const prevThreeHourBtn = document.getElementById('prev-three-hour-btn');
+    const prevHourBtn = document.getElementById('prev-hour-btn');
+    const nextHourBtn = document.getElementById('next-hour-btn');
+    const nextThreeHourBtn = document.getElementById('next-three-hour-btn');
+    const hourDisplay = document.getElementById('hour-display');
+    
+    const calendarPopup = document.getElementById('calendar-popup');
+    const calendarGrid = document.getElementById('calendar-grid');
+    const calendarMonthYear = document.getElementById('calendar-month-year');
+    const loadingSpinner = document.getElementById('global-loading-spinner');
+    const calendarPrevMonthBtn = document.getElementById('calendar-prev-month'); 
+    const calendarNextMonthBtn = document.getElementById('calendar-next-month'); 
+    
+    const searchInput = document.getElementById('search-bar');
+    const suggestionsDropdown = document.getElementById('suggestions-dropdown');
+
     // ================================================================
-    // 2. Logika Inisialisasi Awal
+    // 2. Inisialisasi Manajer (Dependency Injection)
     // ================================================================
-    // (Tidak ada perubahan)
+    
+    // Kirim elemen-elemen yang dibutuhkan oleh sidebarManager
+    sidebarManager.initDOM({
+        sidebarEl, 
+        toggleBtnEl, 
+        closeBtnEl, 
+        sidebarContentEl, 
+        sidebarLocationNameEl,
+        sidebarPlaceholderEl, 
+        sidebarLoadingEl, 
+        sidebarWeatherDetailsEl, 
+        sidebarProvinceDetailsEl,
+        sidebarEl // Kirim elemen 'sidebarEl' lagi untuk referensi umum jika perlu
+    });
+
+    // Kirim elemen-elemen detail cuaca ke sidebarManager
+    sidebarManager.initWeatherElements({
+        timeEl: document.getElementById('sidebar-current-time'),
+        iconEl: document.getElementById('sidebar-current-icon'),
+        tempEl: document.getElementById('sidebar-current-temp'),
+        descEl: document.getElementById('sidebar-current-desc'),
+        feelsLikeEl: document.getElementById('sidebar-current-feelslike'),
+        humidityEl: document.getElementById('sidebar-current-humidity'),
+        precipEl: document.getElementById('sidebar-current-precipitation'),
+        windEl: document.getElementById('sidebar-current-wind'),
+        dailyListEl: document.getElementById('sidebar-daily-forecast-list')
+    });
+    
+    // Kirim elemen-elemen yang dibutuhkan oleh timeManager
+    timeManager.initDOM({
+        prevDayBtn, 
+        nextDayBtn, 
+        dateDisplay, 
+        hourDisplay,
+        prevThreeHourBtn, 
+        prevHourBtn, 
+        nextHourBtn, 
+        nextThreeHourBtn
+    });
+
+    // Kirim elemen-elemen yang dibutuhkan oleh searchBarManager
+    searchBarManager.init({
+        searchInput, 
+        suggestionsDropdown
+    });
+
+    // Mengaktifkan inisialisasi calendarManager
+    calendarManager.initDOM({ calendarPopup, calendarGrid, calendarMonthYear });
+
+    // ================================================================
+    // 3. Logika Inisialisasi Awal
+    // ================================================================
     fetch(`${baseUrl}/api/wmo-codes`)
         .then(res => res.ok ? res.json() : Promise.reject(`Error ${res.status}`))
-        .then(data => { WMO_CODE_MAP = data; })
+        .then(data => { 
+            // Salin properti ke objek yang diimpor
+            Object.assign(WMO_CODE_MAP, data); 
+        })
         .catch(e => console.error("Gagal memuat WMO codes:", e));
 
-    timeManager.init(); // Fallback time picker tetap berfungsi
+    timeManager.init(); // Inisialisasi waktu setelah initDOM dipanggil
     
     // ================================================================
-    // 3. Pasang Event Listener
+    // 4. Pasang Event Listener
     // ================================================================
-    // (Tidak ada perubahan di listener tombol waktu)
 
     prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 24));
     nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 24));
@@ -97,13 +139,10 @@ document.addEventListener('DOMContentLoaded', function() {
     nextHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 1));
     nextThreeHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 3));
     
-    // --- REFAKTOR (Rencana 3.2.2) ---
-    // Menambahkan stopPropagation agar listener global tidak langsung menutupnya
     calendarBtn.addEventListener('click', (e) => { 
         e.stopPropagation(); 
         calendarManager.toggleCalendar(); 
     });
-    // --- Akhir Refaktor ---
     
     calendarPrevMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(-1); });
     calendarNextMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(1); });
@@ -111,6 +150,7 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleBtnEl.addEventListener('click', () => sidebarManager.toggleSidebar());
     closeBtnEl.addEventListener('click', () => sidebarManager.closeSidebar());
 
+    // PERUBAHAN: Gunakan searchBarManager.fetchLokasi
     searchInput.addEventListener('input', () => {
         clearTimeout(searchDebounceTimer);
         const query = searchInput.value;
@@ -120,35 +160,31 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         searchDebounceTimer = setTimeout(() => {
-            fetchLokasi(query); 
+            searchBarManager.fetchLokasi(query); // Panggil metode dari manajer
         }, 350); 
     });
     searchInput.addEventListener('focus', () => {
         const query = searchInput.value;
         if (query.length >= 3) {
-            fetchLokasi(query); 
+            searchBarManager.fetchLokasi(query); // Panggil metode dari manajer
         }
     });
     
-    // --- REFAKTOR (Rencana 3.2.2) ---
     // Listener global untuk menutup dropdown pencarian DAN kalender
     document.addEventListener('click', function(e) {
-        // Logika penutup search
         const wrapper = document.getElementById('search-wrapper');
         if (wrapper && !wrapper.contains(e.target)) {
             suggestionsDropdown.style.display = 'none';
         }
         
-        // Logika penutup kalender
         if (calendarPopup && calendarPopup.style.display === 'block') {
-            // Jika klik BUKAN di dalam kalender DAN BUKAN di tombol kalender
             if (!calendarPopup.contains(e.target) && e.target !== calendarBtn) {
-                calendarManager.toggleCalendar(); // Panggil toggle untuk menutup
+                calendarManager.toggleCalendar();
             }
         }
     });
-    // --- Akhir Refaktor ---
     
+    // PERUBAHAN: Gunakan searchBarManager.fetchLokasi
     document.getElementById('search-btn').addEventListener('click', () => {
         const query = searchInput.value;
         if (query.length < 3) {
@@ -156,12 +192,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         clearTimeout(searchDebounceTimer);
-        fetchLokasi(query);
+        searchBarManager.fetchLokasi(query); // Panggil metode dari manajer
         searchInput.focus();
     });
 
-    // --- REFAKTOR (Proyek 2.2) ---
-    // [BARU] Event listener terpusat (Pub/Sub) untuk dekopling
+    // Event listener terpusat (Pub/Sub)
     document.addEventListener('requestSidebarDetail', () => {
         console.log("Event 'requestSidebarDetail' diterima.");
         sidebarManager.openSidebarFromPopup();
@@ -172,21 +207,20 @@ document.addEventListener('DOMContentLoaded', function() {
             sidebarManager.openSidebar();
         }
     });
-    // --- Akhir Refaktor ---
 
     // ================================================================
-    // 4. Inisialisasi Peta & Event Peta
+    // 5. Inisialisasi Peta & Event Peta
     // ================================================================
     
     map = new maplibregl.Map({ 
         container: 'map',
-        // --- REFAKTOR (Rencana 3.1) ---
-        // Menggunakan konstanta global
         style: MAP_STYLE,
-        // --- Akhir Refaktor ---
         center: [118.0149, -2.5489], zoom: 4.5, minZoom: 4, maxZoom: 14,
         maxBounds: [[90, -15], [145, 10]]
     });
+
+    // PERUBAHAN KRUSIAL: Kirim instance map ke mapManager
+    mapManager.setMap(map);
 
     // --- Logika Peta on 'load' ---
     map.on('load', () => {
@@ -197,11 +231,13 @@ document.addEventListener('DOMContentLoaded', function() {
         map.addControl(new ResetPitchControl(), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl());
         
+        // .bind(mapManager) memastikan 'this' di dalam perbaruiPetaGeo adalah mapManager
         const perbaruiPetaDebounced = utils.debounce(mapManager.perbaruiPetaGeo.bind(mapManager), 700);
         map.on('moveend', perbaruiPetaDebounced);
+        
         map.on('data', (e) => {
             if (e.sourceId === 'data-cuaca-source' && e.isSourceLoaded) {
-                    mapManager.fetchDataForVisibleMarkers.bind(mapManager)();
+                    mapManager.fetchDataForVisibleMarkers(); // Tidak perlu .bind lagi karena sudah di dalam arrow function
             }
         });
 
@@ -212,9 +248,7 @@ document.addEventListener('DOMContentLoaded', function() {
         map.on('click', (e) => {
             const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
 
-            // --- REFAKTOR (Rencana 3.2.1) ---
-            // Logika ini DIBIARKAN seperti semula karena sudah kuat.
-            // Ini menangani klik pada "kanvas peta kosong" untuk menutup sidebar.
+            // Logika klik di kanvas kosong untuk menutup sidebar
             if (sidebarManager.isOpen() && !features.length) { 
                 const sidebarClicked = e.originalEvent.target.closest('#detail-sidebar');
                 const popupClicked = e.originalEvent.target.closest('.maplibregl-popup');
@@ -224,12 +258,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
                 const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
 
-                // Jika klik BUKAN pada salah satu elemen UI ini, baru tutup.
                 if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked) {
                     sidebarManager.closeSidebar(); 
                 }
             }
-            // --- Akhir Refaktor ---
 
             if (!features.length) { 
                 popupManager.close();

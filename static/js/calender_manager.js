@@ -1,32 +1,45 @@
-import { utils } from "./utilities";
-import { timeManager } from "./time_manager";
+import { timeManager } from "./time_manager.js";
 
 /** 🗓️ CALENDAR MANAGER: Mengelola semua logika kalender */
 export const calendarManager = { 
     _displayMonth: new Date().getMonth(),
     _displayYear: new Date().getFullYear(),
 
-    // --- REFAKTOR (Rencana 3.2.2) ---
-    // Logika listener dipindahkan ke global
+    // FUNGSI BARU: Tempat menyimpan referensi elemen DOM
+    elements: {},
+
+    // FUNGSI BARU: Dipanggil oleh main.js untuk 'menyuntikkan' elemen DOM
+    initDOM: function(domElements) {
+        this.elements = domElements;
+        // domElements: { calendarPopup, calendarGrid, calendarMonthYear }
+        console.log("Elemen DOM Kalender telah di-set.");
+    },
+
     toggleCalendar: function() {
-        if (!calendarPopup) return;
+        // Ambil elemen dari 'this.elements'
+        const { calendarPopup } = this.elements;
+        if (!calendarPopup) {
+            console.error("calendarPopup belum di-init di calendarManager.");
+            return;
+        }
+
         const isOpen = calendarPopup.style.display === 'block';
         if (isOpen) {
             calendarPopup.style.display = 'none';
-            // document.removeEventListener('click', this.closeCalendarOnClickOutside); // <-- Hapus
         } else {
             this.renderCalendar(); 
             calendarPopup.style.display = 'block';
-            // setTimeout(...); // <-- Hapus
         }
     },
     
-    // Hapus fungsi closeCalendarOnClickOutside, diganti listener global
-    // closeCalendarOnClickOutside: function(event) { ... },
-    // --- Akhir Refaktor ---
-    
     renderCalendar: function() {
-            if (!calendarGrid || !calendarMonthYear) return;
+            // Ambil elemen dari 'this.elements'
+            const { calendarGrid, calendarMonthYear } = this.elements;
+            if (!calendarGrid || !calendarMonthYear) {
+                 console.error("calendarGrid atau calendarMonthYear belum di-init.");
+                return;
+            }
+
             const predictedStartDate = timeManager.getPredictedStartDate();
             if (!predictedStartDate) {
                 calendarGrid.innerHTML = '<div style="grid-column: span 7; color: #f00; padding: 10px; text-align: center;">Error: Tanggal awal prediksi belum siap.</div>';
@@ -40,7 +53,11 @@ export const calendarManager = {
             this._buildCalendarHeaders();
             this._buildCalendarGrid();
     },
+
     _buildCalendarHeaders: function() {
+            const { calendarGrid } = this.elements; // Ambil dari elements
+            if (!calendarGrid) return;
+
             const daysHeader = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
             daysHeader.forEach(day => { 
                 const h = document.createElement('div'); 
@@ -49,7 +66,11 @@ export const calendarManager = {
                 calendarGrid.appendChild(h); 
             });
     },
+
     _buildCalendarGrid: function() {
+            const { calendarGrid } = this.elements; // Ambil dari elements
+            if (!calendarGrid) return;
+
             const displayMonth = this._displayMonth;
             const displayYear = this._displayYear;
             const lookup = timeManager.getGlobalTimeLookup();
@@ -59,6 +80,7 @@ export const calendarManager = {
             const getLocalDateString = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             const startDate = useRealData ? new Date(lookup[0].split('T')[0] + "T00:00:00") : new Date(predictedStartDate);
             const endDate = useRealData ? new Date(lookup[lookup.length - 1].split('T')[0] + "T00:00:00") : new Date(predictedStartDate);
+            
             if (!useRealData) {
                 endDate.setHours(endDate.getHours() + 335); 
             }
@@ -68,7 +90,7 @@ export const calendarManager = {
             if (useRealData && selectedTimeIndex >= 0 && selectedTimeIndex < lookup.length) {
                 selectedDateStr = lookup[selectedTimeIndex].split('T')[0];
             } else {
-                const predDate = utils.getPredictedDateFromIndex(selectedTimeIndex);
+                const predDate = timeManager.getPredictedDateFromIndex(selectedTimeIndex);
                 selectedDateStr = predDate ? getLocalDateString(predDate) : null;
             }
             const todayStr = getLocalDateString(new Date());
@@ -100,7 +122,9 @@ export const calendarManager = {
             }
             calendarGrid.appendChild(fragment);
     },
+
     _createCalendarCell: function(day, dateStr, startDateStr, endDateStr, todayStr, selectedDateStr, lookup, useRealData, predictedStartDate) {
+        // Fungsi ini tidak memiliki dependensi DOM global, jadi aman.
         const dateButton = document.createElement('button');
         dateButton.className = 'calendar-date';
         dateButton.textContent = day;
@@ -137,20 +161,21 @@ export const calendarManager = {
         }
         return dateButton;
     },
+
     handleCalendarDateClick: function(targetIndex) {
+        // Fungsi ini aman
         console.log("Calendar date clicked, target index (predicted for ~12:00):", targetIndex);
         const currentHourInDay = timeManager.getSelectedTimeIndex() >= 0 ? (timeManager.getSelectedTimeIndex() % 24) : new Date().getHours(); 
         const targetDayIndex = Math.floor(targetIndex / 24); 
         const newIndex = (targetDayIndex * 24) + currentHourInDay;
         
-        // --- REFAKTOR (Rencana 3.2.2) ---
-        // Panggil toggleCalendar alih-alih memanipulasi style secara manual
-        this.toggleCalendar();
-        // --- Akhir Refaktor ---
+        this.toggleCalendar(); // Panggil metode internal
         
         timeManager.handleTimeChange(newIndex); 
     },
+
     changeCalendarMonth: function(direction) {
+        // Fungsi ini aman
         let newMonth = this._displayMonth + direction;
         let newYear = this._displayYear;
         if (newMonth < 0) {
