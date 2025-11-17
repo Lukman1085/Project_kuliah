@@ -1,0 +1,210 @@
+import { utils } from "./utilities";
+import { popupManager } from "./popup_manager";
+import { timeManager } from "./time_manager";
+import { mapManager } from "./map_manager";
+
+/** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
+export const sidebarManager = { 
+    // (Tidak ada perubahan di ronde refaktor ini)
+    _isSidebarOpen: false,
+    _timeEl: null, _iconEl: null, _tempEl: null, _descEl: null,
+    _feelsLikeEl: null, _humidityEl: null, _precipEl: null, _windEl: null,
+    _dailyListEl: null,
+    isOpen: function() {
+        return this._isSidebarOpen;
+    },
+    openSidebar: function() {
+        if (!sidebarEl || !toggleBtnEl || this._isSidebarOpen) return;
+        mapManager.removeActiveMarkerHighlight(); 
+        sidebarEl.classList.add('sidebar-open');
+        this._isSidebarOpen = true;
+        toggleBtnEl.innerHTML = '&lt;';
+        toggleBtnEl.setAttribute('aria-label', 'Tutup detail lokasi');
+        this.renderSidebarContent(); 
+        mapManager.setActiveMarkerHighlight(mapManager.getActiveLocationId()); 
+    },
+    closeSidebar: function() {
+        if (!sidebarEl || !toggleBtnEl || !this._isSidebarOpen) return;
+        sidebarEl.classList.remove('sidebar-open');
+        this._isSidebarOpen = false;
+        toggleBtnEl.innerHTML = '&gt;';
+        toggleBtnEl.setAttribute('aria-label', 'Buka detail lokasi');
+        const activeId = mapManager.getActiveLocationId();
+        if (!activeId) { return } 
+        mapManager.removeActiveMarkerHighlight(activeId); 
+    },
+    toggleSidebar: function() { 
+        if (this._isSidebarOpen) this.closeSidebar(); else this.openSidebar(); 
+    },
+        openSidebarFromPopup: function() {
+            if (!this._isSidebarOpen) { this.openSidebar(); } 
+            else { if (sidebarContentEl) sidebarContentEl.scrollTop = 0; }
+            popupManager.close(true); 
+        },
+    _hideAllSidebarSections: function() {
+        sidebarPlaceholderEl.style.display = 'none';
+        sidebarLoadingEl.style.display = 'none';
+        sidebarWeatherDetailsEl.style.display = 'none';
+        sidebarProvinceDetailsEl.style.display = 'none';
+    },
+    _renderSidebarLoadingState: function() {
+        sidebarLoadingEl.style.display = 'block';
+        sidebarLocationNameEl.textContent = `Memuat ${mapManager.getActiveLocationSimpleName() || 'lokasi'}...`;
+    },
+    _renderSidebarPlaceholderState: function() {
+        sidebarPlaceholderEl.textContent = 'Pilih satu wilayah di peta.';
+        sidebarPlaceholderEl.style.display = 'block';
+        sidebarLocationNameEl.textContent = 'Detail Lokasi';
+    },
+    _renderSidebarErrorState: function(message) {
+            sidebarPlaceholderEl.textContent = message || `Data cuaca untuk ${mapManager.getActiveLocationLabel()} belum dimuat atau tidak lengkap.`;
+            sidebarPlaceholderEl.style.display = 'block';
+            sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName() || 'Detail Lokasi';
+            if (!mapManager.getActiveLocationId()) {
+                sidebarLocationNameEl.textContent = 'Detail Lokasi';
+                sidebarPlaceholderEl.textContent = 'Terjadi kesalahan.';
+            }
+    },
+    _renderSidebarProvinceState: function() {
+            const container = sidebarProvinceDetailsEl;
+            container.innerHTML = ''; 
+            const labelEl = document.createElement('div');
+            labelEl.className = 'location-label-subtitle'; 
+            labelEl.id = 'sidebar-location-label-province'; 
+            labelEl.textContent = mapManager.getActiveLocationLabel();
+            container.appendChild(labelEl);
+            const infoEl = document.createElement('p');
+            infoEl.textContent = '(Detail informasi provinsi akan ditampilkan di sini.)';
+            infoEl.style.textAlign = 'center';
+            infoEl.style.marginTop = '20px';
+            container.appendChild(infoEl);
+            container.style.display = 'block';
+            sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName();
+    },
+    _createDailyForecastItem: function(date, code, maxT, minT, timeZone) {
+        const { deskripsi, ikon } = utils.getWeatherInfo(code, 1);
+        const item = document.createElement('div');
+        item.className = 'daily-forecast-item';
+        const daySpan = document.createElement('span');
+        daySpan.className = 'daily-day';
+        daySpan.textContent = utils.formatDayOnly(date, timeZone);
+        const iconEl = document.createElement('i');
+        iconEl.className = `daily-icon ${ikon}`;
+        const descSpan = document.createElement('span');
+        descSpan.className = 'daily-desc';
+        descSpan.textContent = deskripsi;
+        const tempSpan = document.createElement('span');
+        tempSpan.className = 'daily-temp';
+        tempSpan.textContent = `${maxT.toFixed(1)}° / ${minT.toFixed(1)}°`;
+        item.appendChild(daySpan);
+        item.appendChild(iconEl);
+        item.appendChild(descSpan);
+        item.appendChild(tempSpan);
+        return item;
+    },
+    _renderSidebarWeatherState: function() {
+        sidebarWeatherDetailsEl.style.display = 'block';
+        sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName();
+        const labelEl = sidebarEl.querySelector('#sidebar-location-label-weather');
+        if (labelEl) {
+            labelEl.textContent = mapManager.getActiveLocationLabel();
+        }
+        const activeData = mapManager.getActiveLocationData();
+        if (!activeData) {
+            this._renderSidebarErrorState("Data lokasi aktif tidak ditemukan.");
+            return;
+        }
+        const daily = activeData.daily;
+        const timeZone = activeData.timezone;
+        const listContainer = this._dailyListEl;
+        listContainer.innerHTML = ''; 
+        if (daily?.time) {
+            const getLocalDateString = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const todayStr = getLocalDateString(new Date());
+            const todayIndex = daily.time.indexOf(todayStr);
+            const startIndex = (todayIndex !== -1) ? todayIndex : 0;
+            const endIndex = Math.min(startIndex + 7, daily.time.length);
+            const fragment = document.createDocumentFragment();
+            for (let i = startIndex; i < endIndex; i++) {
+                const date = daily.time[i], code = daily.weather_code?.[i], maxT = daily.temperature_2m_max?.[i], minT = daily.temperature_2m_min?.[i];
+                if (date === undefined || code === undefined || maxT === undefined || minT === undefined) continue;
+                const itemEl = this._createDailyForecastItem(date, code, maxT, minT, timeZone);
+                fragment.appendChild(itemEl);
+            }
+            listContainer.appendChild(fragment); 
+        } else { 
+            const p = document.createElement('p');
+            const i = document.createElement('i');
+            i.textContent = 'Data harian tidak tersedia.';
+            p.appendChild(i);
+            listContainer.appendChild(p);
+        }
+        const idx = timeManager.getSelectedTimeIndex();
+        const lookup = timeManager.getGlobalTimeLookup();
+            if (idx >= 0 && idx < lookup.length) {
+                const timeStr = lookup[idx];
+                this.updateUIForTime(idx, timeStr, activeData);
+            } else {
+                this.updateCurrentConditions(null, null, null);
+            }
+    },
+    renderSidebarContent: function() {
+            if (!this._isSidebarOpen || !sidebarContentEl || !sidebarPlaceholderEl || !sidebarLoadingEl || !sidebarWeatherDetailsEl || !sidebarProvinceDetailsEl || !sidebarLocationNameEl) { return; }
+        this._hideAllSidebarSections();
+        sidebarLocationNameEl.textContent = 'Detail Lokasi'; // Default
+        const lblWeather = sidebarEl.querySelector('#sidebar-location-label-weather');
+        const lblProvince = sidebarEl.querySelector('#sidebar-location-label-province');
+        if (lblWeather) lblWeather.textContent = '';
+        if (lblProvince) lblProvince.textContent = '';
+        if (mapManager.getIsClickLoading()) { 
+            this._renderSidebarLoadingState();
+        } else if (!mapManager.getActiveLocationId()) { 
+            this._renderSidebarPlaceholderState();
+        } else if (mapManager.getActiveLocationData()?.type === 'provinsi') { 
+                this._renderSidebarProvinceState();
+        } else if (mapManager.getActiveLocationData()?.hourly && timeManager.getGlobalTimeLookup().length > 0) { 
+            this._renderSidebarWeatherState();
+        } else if (mapManager.getActiveLocationId()) { 
+                const msg = (timeManager.getGlobalTimeLookup().length > 0) 
+                    ? `Data cuaca untuk ${mapManager.getActiveLocationLabel()} tidak lengkap atau rusak.`
+                    : `Data cuaca untuk ${mapManager.getActiveLocationLabel()} belum dimuat.`; 
+                this._renderSidebarErrorState(msg);
+        } else { 
+                this._renderSidebarErrorState('Terjadi kesalahan.');
+        }
+    },
+    updateCurrentConditions: function(dataPoint, formattedTime, weatherInfo) {
+        if (dataPoint && formattedTime && weatherInfo) {
+            this._timeEl.textContent = formattedTime;
+            this._iconEl.className = weatherInfo.ikon;
+            this._tempEl.textContent = `${dataPoint.suhu?.toFixed(1) ?? '-'}°C`;
+            this._descEl.textContent = weatherInfo.deskripsi;
+            this._feelsLikeEl.textContent = `Terasa ${dataPoint.terasa?.toFixed(1) ?? '-'}°C`;
+            this._humidityEl.textContent = `Kelembapan: ${dataPoint.kelembapan ?? '-'}%`;
+            this._precipEl.textContent = `Presipitasi: ${dataPoint.prob_presipitasi ?? '-'}%`;
+            this._windEl.textContent = `Angin: ${dataPoint.kecepatan_angin_10m ?? '-'} m/s dari arah ${dataPoint.arah_angin_10m ?? '-'}°`;
+        } else {
+            this._timeEl.textContent = '...';
+            this._iconEl.className = 'wi wi-na';
+            this._tempEl.textContent = '-°C';
+            this._descEl.textContent = '...';
+            this._feelsLikeEl.textContent = 'Terasa ...°C';
+            this._humidityEl.textContent = 'Kelembapan: ...%';
+            this._precipEl.textContent = 'Presipitasi: ...%';
+            this._windEl.textContent = 'Angin: ... m/s';
+        }
+    },
+    updateUIForTime: function(idxGlobal, localTimeString, activeData) {
+        if (!this._isSidebarOpen || !activeData || !activeData.hourly?.time) {
+            return;
+        }
+        try {
+            const hourly = activeData.hourly;
+            if (idxGlobal >= hourly.time.length) return; 
+            const formattedTime = utils.formatLocalTimestampString(localTimeString); 
+            const dataPoint = utils.extractHourlyDataPoint(hourly, idxGlobal);
+            const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
+            this.updateCurrentConditions(dataPoint, formattedTime, { deskripsi, ikon });
+        } catch (e) { console.warn("Error updating sidebar DOM:", e); }
+    }
+};

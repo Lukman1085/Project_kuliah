@@ -1,0 +1,89 @@
+/* Container utama (Navigasi & Skala) */
+.maplibregl-ctrl-group {
+    background-color: rgba(255, 255, 255, 0.98);
+    border-radius: 8px !important; /* Timpa default */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    /* MapLibre menambahkan margin 10px by default, itu oke */
+}
+
+/* Tombol di dalam grup navigasi */
+.maplibregl-ctrl-group button {
+    background-color: transparent;
+    transition: background-color 0.2s;
+    width: 32px !important; /* Paksa ukuran */
+    height: 32px !important; /* Paksa ukuran */
+}
+
+.maplibregl-ctrl-group button:hover {
+    background-color: #f0f0f0;
+}
+
+/* Radius untuk tombol pertama dan terakhir */
+.maplibregl-ctrl-group button:first-child {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+.maplibregl-ctrl-group button:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+/* Garis pemisah di grup navigasi */
+.maplibregl-ctrl-group button + button {
+    border-top: 1px solid #ddd;
+}
+
+/* Ikon di dalam tombol (compass, zoom) */
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+    opacity: 0.8;
+}
+
+/* Kontrol Skala (di bottom-left) */
+.maplibregl-ctrl-scale {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    padding: 2px 8px !important;
+    border-radius: 3px !important;
+    font-family: sans-serif !important;
+    font-size: 12px !important;
+    color: #333 !important;
+    border: 1px solid #ccc !important;
+    margin-bottom: 10px !important; /* Samakan dengan #koordinat-info */
+    margin-left: 10px !important;
+}
+
+
+/* ======================================================= */
+/* --- CSS BARU (TAMBAHAN INI) --- */
+/* ======================================================= */
+
+/* 3. Styling untuk TOMBOL RESET PITCH KUSTOM */
+.maplibregl-ctrl-pitch-reset {
+    /* Style diwarisi dari `.maplibregl-ctrl-group button` */
+    /* (width, height, background-color, transition) */
+    
+    /* Pastikan tidak ada border atau padding default */
+    padding: 0;
+    border: none;
+    
+    /* Karena ini adalah satu-satunya tombol di grupnya, 
+      ia akan secara otomatis mendapatkan 4 sudut bulat 
+      dari rules `:first-child` dan `:last-child` 
+      yang sudah kita definisikan di atas.
+    */
+}
+
+/* Target SVG di dalam tombol kustom kita */
+.maplibregl-ctrl-pitch-reset svg {
+    /* Warna dan opasitas ikon agar serasi */
+    fill: #333;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+    /* Centering (display: block; margin: auto;) 
+      sudah ditambahkan inline di JS 
+    */
+}
+
+/* Efek hover pada tombol kustom */
+.maplibregl-ctrl-pitch-reset:hover svg {
+    opacity: 1;
+}

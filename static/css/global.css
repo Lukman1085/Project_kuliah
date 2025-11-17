@@ -1,0 +1,89 @@
+body { margin: 0; padding: 0; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1;}
+
+/* MODIFIKASI: Dipindahkan ke atas ScaleControl baru */
+#koordinat-info {
+    position: absolute; 
+    bottom: 35px; /* <-- MODIFIKASI: Pindahkan ke atas ScaleControl */
+    left: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 5px 10px; border-radius: 3px;
+    font-family: sans-serif; font-size: 12px; z-index: 1;
+}
+
+/* ===== PERBAIKAN UNTUK MASALAH JITTER (MASALAH 1) ===== */
+#global-loading-spinner {
+    position: fixed; /* 1. Keluarkan dari alur dokumen (layout) */
+    top: 10px;
+    right: 10px;
+    z-index: 2000;  /* 2. Pastikan di atas elemen peta dan UI lain */
+    
+    /* 3. Styling agar terlihat bagus */
+    background-color: rgba(40, 40, 40, 0.85);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-family: sans-serif;
+    font-size: 13px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    
+    /* 4. Sembunyikan di awal. JS (appState.isLoading) akan menampilkannya saat perlu. */
+    display: none; 
+}
+/* ======================================================= */
+
+.cluster-popup-content { max-height: 200px; overflow-y: auto; }
+.cluster-item { padding: 4px; cursor: pointer; }
+.cluster-item:hover { background-color: #f0f0f0; }
+.maplibregl-popup-content { font-family: sans-serif; font-size: 14px; }
+
+/* CSS untuk Popup */
+.weather-popup-content {
+    font-family: sans-serif;
+    font-size: 14px;
+    min-width: 240px;
+}
+.weather-popup-content b { font-size: 16px; }
+.popup-current-weather {
+    display: flex;
+    align-items: center;
+    margin: 8px 0;
+}
+.popup-current-weather i {
+    font-size: 2.5em; /* Perbesar ikon popup */
+    margin-right: 12px;
+}
+.popup-details div { margin-bottom: 3px; }
+.popup-actions { margin-top: 10px; }
+.popup-actions button {
+    cursor: pointer;
+    width: 100%;
+    padding: 8px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: white;
+}
+.popup-actions button:hover { background-color: #0056b3; }
+
+/* Teks Presipitasi & Ikon Cuaca (Tetap) */
+.map-precip-text { font-family: sans-serif; font-size: 10px; font-weight: bold; line-height: 1; }
+.map-weather-icon { font-size: 14px; line-height: 1; }
+
+
+/* ======================================================= */
+/* --- CSS YANG SUDAH ADA (DARI LANGKAH SEBELUMNYA) --- */
+/* ======================================================= */
+
+/* 1. Style untuk sub-judul label hierarki di sidebar */
+.location-label-subtitle {
+    font-size: 0.9rem;
+    font-style: italic;
+    color: #666; /* Sedikit lebih redup */
+    text-align: center;
+    padding: 0 10px; /* Agar tidak menempel di tepi */
+    margin-bottom: 15px; /* Jarak ke blok "current conditions" */
+    line-height: 1.4;
+}
+

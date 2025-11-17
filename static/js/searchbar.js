@@ -1,62 +1,97 @@
-// Tunggu sampai semua elemen HTML dimuat
-document.addEventListener('DOMContentLoaded', () => {
+import { sidebarManager } from "./sidebar_manager";
+import { mapManager } from "./map_manager";
 
-    // --- DATA CONTOH ---
-    // Ganti ini dengan data dari API Anda nanti
-    const daftarLokasi = [
-        "Jakarta", "Jayapura", "Surabaya", "Bandung", "Medan", 
-        "Semarang", "Makassar", "Palembang", "Denpasar", "Banjarmasin"
-    ];
+// --- FUNGSI-FUNGSI UNTUK SEARCH BAR ---
+/** 🔍 Aksi yang terjadi saat hasil pencarian di-klik */
+function handleSuggestionClick(lokasi) {
+    searchInput.value = ''; 
+    suggestionsDropdown.innerHTML = '';
+    suggestionsDropdown.style.display = 'none';
+    searchInput.blur(); 
 
-    // Ambil elemen-elemen yang kita butuhkan
-    const searchInput = document.getElementById('search-bar'); // ID dari HTML Anda
-    const suggestionsDropdown = document.getElementById('suggestions-dropdown'); // ID baru
+    let zoom = 10; 
+    const tipadm = parseInt(lokasi.tipadm, 10);
+    if (tipadm === 1) { zoom = 7; }       
+    else if (tipadm === 2) { zoom = 9; } 
+    else if (tipadm === 3) { zoom = 11; } 
+    else if (tipadm === 4) { zoom = 14; } 
+    
+    console.log(`Search click: ${lokasi.nama_label} (TIPADM: ${tipadm}), zooming to ${zoom}`);
 
-    // Event listener saat pengguna mengetik
-    searchInput.addEventListener('input', function() {
-        const inputText = this.value.toLowerCase();
-        suggestionsDropdown.innerHTML = ''; // Bersihkan hasil lama
+    if (map) {
+        map.easeTo({
+            center: [lokasi.lon, lokasi.lat],
+            zoom: zoom
+        });
+    }
 
-        if (inputText.length === 0) {
-            suggestionsDropdown.style.display = 'none';
-            return;
-        }
-
-        // Filter data
-        const hasilFilter = daftarLokasi.filter(lokasi => 
-            lokasi.toLowerCase().startsWith(inputText)
-        );
-
-        // Tampilkan hasil
-        if (hasilFilter.length > 0) {
-            hasilFilter.forEach(lokasi => {
-                const item = document.createElement('div');
-                item.className = 'suggestion-item';
-                item.textContent = lokasi;
-
-                // Event saat item di-klik
-                item.addEventListener('click', () => {
-                    searchInput.value = lokasi;
-                    suggestionsDropdown.style.display = 'none';
-                    // Panggil fungsi pencarian Anda di sini
-                    // console.log('Mencari cuaca untuk: ' + lokasi);
-                });
+    const props = {
+        id: lokasi.id,
+        nama_simpel: lokasi.nama_simpel,
+        nama_label: lokasi.nama_label,
+        lat: lokasi.lat,
+        lon: lokasi.lon
+    };
+    
+    if (mapManager) {
+        setTimeout(() => {
+                mapManager.handleUnclusteredClick(props);
                 
-                suggestionsDropdown.appendChild(item);
-            });
+                // --- REFAKTOR (Proyek 2.2) ---
+                // Dekopling: Memancarkan event, alih-alih memanggil sidebarManager
+                if (!sidebarManager.isOpen() && sidebarManager) {
+                console.log("Search click: Meminta sidebar dibuka.");
+                // sidebarManager.openSidebar(); // <-- Dihapus
+                document.dispatchEvent(new CustomEvent('requestSidebarOpen'));
+                }
+                // --- Akhir Refaktor ---
+        }, 500); 
+    }
+}
 
-            suggestionsDropdown.style.display = 'block';
-        } else {
-            suggestionsDropdown.style.display = 'none';
-        }
+/** 🔍 Merender hasil pencarian ke dropdown */
+function renderSuggestions(results) {
+    suggestionsDropdown.innerHTML = '';
+    if (!results) {
+        suggestionsDropdown.style.display = 'none';
+        return;
+    }
+    if (results.length === 0) {
+        suggestionsDropdown.innerHTML = '<div class="suggestion-item-none">Lokasi tidak ditemukan</div>';
+        suggestionsDropdown.style.display = 'block';
+        return;
+    }
+    results.forEach(lokasi => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.textContent = lokasi.nama_label; 
+        item.dataset.id = lokasi.id;
+        item.dataset.nama_simpel = lokasi.nama_simpel; 
+        item.dataset.nama_label = lokasi.nama_label; 
+        item.dataset.lat = lokasi.lat;
+        item.dataset.lon = lokasi.lon;
+        item.dataset.tipadm = lokasi.tipadm; 
+        item.addEventListener('click', () => {
+            handleSuggestionClick(lokasi);
+        });
+        suggestionsDropdown.appendChild(item);
     });
+    suggestionsDropdown.style.display = 'block';
+}
 
-    // Sembunyikan dropdown jika klik di luar
-    document.addEventListener('click', function(e) {
-        // Jika yang diklik BUKAN di dalam #search-wrapper
-        if (!document.getElementById('search-wrapper').contains(e.target)) {
-            suggestionsDropdown.style.display = 'none';
-        }
-    });
+/** 🔍 Mengambil data lokasi dari backend */
+export async function fetchLokasi(query) {
+    try {
+        const resp = await fetch(`${baseUrl}/api/cari-lokasi?q=${encodeURIComponent(query)}`);
+        if (!resp.ok) throw new Error('Network response was not ok');
+        const results = await resp.json();
+        renderSuggestions(results);
+    } catch (e) {
+        console.error("Search fetch error:", e);
+        suggestionsDropdown.innerHTML = '<div class="suggestion-item-error">Gagal memuat hasil</div>';
+        suggestionsDropdown.style.display = 'block';
+    }
+}
 
-});
+
+
