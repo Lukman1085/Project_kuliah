@@ -189,3 +189,57 @@
 #sidebar-daily-forecast-list::-webkit-scrollbar-thumb:hover {
     background: #aaa;
 }
+
+/* ===== STYLE BARU DITAMBAHKAN DI SINI ===== */
+#sidebar-sub-region-container {
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+}
+
+#sidebar-sub-region-container h3 {
+    /* Style h3 mungkin sudah ada, ini opsional */
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    padding-left: 5px; /* Sedikit padding jika perlu */
+}
+
+#sidebar-sub-region-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Jarak antar item */
+}
+
+.sub-region-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+}
+
+.sub-region-item-name {
+    flex-grow: 1;
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.sub-region-item-icon {
+    font-size: 1.5rem;
+    color: #555;
+    margin-left: 10px;
+    margin-right: 5px;
+    min-width: 30px; /* Jaga agar ikon rapi */
+    text-align: center;
+}
+
+.sub-region-item-temp {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #000;
+    min-width: 50px; /* Jaga agar suhu rapi */
+    text-align: right;
+}
+/* ===== AKHIR STYLE BARU ===== */
