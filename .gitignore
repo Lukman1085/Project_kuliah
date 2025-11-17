@@ -1,5 +1,7 @@
 venv/
 
+/legacy_file
+
 *.pyc
 *.pem
 personal_notes.md
