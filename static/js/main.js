@@ -63,6 +63,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('search-bar');
     const suggestionsDropdown = document.getElementById('suggestions-dropdown');
 
+    // MODIFIKASI: Ambil elemen UI baru untuk sub-wilayah
+    const subRegionContainerEl = document.getElementById('sidebar-sub-region-container');
+    const subRegionTitleEl = document.getElementById('sidebar-sub-region-title');
+    const subRegionLoadingEl = document.getElementById('sidebar-sub-region-loading');
+    const subRegionListEl = document.getElementById('sidebar-sub-region-list');
+
     // ================================================================
     // 2. Inisialisasi Manajer (Dependency Injection)
     // ================================================================
@@ -78,7 +84,13 @@ document.addEventListener('DOMContentLoaded', function() {
         sidebarLoadingEl, 
         sidebarWeatherDetailsEl, 
         sidebarProvinceDetailsEl,
-        sidebarEl // Kirim elemen 'sidebarEl' lagi untuk referensi umum jika perlu
+        sidebarEl, // Kirim elemen 'sidebarEl' lagi untuk referensi umum jika perlu
+
+        // MODIFIKASI: Tambahkan elemen baru ke injeksi
+        subRegionContainerEl,
+        subRegionTitleEl,
+        subRegionLoadingEl,
+        subRegionListEl
     });
 
     // Kirim elemen-elemen detail cuaca ke sidebarManager
@@ -278,12 +290,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 mapManager.handleProvinceClick(props, coordinates); 
             }
             else if (layerId === 'unclustered-point-temp-circle') {
+                // MODIFIKASI: Pastikan 'tipadm' diteruskan
                 const dataUntukHandler = { 
                     id: feature.id, 
                     nama_simpel: props.nama_simpel, 
                     nama_label: props.nama_label, 
                     lat: coordinates[1], 
-                    lon: coordinates[0] 
+                    lon: coordinates[0],
+                    tipadm: props.tipadm // <-- Ambil 'tipadm' dari properti fitur
                 };
                 mapManager.handleUnclusteredClick(dataUntukHandler);
             }

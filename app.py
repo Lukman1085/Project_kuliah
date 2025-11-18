@@ -210,17 +210,16 @@ def process_wilayah_data(wilayah_list):
 
     for info in wilayah_list:
         wilayah_id = info["id"]
-        data_to_store = {
-            "id": info["id"],
-            "lat": info["lat"],
-            "lon": info["lon"],
-            "nama_simpel": info.get("nama_simpel"),
-            "nama_label": info.get("nama_label")
-        }
+        # Pastikan kita meneruskan semua info yang diterima
+        data_to_store = {**info}
+        # Hapus data geo yang tidak perlu disimpan di cache
+        data_to_store.pop('lat', None)
+        data_to_store.pop('lon', None)
+
 
         if wilayah_id in WEATHER_CACHE and (current_time - WEATHER_CACHE[wilayah_id]['timestamp'] < CACHE_TTL):
             weather_data = WEATHER_CACHE[wilayah_id]['data']
-            final_data[wilayah_id] = {**data_to_store, **weather_data}
+            final_data[wilayah_id] = {**info, **weather_data} # Gabungkan info asli (dgn lat/lon) + data cache
         else:
             ids_to_fetch_info.append(info) 
     
@@ -231,7 +230,7 @@ def process_wilayah_data(wilayah_list):
             if wilayah_id in new_weather_data_map:
                 weather_data = new_weather_data_map[wilayah_id]
                 WEATHER_CACHE[wilayah_id] = {"data": weather_data, "timestamp": current_time}
-                final_data[wilayah_id] = {**info, **weather_data}
+                final_data[wilayah_id] = {**info, **weather_data} # Gabungkan info asli (dgn lat/lon) + data baru
 
     return final_data
 
@@ -251,9 +250,10 @@ def get_provinsi_info():
                 "WADMPR" as nama_simpel, 
                 "WADMPR" as nama_label, 
                 latitude as lat, 
-                longitude as lon
+                longitude as lon,
+                "TIPADM" as tipadm
             FROM batas_provinsi
-            WHERE "KDPPUM" IS NOT NULL AND "WADMPR" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+            WHERE "KDPPUM" IS NOT NULL AND "WADMPR" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL AND "TIPADM" = 1;
         """)
         result = session.execute(query)
         provinsi_info = [dict(row) for row in result.mappings()]
@@ -276,7 +276,6 @@ def cari_lokasi():
 
     session = Session()
     try:
-        # Kueri CASE...WHEN ini sudah benar dari perbaikan sebelumnya
         query = text("""
             SELECT 
                 CASE "TIPADM"
@@ -345,7 +344,8 @@ def get_data_cuaca():
                     t1."WADMKK" as nama_simpel,
                     COALESCE(t2.label, t1."WADMKK") as nama_label,
                     t1.latitude as lat,
-                    t1.longitude as lon
+                    t1.longitude as lon,
+                    t1."TIPADM" as tipadm
                 FROM batas_kabupatenkota AS t1
                 LEFT JOIN wilayah_administratif AS t2
                     ON t1."KDPKAB" = t2."KDPKAB" AND t2."TIPADM" = 2
@@ -361,7 +361,8 @@ def get_data_cuaca():
                     t1."WADMKC" as nama_simpel,
                     COALESCE(t2.label, t1."WADMKC") as nama_label,
                     t1.latitude as lat,
-                    t1.longitude as lon
+                    t1.longitude as lon,
+                    t1."TIPADM" as tipadm
                 FROM batas_kecamatandistrik AS t1
                 LEFT JOIN wilayah_administratif AS t2
                     ON t1."KDCPUM" = t2."KDCPUM" AND t2."TIPADM" = 3
@@ -370,9 +371,6 @@ def get_data_cuaca():
                     AND t1."KDCPUM" IS NOT NULL;
             """)
         else:
-            # **MODIFIKASI**: Zoom 14+ (jika terjadi) harusnya menampilkan Kelurahan.
-            # Namun, kita tidak punya layer 'batas_kelurahan' di mbtiles, 
-            # jadi kita biarkan ini kosong agar tidak ada marker.
             return jsonify([])
 
         result = session.execute(query, {"bbox_wkt": bbox_wkt})
@@ -386,6 +384,78 @@ def get_data_cuaca():
         return jsonify({"error": "Internal server error"}), 500
     finally:
         session.close()
+
+# ===== ENDPOINT BARU UNTUK FITUR INI =====
+@app.route('/api/sub-wilayah-cuaca')
+def get_sub_wilayah_cuaca():
+    session = Session()
+    try:
+        parent_id = request.args.get('id')
+        parent_tipadm_str = request.args.get('tipadm')
+
+        if not parent_id or not parent_tipadm_str:
+            return jsonify({"error": "Parameter 'id' dan 'tipadm' diperlukan"}), 400
+        
+        if not ID_REGEX.match(parent_id):
+             return jsonify({"error": "ID induk tidak valid"}), 400
+
+        parent_tipadm = int(parent_tipadm_str)
+        target_tipadm = parent_tipadm + 1
+
+        query_text = None
+        # Gunakan pencocokan ID langsung, bukan LIKE
+        params = {"parent_id": parent_id} 
+
+        if target_tipadm == 2: # Induk = Provinsi (1), Anak = Kab/Kota (2)
+            query_text = """
+                SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
+                FROM wilayah_administratif
+                WHERE "TIPADM" = 2 AND "KDPPUM" = :parent_id
+                AND "KDPKAB" IS NOT NULL AND "WADMKK" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+            """
+        elif target_tipadm == 3: # Induk = Kab/Kota (2), Anak = Kecamatan (3)
+            query_text = """
+                SELECT "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
+                FROM wilayah_administratif
+                WHERE "TIPADM" = 3 AND "KDPKAB" = :parent_id
+                AND "KDCPUM" IS NOT NULL AND "WADMKC" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+            """
+        elif target_tipadm == 4: # Induk = Kecamatan (3), Anak = Kel/Desa (4)
+            query_text = """
+                SELECT "KDEPUM" as id, "WADMKD" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
+                FROM wilayah_administratif
+                WHERE "TIPADM" = 4 AND "KDCPUM" = :parent_id
+                AND "KDEPUM" IS NOT NULL AND "WADMKD" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+            """
+        
+        if query_text:
+            query = text(query_text)
+            result = session.execute(query, params)
+            # Buat daftar info sub-wilayah (hanya geo dan nama)
+            sub_wilayah_info = [dict(row) for row in result.mappings()]
+            
+            if not sub_wilayah_info:
+                print(f"Tidak ditemukan sub-wilayah untuk {parent_id} (TIPADM {parent_tipadm})")
+                return jsonify([]) # Kembalikan list kosong jika tidak ada anak
+
+            # Gunakan ulang fungsi process_wilayah_data untuk mendapatkan data cuaca
+            # Ini akan otomatis menangani caching dan panggilan API (nyata atau dummy)
+            print(f"Memproses data cuaca untuk {len(sub_wilayah_info)} sub-wilayah...")
+            data_cuaca_lengkap = process_wilayah_data(sub_wilayah_info)
+            
+            # Kembalikan sebagai list, urutkan berdasarkan nama
+            sorted_data = sorted(data_cuaca_lengkap.values(), key=lambda x: x.get('nama_simpel', ''))
+            return jsonify(sorted_data)
+        else:
+            # Jika induk adalah Kelurahan (TIPADM 4) atau tidak valid
+            return jsonify([])
+
+    except Exception as e:
+        print(f"Error in /api/sub-wilayah-cuaca: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        session.close()
+# ===== AKHIR ENDPOINT BARU =====
 
 @app.route('/api/data-by-ids')
 def get_data_by_ids():
@@ -408,19 +478,18 @@ def get_data_by_ids():
 
         ids_tuple_str = f"({','.join(list_of_ids_validated)})"
 
-        # **MODIFIKASI**: Menambahkan `UNION ALL` untuk `TIPADM=4`
-        # dan `LEFT JOIN` yang sesuai.
         query = text(f"""
             SELECT
                 combined.id,
                 combined.nama_simpel,
                 COALESCE(wa.label, combined.nama_simpel) as nama_label,
                 combined.lat,
-                combined.lon
+                combined.lon,
+                combined.tipadm
             FROM (
                 -- TIPADM 1 (Provinsi)
                 SELECT 
-                    "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, 
+                    "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm,
                     "KDPPUM" as j_prov, NULL as j_kab, NULL as j_kec, NULL as j_kel 
                 FROM batas_provinsi 
                 WHERE "KDPPUM" IN {ids_tuple_str}
@@ -429,7 +498,7 @@ def get_data_by_ids():
                 
                 -- TIPADM 2 (Kab/Kota)
                 SELECT 
-                    "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, 
+                    "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm,
                     NULL as j_prov, "KDPKAB" as j_kab, NULL as j_kec, NULL as j_kel 
                 FROM batas_kabupatenkota 
                 WHERE "KDPKAB" IN {ids_tuple_str}
@@ -438,37 +507,34 @@ def get_data_by_ids():
                 
                 -- TIPADM 3 (Kecamatan)
                 SELECT 
-                    "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, 
+                    "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm,
                     NULL as j_prov, NULL as j_kab, "KDCPUM" as j_kec, NULL as j_kel 
                 FROM batas_kecamatandistrik 
                 WHERE "KDCPUM" IN {ids_tuple_str}
                 
                 UNION ALL
                 
-                -- **INI PERBAIKANNYA**
                 -- TIPADM 4 (Kel/Desa) - Ambil langsung dari tabel wilayah_administratif
                 SELECT 
-                    "KDEPUM" as id, "WADMKD" as nama_simpel, latitude as lat, longitude as lon, 
+                    "KDEPUM" as id, "WADMKD" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm,
                     NULL as j_prov, NULL as j_kab, NULL as j_kec, "KDEPUM" as j_kel 
                 FROM wilayah_administratif
                 WHERE "KDEPUM" IN {ids_tuple_str} AND "TIPADM" = 4
 
             ) as combined
             LEFT JOIN wilayah_administratif AS wa
-                -- Kondisi JOIN untuk semua level
                 ON (wa."KDPPUM" = combined.j_prov AND wa."TIPADM" = 1)
                 OR (wa."KDPKAB" = combined.j_kab AND wa."TIPADM" = 2)
                 OR (wa."KDCPUM" = combined.j_kec AND wa."TIPADM" = 3)
-                OR (wa."KDEPUM" = combined.j_kel AND wa."TIPADM" = 4); -- **INI PERBAIKANNYA**
+                OR (wa."KDEPUM" = combined.j_kel AND wa."TIPADM" = 4);
         """)
         
         result = session.execute(query)
         relevant_rows = [dict(row) for row in result.mappings()]
         
         if not relevant_rows:
-             # **MODIFIKASI**: Ini akan membuat frontend menampilkan error yang benar
              print(f"PERINGATAN: Tidak ada data ditemukan di /api/data-by-ids untuk {ids_tuple_str}")
-             return jsonify({}), 404 # Kembalikan objek kosong atau error
+             return jsonify({}), 404 
 
         final_data = process_wilayah_data(relevant_rows)
         return jsonify(final_data)

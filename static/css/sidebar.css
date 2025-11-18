@@ -152,16 +152,105 @@
     font-size: 2rem;
 }
 
-/* Styling konten detail cuaca di sidebar (mirip modal) */
+/* ==========================================================================
+   DESAIN BARU: KARTU CUACA UTAMA (MODERN UI)
+   ========================================================================== */
+
+/* Reset style lama untuk container ini */
 #sidebar-current-conditions { 
-    text-align: center;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 15px;
-    margin-bottom: 15px;
+    text-align: left; /* Reset dari center */
+    border-bottom: none; /* Hapus garis pemisah lama */
+    padding-bottom: 0;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); /* Gradient Biru Modern */
+    color: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+    position: relative;
+    overflow: hidden;
 }
-#sidebar-current-icon { font-size: 3.5rem; color: #007bff; }
-#sidebar-current-temp { font-size: 2rem; font-weight: bold; margin: 5px 0; }
-#sidebar-current-desc, #sidebar-current-feelslike, #sidebar-current-humidity, #sidebar-current-precipitation, #sidebar-current-wind { font-size: 1rem; color: #555; }
+
+/* Hiasan latar belakang (opsional, lingkaran halus) */
+#sidebar-current-conditions::before {
+    content: "";
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    width: 100px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* 1. Header Waktu */
+.weather-header-time {
+    font-size: 0.85rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+/* 2. Baris Utama: Suhu & Ikon */
+.weather-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.weather-temp-big {
+    font-size: 4rem; /* Sangat besar */
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -2px;
+}
+
+.weather-icon-container {
+    flex-shrink: 0;
+}
+
+.weather-icon-big {
+    font-size: 3.5rem;
+    color: rgba(255, 255, 255, 0.95);
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+/* 3. Deskripsi Cuaca */
+.weather-desc-main {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-top: 5px;
+    margin-bottom: 20px;
+    text-transform: capitalize;
+    opacity: 0.95;
+}
+
+/* 4. Grid Detail (2 Kolom) */
+.weather-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.1); /* Background transparan gelap */
+    padding: 15px;
+    border-radius: 12px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.detail-icon {
+    font-size: 1.2rem;
+    width: 24px; /* Lebar tetap agar rapi */
+    text-align: center;
+    margin-right: 8px;
+    opacity: 0.8;
+}
 
 
 #sidebar-daily-forecast-list {
@@ -188,4 +277,108 @@
 }
 #sidebar-daily-forecast-list::-webkit-scrollbar-thumb:hover {
     background: #aaa;
+}
+
+/* ===== STYLE BARU DITAMBAHKAN DI SINI ===== */
+#sidebar-sub-region-container {
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+}
+
+#sidebar-sub-region-container h3 {
+    /* Style h3 mungkin sudah ada, ini opsional */
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    padding-left: 5px; /* Sedikit padding jika perlu */
+}
+
+/* ==========================================================================
+   DESAIN BARU: LIST ITEM SUB-WILAYAH (KARTU HORIZONTAL)
+   ========================================================================== */
+
+/* Container List - Memberikan ruang antar item */
+#sidebar-sub-region-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* Jarak antar kartu lebih besar agar lega */
+    padding-bottom: 20px;
+}
+
+/* Kartu Item Sub-Wilayah */
+.sub-region-item {
+    display: grid;
+    /* Grid 3 Kolom: 
+       1. Info Teks (Nama & Deskripsi) -> Mengambil sisa ruang (1fr)
+       2. Ikon Cuaca -> Ukuran sesuai konten (auto)
+       3. Suhu -> Ukuran sesuai konten (auto)
+    */
+    grid-template-columns: 1fr auto auto; 
+    align-items: center;
+    gap: 15px; /* Jarak antar kolom di dalam kartu */
+    
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0; /* Border halus */
+    border-left: 5px solid #007bff; /* Aksen warna biru di kiri untuk identitas */
+    border-radius: 10px; /* Sudut lebih bulat */
+    padding: 15px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    cursor: default; /* Karena item ini informatif, bukan tombol */
+}
+
+/* Efek Hover */
+.sub-region-item:hover {
+    transform: translateY(-2px); /* Sedikit naik */
+    box-shadow: 0 6px 12px rgba(0,0,0,0.08); /* Bayangan lebih lembut */
+    border-color: #b3d7ff; /* Border berubah warna sedikit */
+}
+
+/* Kolom 1: Informasi Teks (Nama & Deskripsi) */
+.sub-region-info-col {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Penting untuk text-overflow */
+    justify-content: center;
+}
+
+/* Nama Sub-wilayah */
+.sub-region-item-name {
+    font-size: 1.05rem;
+    font-weight: 700; /* Tebal */
+    color: #2c3e50; /* Warna teks gelap elegan */
+    margin-bottom: 4px;
+    
+    /* Truncate text panjang dengan ellipsis (...) */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Deskripsi Cuaca (Baris kedua) */
+.sub-region-item-desc {
+    font-size: 0.85rem;
+    color: #7f8c8d; /* Abu-abu sedang */
+    text-transform: capitalize; /* Huruf kapital di awal kata */
+    font-weight: 500;
+}
+
+/* Kolom 2: Ikon Cuaca */
+.sub-region-item-icon {
+    font-size: 2.2rem; /* Ukuran ikon besar */
+    color: #555; /* Warna netral, atau bisa disesuaikan per kondisi cuaca nanti */
+    width: 45px; /* Lebar tetap agar rata */
+    text-align: center;
+    display: flex; /* Memastikan ikon di tengah vertikal */
+    align-items: center;
+    justify-content: center;
+}
+
+/* Kolom 3: Suhu */
+.sub-region-item-temp {
+    font-size: 1.4rem; /* Font besar */
+    font-weight: 800; /* Sangat tebal */
+    color: #2980b9; /* Biru yang sedikit berbeda untuk kontras */
+    min-width: 60px; /* Lebar minimum agar angka tidak geser */
+    text-align: right;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Font angka yang jelas */
 }

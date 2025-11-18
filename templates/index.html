@@ -48,22 +48,64 @@
                 <i class="wi wi-day-sunny"></i> Memuat data...
             </div>
             <div id="sidebar-weather-details" style="display: none;">
+                <!-- HAPUS div .location-label-subtitle yang lama jika tidak ingin duplikat, 
+                     atau biarkan untuk breadcrumb -->
                 <div id="sidebar-location-label-weather" class="location-label-subtitle"></div>
                 
-                <div id="sidebar-current-conditions">
-                    <div id="sidebar-current-time" style="font-size: 0.9rem; color: #555; margin-bottom: 8px; text-align: center;">...</div>
-                    <i id="sidebar-current-icon" class="wi wi-na"></i>
-                    <div id="sidebar-current-temp">-°C</div>
-                    <div id="sidebar-current-desc">...</div>
-                    <div id="sidebar-current-feelslike">Terasa ...°C</div>
-                    <div id="sidebar-current-humidity" style="font-size: 1rem; color: #555;">Kelembapan: ...%</div>
-                    <div id="sidebar-current-precipitation" style="font-size: 1rem; color: #555;">Presipitasi: ...%</div>
-                    <div id="sidebar-current-wind" style="font-size: 1rem; color: #555;">Angin: ... m/s</div>
+                <!-- ===== STRUKTUR BARU: INFORMASI CUACA UTAMA ===== -->
+                <div id="sidebar-current-conditions" class="weather-card-main">
+                    <!-- Header Waktu (Kecil di atas) -->
+                    <div id="sidebar-current-time" class="weather-header-time">...</div>
+                    
+                    <!-- Baris Utama: Suhu Besar & Ikon Besar -->
+                    <div class="weather-main-row">
+                        <div id="sidebar-current-temp" class="weather-temp-big">-°</div>
+                        <div class="weather-icon-container">
+                            <i id="sidebar-current-icon" class="wi wi-na weather-icon-big"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Deskripsi Cuaca (Teks) -->
+                    <div id="sidebar-current-desc" class="weather-desc-main">...</div>
+
+                    <!-- Grid Detail Tambahan (2x2) -->
+                    <div class="weather-details-grid">
+                        <div class="detail-item">
+                            <i class="wi wi-thermometer detail-icon"></i>
+                            <span id="sidebar-current-feelslike">Terasa ...°</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="wi wi-humidity detail-icon"></i>
+                            <span id="sidebar-current-humidity">...%</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="wi wi-raindrop detail-icon"></i>
+                            <span id="sidebar-current-precipitation">...%</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="wi wi-strong-wind detail-icon"></i>
+                            <span id="sidebar-current-wind">... m/s</span>
+                        </div>
+                    </div>
                 </div>
+                <!-- ===== AKHIR STRUKTUR BARU ===== -->
+
                 <h3 id="sidebar-daily-forecast-title">Prakiraan 7 Hari Kedepan</h3>
                 <div id="sidebar-daily-forecast-list">
                     <!-- Item prakiraan harian akan ditambahkan di sini -->
                 </div>
+
+                <div id="sidebar-sub-region-container" style="display: none;">
+                    <h3 id="sidebar-sub-region-title">Prakiraan Wilayah Bawahan</h3>
+                    <div id="sidebar-sub-region-loading" style="display: none; text-align: center; color: #777; margin: 20px 0;">
+                        <i class="wi wi-day-sunny" style="font-size: 1.5rem; display: block; margin-bottom: 5px;"></i> 
+                        Memuat data wilayah...
+                    </div>
+                    <div id="sidebar-sub-region-list">
+                        <!-- Item sub-wilayah akan dirender oleh JS di sini -->
+                    </div>
+                </div>
+
             </div>
             <div id="sidebar-province-details" style="display: none;">
                 <!-- Konten akan di-render oleh JS, termasuk elemen label baru -->

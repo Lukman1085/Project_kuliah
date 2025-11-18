@@ -40,62 +40,95 @@ export const mapManager = {
     getActiveLocationData: function() { return this._activeLocationData; },
     
     setActiveMarkerHighlight: function(id) {
-            const map = this.getMap(); // Ambil map
-            if (!id || !map || !map.getSource('data-cuaca-source')) return;
-            
-            console.log("Highlighting:", id);
-            try {
+        const map = this.getMap(); // Ambil map
+        if (!id || !map || !map.getSource('data-cuaca-source')) return;
+        
+        console.log("Highlighting:", id);
+        try {
             const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: id }) || {};
+            // Jangan set ulang jika sudah aktif untuk mencegah flicker/re-render yang tidak perlu
+            if (currentState.active) return; 
+
             const newState = {
                 hasData: currentState.hasData || false,
                 suhu: currentState.suhu ?? -999,
                 precip: currentState.precip ?? -1,
                 active: true
             };
-            if (!currentState.active) { 
-                map.setFeatureState({ source: 'data-cuaca-source', id: id }, newState); 
-            }
-            } catch (e) { console.error("Error setting active highlight:", e); }
+            map.setFeatureState({ source: 'data-cuaca-source', id: id }, newState); 
+        } catch (e) { console.error("Error setting active highlight:", e); }
     },
+
+    // MODIFIKASI PENTING: Logika penghapusan highlight yang persisten
     removeActiveMarkerHighlight: function(idToRemove = null) { 
-        const map = this.getMap(); // Ambil map
+        const map = this.getMap(); 
         const targetId = idToRemove || this._previousActiveLocationId;
-        if (targetId && map && map.getSource('data-cuaca-source')) {
-            console.log("Removing highlight from:", targetId);
-            try {
-                const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: targetId });
-                if (currentState?.active) {
-                    const newState = {
-                        hasData: currentState.hasData || false,
-                        suhu: currentState.suhu ?? -999,
-                        precip: currentState.precip ?? -1,
-                        active: false
-                    };
-                    map.setFeatureState({ source: 'data-cuaca-source', id: targetId }, newState);
-                }
-            } catch (e) { console.error("Error removing highlight:", e); }
+
+        if (!targetId || !map || !map.getSource('data-cuaca-source')) return;
+
+        // LOGIKA BARU: Cek kondisi persisten
+        // Jangan hapus highlight jika:
+        // 1. ID target adalah lokasi aktif saat ini DAN
+        // 2. (Sidebar terbuka ATAU Popup terbuka)
+        const isTargetActive = (String(targetId) === String(this._activeLocationId));
+        const isSidebarOpen = sidebarManager.isOpen();
+        const isPopupOpen = popupManager.isOpen();
+
+        if (isTargetActive && (isSidebarOpen || isPopupOpen)) {
+            console.log(`Menahan highlight untuk ${targetId} (Sidebar: ${isSidebarOpen}, Popup: ${isPopupOpen})`);
+            return; 
         }
-            if (!idToRemove) {
-            this._previousActiveLocationId = null;
+
+        console.log("Removing highlight from:", targetId);
+        try {
+            const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: targetId });
+            if (currentState?.active) {
+                const newState = {
+                    hasData: currentState.hasData || false,
+                    suhu: currentState.suhu ?? -999,
+                    precip: currentState.precip ?? -1,
+                    active: false
+                };
+                map.setFeatureState({ source: 'data-cuaca-source', id: targetId }, newState);
             }
+        } catch (e) { console.error("Error removing highlight:", e); }
+
+        if (!idToRemove) {
+            this._previousActiveLocationId = null;
+        }
     },
+
     resetActiveLocationState: function() {
+        // Ini dipanggil saat popup ditutup sepenuhnya (misal klik 'x') atau klik peta kosong
+        // Kita harus memaksa hapus highlight di sini
         console.log("Resetting active location state...");
         const idToReset = this._activeLocationId;
-        if (idToReset) { this.removeActiveMarkerHighlight(idToReset); } 
-        this._activeLocationId = null;
+        
+        // Force remove dengan mem-bypass cek persisten sementara atau ubah state dulu
+        // Cara terbaik: set _activeLocationId ke null dulu, baru panggil remove
+        
+        const oldId = this._activeLocationId;
+        this._activeLocationId = null; // Non-aktifkan state global dulu
+        
+        if (oldId) { 
+            this.removeActiveMarkerHighlight(oldId); 
+        } 
+
         this._activeLocationSimpleName = null; 
         this._activeLocationLabel = null; 
         this._activeLocationData = null;
         this._isClickLoading = false;
         this._previousActiveLocationId = null;
+        
         if (sidebarManager.isOpen()) { sidebarManager.renderSidebarContent(); } 
         if (timeManager.getGlobalTimeLookup().length > 0) {
-                timeManager.updateUIWithRealData(); 
+            timeManager.updateUIWithRealData(); 
         } else {
-                timeManager.updateTimePickerDisplayOnly(); 
+            timeManager.updateTimePickerDisplayOnly(); 
         }
     },
+
+
     dataController: null, 
     perbaruiPetaGeo: async function() {
             const map = this.getMap(); // Ambil map
@@ -149,7 +182,8 @@ export const mapManager = {
                         id: g.id, 
                         nama_simpel: g.nama_simpel || 'N/A', 
                         nama_label: g.nama_label || 'N/A', 
-                        type: 'kabkec' 
+                        type: 'kabkec',
+                        tipadm: g.tipadm // <-- MODIFIKASI: Tambahkan tipadm
                     } 
                 }));
                 if (cuacaSource()) cuacaSource().setData({ type: 'FeatureCollection', features: features });
@@ -387,7 +421,8 @@ export const mapManager = {
                                     nama_simpel: data.nama_simpel,
                                     nama_label: data.nama_label,
                                     lat: data.latitude,
-                                    lon: data.longitude
+                                    lon: data.longitude,
+                                    tipadm: data.tipadm
                                 };
                                 this.handleUnclusteredClick(clickProps); 
                             });
@@ -414,7 +449,7 @@ export const mapManager = {
         this._activeLocationId = props.id;
         this._activeLocationSimpleName = props.nama_simpel; 
         this._activeLocationLabel = props.nama_label; 
-        this._activeLocationData = { type: 'provinsi' }; 
+        this._activeLocationData = { type: 'provinsi', tipadm: 1 }; // <-- MODIFIKASI: Tambahkan tipadm: 1
         this._previousActiveLocationId = previousId;
         if (previousId && cacheManager.get(previousId)) { 
             this.removeActiveMarkerHighlight(previousId); 
@@ -440,18 +475,36 @@ export const mapManager = {
 
     /** FASE 2: Menangani klik pada marker unclustered (Fungsi Kontroler Utama) */
     handleUnclusteredClick: function(props) {
-        const { id, nama_simpel, nama_label, lat, lon } = props; 
+        const { id, nama_simpel, nama_label, lat, lon, tipadm } = props; 
         const coordinates = [lon, lat];
         if (!coordinates || isNaN(coordinates[0]) || isNaN(coordinates[1])) { return; }
-        console.log("Handling Unclustered Click:", nama_label, id); 
+        
+        console.log("Handling Unclustered Click:", nama_label, id, `(TIPADM: ${tipadm})`); 
+        
+        // 1. Tutup popup LAMA (jika ada)
         popupManager.close(true);
+
+        // 2. Kelola ID aktif dan highlight LAMA
         const previousId = this._activeLocationId;
+        if (previousId && previousId !== id) { 
+            // Hapus highlight lama, logic removeActiveMarkerHighlight akan cek kondisi
+            // Tapi karena _activeLocationId akan berubah, kita paksa remove dulu jika beda lokasi
+            
+            // Hack kecil: set _activeLocationId sementara ke null biar remove jalan
+            // atau cukup panggil removeActiveMarkerHighlight(previousId)
+             this.removeActiveMarkerHighlight(previousId); 
+        }
+
+        // 3. Set ID Aktif BARU
         this._activeLocationId = id;
         this._activeLocationSimpleName = nama_simpel; 
         this._activeLocationLabel = nama_label; 
         this._previousActiveLocationId = previousId;
-        if (previousId) { this.removeActiveMarkerHighlight(previousId); } 
+
+        // 4. Set highlight BARU
         this.setActiveMarkerHighlight(id); 
+        
+        // 5. Ambil data
         const cachedData = cacheManager.get(id);
         if (inflightIds.has(id)) {
             this._handleInflightState(props, coordinates);
@@ -479,7 +532,9 @@ export const mapManager = {
             data.nama_label = props.nama_label;
             cacheManager.set(props.id, data);
         }
-        this._activeLocationData = data;                    
+        this._activeLocationData = data; 
+        // MODIFIKASI: Tambahkan tipadm dari klik (karena tidak ada di cache)
+        this._activeLocationData.tipadm = props.tipadm;                   
         this._isClickLoading = false;
         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
         const idxLocal = timeManager.getSelectedTimeIndex();
@@ -507,7 +562,7 @@ export const mapManager = {
         
         const { id, nama_simpel, nama_label } = props; 
         console.log(`Cache miss for ${id}. Fetching...`);
-        this._activeLocationData = null; 
+        this._activeLocationData = null;
         this._isClickLoading = true; 
         inflightIds.add(id);
         const loadingPopupRef = popupManager.open(coordinates, `<b>${nama_simpel}</b><br>Memuat...`);
@@ -527,6 +582,8 @@ export const mapManager = {
             this._processIncomingData(id, data);
             if (this._activeLocationId === id) {
                 this._activeLocationData = data;
+                // MODIFIKASI: Tambahkan tipadm dari klik
+                this._activeLocationData.tipadm = props.tipadm;
                 this._isClickLoading = false;
                 this._updateMapStateForFeature(id, data, true); 
                 const idxLocal = timeManager.getSelectedTimeIndex();
