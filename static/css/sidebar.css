@@ -152,16 +152,105 @@
     font-size: 2rem;
 }
 
-/* Styling konten detail cuaca di sidebar (mirip modal) */
+/* ==========================================================================
+   DESAIN BARU: KARTU CUACA UTAMA (MODERN UI)
+   ========================================================================== */
+
+/* Reset style lama untuk container ini */
 #sidebar-current-conditions { 
-    text-align: center;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 15px;
-    margin-bottom: 15px;
+    text-align: left; /* Reset dari center */
+    border-bottom: none; /* Hapus garis pemisah lama */
+    padding-bottom: 0;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); /* Gradient Biru Modern */
+    color: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+    position: relative;
+    overflow: hidden;
 }
-#sidebar-current-icon { font-size: 3.5rem; color: #007bff; }
-#sidebar-current-temp { font-size: 2rem; font-weight: bold; margin: 5px 0; }
-#sidebar-current-desc, #sidebar-current-feelslike, #sidebar-current-humidity, #sidebar-current-precipitation, #sidebar-current-wind { font-size: 1rem; color: #555; }
+
+/* Hiasan latar belakang (opsional, lingkaran halus) */
+#sidebar-current-conditions::before {
+    content: "";
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    width: 100px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* 1. Header Waktu */
+.weather-header-time {
+    font-size: 0.85rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+/* 2. Baris Utama: Suhu & Ikon */
+.weather-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.weather-temp-big {
+    font-size: 4rem; /* Sangat besar */
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -2px;
+}
+
+.weather-icon-container {
+    flex-shrink: 0;
+}
+
+.weather-icon-big {
+    font-size: 3.5rem;
+    color: rgba(255, 255, 255, 0.95);
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+/* 3. Deskripsi Cuaca */
+.weather-desc-main {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-top: 5px;
+    margin-bottom: 20px;
+    text-transform: capitalize;
+    opacity: 0.95;
+}
+
+/* 4. Grid Detail (2 Kolom) */
+.weather-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.1); /* Background transparan gelap */
+    padding: 15px;
+    border-radius: 12px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.detail-icon {
+    font-size: 1.2rem;
+    width: 24px; /* Lebar tetap agar rapi */
+    text-align: center;
+    margin-right: 8px;
+    opacity: 0.8;
+}
 
 
 #sidebar-daily-forecast-list {
@@ -204,42 +293,79 @@
     padding-left: 5px; /* Sedikit padding jika perlu */
 }
 
+/* ==========================================================================
+   DESAIN BARU: LIST ITEM SUB-WILAYAH (KARTU HORIZONTAL)
+   ========================================================================== */
+
+/* Container List */
 #sidebar-sub-region-list {
     display: flex;
     flex-direction: column;
-    gap: 8px; /* Jarak antar item */
+    gap: 10px; /* Jarak antar kartu lebih besar */
+    padding-bottom: 20px;
 }
 
+/* Kartu Item */
 .sub-region-item {
-    display: flex;
+    display: grid;
+    /* Kolom 1: Nama & Desc (Expand), Kolom 2: Ikon, Kolom 3: Suhu */
+    grid-template-columns: 1fr auto auto; 
     align-items: center;
-    padding: 10px;
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 5px;
+    gap: 12px;
+    
+    background-color: #ffffff;
+    border: 1px solid #eee;
+    border-left: 4px solid #007bff; /* Aksen warna di kiri */
+    border-radius: 8px;
+    padding: 12px 16px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sub-region-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+    border-color: #d0e5ff;
+}
+
+/* Kolom Kiri: Teks */
+.sub-region-info-col {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Untuk text truncation */
 }
 
 .sub-region-item-name {
-    flex-grow: 1;
-    font-size: 0.9rem;
-    font-weight: bold;
+    font-size: 1rem;
+    font-weight: 700;
     color: #333;
+    margin-bottom: 2px;
+    
+    /* Truncate text panjang dengan ellipsis (...) */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
+/* (Opsional) Anda perlu menambahkan elemen deskripsi ini di JS jika ingin tampil */
+.sub-region-item-desc {
+    font-size: 0.8rem;
+    color: #777;
+    text-transform: capitalize;
+}
+
+/* Kolom Tengah: Ikon */
 .sub-region-item-icon {
-    font-size: 1.5rem;
+    font-size: 1.8rem; /* Lebih besar */
     color: #555;
-    margin-left: 10px;
-    margin-right: 5px;
-    min-width: 30px; /* Jaga agar ikon rapi */
+    width: 40px;
     text-align: center;
 }
 
+/* Kolom Kanan: Suhu */
 .sub-region-item-temp {
-    font-size: 1rem;
-    font-weight: bold;
-    color: #000;
-    min-width: 50px; /* Jaga agar suhu rapi */
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #007bff;
+    min-width: 50px;
     text-align: right;
 }
-/* ===== AKHIR STYLE BARU ===== */

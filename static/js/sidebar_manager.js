@@ -58,6 +58,7 @@ export const sidebarManager = {
         mapManager.setActiveMarkerHighlight(mapManager.getActiveLocationId()); 
     },
 
+    // Modifikasi: closeSidebar tidak lagi memaksa hapus highlight
     closeSidebar: function() {
         const { sidebarEl, toggleBtnEl } = this.elements;
         if (!sidebarEl || !toggleBtnEl || !this._isSidebarOpen) return;
@@ -66,8 +67,12 @@ export const sidebarManager = {
         this._isSidebarOpen = false;
         toggleBtnEl.innerHTML = '&gt;';
         toggleBtnEl.setAttribute('aria-label', 'Buka detail lokasi');
+        
         const activeId = mapManager.getActiveLocationId();
         if (!activeId) { return } 
+        
+        // Panggil fungsi ini, mapManager akan memutuskan apakah highlight perlu dihapus
+        // berdasarkan apakah popup masih terbuka atau tidak
         mapManager.removeActiveMarkerHighlight(activeId); 
     },
 
@@ -282,10 +287,11 @@ export const sidebarManager = {
     },
 
     // ===== FUNGSI BARU (2/3): Render Sub-Wilayah =====
+    // Modifikasi: Menambahkan deskripsi cuaca ke item list
     _renderSubRegionList: function(timeIndex) {
         const { subRegionListEl } = this.elements;
         if (!subRegionListEl || !this._subRegionData || this._subRegionData.length === 0) {
-            return; // Tidak ada data untuk dirender
+            return; 
         }
 
         if (timeIndex < 0) {
@@ -298,41 +304,52 @@ export const sidebarManager = {
         for (const subRegion of this._subRegionData) {
             const hourly = subRegion.hourly;
             if (!hourly || !hourly.time || timeIndex >= hourly.time.length) {
-                console.warn(`Data cuaca tidak lengkap untuk sub-wilayah: ${subRegion.nama_simpel}`);
-                continue; // Skip jika data cuaca tidak lengkap
+                continue; 
             }
 
-            // Ekstrak data cuaca untuk INDEKS WAKTU SAAT INI
             const dataPoint = {
                 is_day: hourly.is_day?.[timeIndex],
                 weather_code: hourly.weather_code?.[timeIndex],
                 suhu: hourly.temperature_2m?.[timeIndex],
             };
-            const { ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day);
+            const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day);
 
-            // Buat elemen
+            // Buat Container Item
             const item = document.createElement('div');
             item.className = 'sub-region-item';
             
+            // Kolom 1: Info Teks (Nama + Deskripsi)
+            const infoCol = document.createElement('div');
+            infoCol.className = 'sub-region-info-col'; // Class baru untuk styling fleksibel
+
             const nameEl = document.createElement('span');
             nameEl.className = 'sub-region-item-name';
             nameEl.textContent = subRegion.nama_simpel || 'N/A';
             
+            const descEl = document.createElement('span'); // Elemen deskripsi baru
+            descEl.className = 'sub-region-item-desc';
+            descEl.textContent = deskripsi;
+
+            infoCol.appendChild(nameEl);
+            infoCol.appendChild(descEl);
+
+            // Kolom 2: Ikon
             const iconEl = document.createElement('i');
             iconEl.className = `sub-region-item-icon ${ikon}`;
             
+            // Kolom 3: Suhu
             const tempEl = document.createElement('span');
             tempEl.className = 'sub-region-item-temp';
             tempEl.textContent = `${dataPoint.suhu?.toFixed(1) ?? '-'}°C`;
 
-            item.appendChild(nameEl);
+            item.appendChild(infoCol);
             item.appendChild(iconEl);
             item.appendChild(tempEl);
             fragment.appendChild(item);
         }
 
-        subRegionListEl.innerHTML = ''; // Hapus yang lama
-        subRegionListEl.appendChild(fragment); // Tambahkan yang baru
+        subRegionListEl.innerHTML = ''; 
+        subRegionListEl.appendChild(fragment); 
     },
 
     renderSidebarContent: function() {
