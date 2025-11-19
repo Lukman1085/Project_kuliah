@@ -2,87 +2,192 @@ import { cacheManager } from "./cache_manager.js";
 import { utils } from "./utilities.js";
 import { mapManager } from "./map_manager.js";
 
-/** 팝-업 PENGELOLA POPUP TERPUSAT */
+/** 🏙️ PENGELOLA POPUP TERPUSAT */
 export const popupManager = { 
     _currentInstance: null,
     _internalCloseFlag: false,
 
-    /** Membuat konten DOM untuk popup (Bukan string HTML) */
+    /** * GENERATOR 1: POPUP LENGKAP (Mini Sidebar) untuk Non-Provinsi */
     generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
         const container = document.createElement('div');
-        container.className = 'weather-popup-content';
-        const namaEl = document.createElement('b');
-        namaEl.textContent = nama;
-        const timeEl = document.createElement('div');
-        timeEl.id = 'popup-time';
-        timeEl.style.cssText = 'font-size: 12px; color: #555;';
-        timeEl.textContent = formattedTime;
-        const weatherWrapper = document.createElement('div');
-        weatherWrapper.className = 'popup-current-weather';
-        const iconEl = document.createElement('i');
-        iconEl.id = 'popup-icon';
-        iconEl.className = ikon;
-        const detailsWrapper = document.createElement('div');
-        detailsWrapper.className = 'popup-details';
-        const createDetailEl = (id, htmlContent) => {
-            const el = document.createElement('div');
-            if (id) el.id = id;
-            el.innerHTML = htmlContent;
-            return el;
-        };
-        const tempDescEl = createDetailEl(null, `<b id="popup-temp">${data.suhu?.toFixed(1) ?? '-'}°C</b> <span id="popup-desc">(${deskripsi})</span>`);
-        const feelsLikeEl = createDetailEl('popup-feelslike', `Terasa: <b>${data.terasa?.toFixed(1) ?? '-'}°C</b>`);
-        const humidityEl = createDetailEl('popup-humidity', `Kelembapan: <b>${data.kelembapan ?? '-'}%</b>`);
-        const precipEl = createDetailEl('popup-precipitation', `Presipitasi: <b>${data.prob_presipitasi ?? '-'}%</b>`);
-        const windEl = createDetailEl('popup-wind', `Angin: <b>${data.kecepatan_angin_10m ?? '-'} m/s</b> dari arah ${data.arah_angin_10m ?? '-'}°`);
-        detailsWrapper.appendChild(tempDescEl);
-        detailsWrapper.appendChild(feelsLikeEl);
-        detailsWrapper.appendChild(humidityEl);
-        detailsWrapper.appendChild(precipEl);
-        detailsWrapper.appendChild(windEl);
-        weatherWrapper.appendChild(iconEl);
-        weatherWrapper.appendChild(detailsWrapper);
-        const actionsWrapper = document.createElement('div');
-        actionsWrapper.className = 'popup-actions';
-        const button = document.createElement('button');
-        button.id = 'popup-sidebar-btn-dynamic';
-        button.textContent = 'Lihat Detail di Sidebar';
+        container.className = 'weather-popup-card';
+
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        header.innerHTML = `
+            <div class="popup-title">${nama}</div>
+            <div class="popup-time">${formattedTime}</div>
+        `;
+        container.appendChild(header);
+
+        const mainRow = document.createElement('div');
+        mainRow.className = 'popup-main-row';
+        mainRow.innerHTML = `
+            <div class="popup-icon-container"><i class="${ikon}"></i></div>
+            <div class="popup-temp-container">
+                <div class="popup-temp">${data.suhu?.toFixed(1) ?? '-'}°</div>
+                <div class="popup-desc">${deskripsi}</div>
+            </div>
+        `;
+        container.appendChild(mainRow);
+
+        const detailsGrid = document.createElement('div');
+        detailsGrid.className = 'popup-details-grid';
         
+        const createDetailItem = (iconClass, text) => `
+            <div class="popup-detail-item">
+                <i class="wi ${iconClass}"></i> <span>${text}</span>
+            </div>
+        `;
+
+        detailsGrid.innerHTML = `
+            ${createDetailItem('wi-thermometer', `Terasa: ${data.terasa?.toFixed(1) ?? '-'}°`)}
+            ${createDetailItem('wi-humidity', `${data.kelembapan ?? '-'}%`)}
+            ${createDetailItem('wi-raindrop', `${data.prob_presipitasi ?? '-'}%`)}
+            ${createDetailItem('wi-strong-wind', `${data.kecepatan_angin_10m ?? '-'} m/s`)}
+        `;
+        container.appendChild(detailsGrid);
+
+        const footer = document.createElement('div');
+        footer.className = 'popup-footer';
+        const button = document.createElement('button');
+        button.className = 'popup-btn-detail';
+        button.textContent = 'Lihat Detail Lengkap';
         button.addEventListener('click', () => {
             document.dispatchEvent(new CustomEvent('requestSidebarDetail'));
         });
-        
-        actionsWrapper.appendChild(button);
-        container.appendChild(namaEl);
-        container.appendChild(timeEl);
-        container.appendChild(weatherWrapper);
-        container.appendChild(actionsWrapper);
-        return container;
-        },
-    
-    open: function(lngLat, content, options = { maxWidth: '260px' }) {
-        // AMBIL MAP DARI mapManager, BUKAN GLOBAL
-        const map = mapManager.getMap(); 
+        footer.appendChild(button);
+        container.appendChild(footer);
 
+        return container;
+    },
+
+    /** * GENERATOR 2: POPUP PROVINSI (Minimalis) */
+    generateProvincePopupContent: function(namaSimpel, namaLabel) {
+        const container = document.createElement('div');
+        container.className = 'weather-popup-card province-mode';
+
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        header.innerHTML = `
+            <div class="popup-subtitle">PROVINSI</div>
+            <div class="popup-title large">${namaSimpel}</div>
+        `;
+        container.appendChild(header);
+
+        const body = document.createElement('div');
+        body.className = 'popup-body-text';
+        body.textContent = "Lihat prakiraan cuaca untuk kabupaten/kota di wilayah ini.";
+        container.appendChild(body);
+
+        const footer = document.createElement('div');
+        footer.className = 'popup-footer';
+        const button = document.createElement('button');
+        button.className = 'popup-btn-detail';
+        button.textContent = 'Lihat Sub-Wilayah';
+        button.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('requestSidebarDetail'));
+        });
+        footer.appendChild(button);
+        container.appendChild(footer);
+
+        return container;
+    },
+
+    /** * GENERATOR 3: POPUP LOADING (Konsisten) */
+    generateLoadingPopupContent: function(nama) {
+        const container = document.createElement('div');
+        container.className = 'weather-popup-card';
+        
+        // Header Sederhana
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        header.innerHTML = `<div class="popup-title">${nama}</div>`;
+        container.appendChild(header);
+
+        // Body dengan Spinner
+        const body = document.createElement('div');
+        body.style.padding = '30px 20px';
+        body.style.textAlign = 'center';
+        body.innerHTML = `
+            <i class="wi wi-day-sunny" style="font-size: 2rem; color: #0056b3; animation: spin-slow 2s linear infinite;"></i>
+            <div style="margin-top: 10px; color: #666; font-size: 0.9rem;">Memuat data...</div>
+            <style>@keyframes spin-slow { 100% { transform: rotate(360deg); } }</style>
+        `;
+        container.appendChild(body);
+
+        return container;
+    },
+
+    /** * GENERATOR 4: POPUP CLUSTER LIST (Konsisten) */
+    generateClusterPopupContent: function(titleText, items) {
+        const container = document.createElement('div');
+        container.className = 'weather-popup-card'; // Reuse base style
+        container.style.width = '280px';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        header.innerHTML = `<div class="popup-title" style="font-size: 0.95rem;">${titleText}</div>`;
+        container.appendChild(header);
+
+        // Scrollable Content List
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'cluster-popup-content'; // Style lama utk scroll
+        // Override style agar sesuai kartu
+        contentDiv.style.maxHeight = '220px'; 
+        contentDiv.style.overflowY = 'auto';
+        contentDiv.style.backgroundColor = '#fff';
+
+        items.forEach(itemData => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'cluster-item'; // Style lama utk hover
+            // Inline style untuk perbaikan layout
+            itemEl.style.padding = '8px 12px';
+            itemEl.style.borderBottom = '1px solid #f0f0f0';
+            itemEl.style.display = 'flex';
+            itemEl.style.justifyContent = 'space-between';
+            itemEl.style.alignItems = 'center';
+            
+            itemEl.innerHTML = `
+                <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${itemData.nama}</span>
+                <div style="text-align: right;">
+                    <span style="font-weight: 700; color: #0056b3; font-size: 0.9rem;">${itemData.suhu}</span>
+                    <br>
+                    <span style="font-size: 0.7rem; color: #888;">${itemData.desc}</span>
+                </div>
+            `;
+            
+            itemEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if(itemData.onClick) itemData.onClick();
+            });
+
+            contentDiv.appendChild(itemEl);
+        });
+        container.appendChild(contentDiv);
+
+        return container;
+    },
+    
+    open: function(lngLat, content, options = { maxWidth: '300px', closeButton: true }) {
+        const map = mapManager.getMap(); 
         this.close(true);
 
-        // Tambahkan pengecekan jika map belum siap
-        if (!map) {
-            console.error("PopupManager.open() gagal: Map belum di-inisialisasi.");
-            return null;
-        }
-
-        if (!Array.isArray(lngLat) || lngLat.length !== 2 || typeof lngLat[0] !== 'number' || typeof lngLat[1] !== 'number' || isNaN(lngLat[0]) || isNaN(lngLat[1])) { console.error("Invalid lngLat:", lngLat); return null; }
+        if (!map) { return null; }
+        if (!Array.isArray(lngLat) || lngLat.length !== 2) { return null; }
         
         try {
-            const newPopup = new maplibregl.Popup(options).setLngLat(lngLat);
+            const popupOptions = { ...options, offset: 15 };
+            const newPopup = new maplibregl.Popup(popupOptions).setLngLat(lngLat);
+            
             if (typeof content === 'string') { newPopup.setHTML(content); }
             else if (content instanceof HTMLElement) { newPopup.setDOMContent(content); } 
-            else { newPopup.setHTML("Invalid content."); }
+            
             this._currentInstance = newPopup;
             
             newPopup.once('close', () => {
-                    const wasInternal = this._internalCloseFlag; // 'this' bukan 'popupManager'
+                    const wasInternal = this._internalCloseFlag;
                     this._internalCloseFlag = false;
                     if (this._currentInstance === newPopup) {
                         this._currentInstance = null;
@@ -92,87 +197,76 @@ export const popupManager = {
                     }
             });
 
-            newPopup.addTo(map); // Gunakan variabel 'map' lokal
+            newPopup.addTo(map); 
             return newPopup;
         } catch (e) {
-                console.error("Failed to create/add popup:", e, " LngLat:", lngLat);
-                // Pastikan _currentInstance di-reset jika error terjadi pada 'newPopup'
-                if (this._currentInstance && this._currentInstance.options === options) {
-                    this._currentInstance = null;
-                }
-                return null;
+            console.error("Failed to create popup:", e);
+            return null;
         }
     },
+
     close: function(isInternalAction = false) {
         if (this._currentInstance) {
             const popupToClose = this._currentInstance;
             this._internalCloseFlag = isInternalAction;
-            try {
-                if (popupToClose.isOpen()) {
-                    popupToClose.remove();
-                } else {
-                    if(this._currentInstance === popupToClose){
-                            this._currentInstance = null; this._internalCloseFlag = false;
-                    }
-                }
-            } catch(e) {
-                    console.warn("Error removing popup:", e);
-                    if(this._currentInstance === popupToClose){ this._currentInstance = null; }
-                    this._internalCloseFlag = false;
+            if (popupToClose.isOpen()) {
+                popupToClose.remove();
             }
-        } else { this._internalCloseFlag = false; }
+            if (this._currentInstance === popupToClose) {
+                this._currentInstance = null;
+            }
+        }
+        this._internalCloseFlag = false; // Reset flag
     },
+
     isOpen: function() { return !!this._currentInstance && this._currentInstance.isOpen(); },
     getElement: function() { return (this._currentInstance && this._currentInstance.isOpen()) ? this._currentInstance.getElement() : null; },
     getInstance: function() { return this._currentInstance; },
-    setHTML: function(htmlContent) { if (this._currentInstance && this._currentInstance.isOpen() && typeof htmlContent === 'string') { try { this._currentInstance.setHTML(htmlContent); } catch (e) { console.error("Err setHTML:", e); } } },
-    setDOMContent: function(domElement) { if (this._currentInstance && this._currentInstance.isOpen() && domElement instanceof HTMLElement) { try { this._currentInstance.setDOMContent(domElement); } catch (e) { console.error("Err setDOMContent:", e); } } },
+    setHTML: function(htmlContent) { if (this.isOpen() && typeof htmlContent === 'string') this._currentInstance.setHTML(htmlContent); },
+    setDOMContent: function(domElement) { if (this.isOpen() && domElement instanceof HTMLElement) this._currentInstance.setDOMContent(domElement); },
     
-    /** Memperbarui konten popup (jika terbuka) untuk waktu yang dipilih. */
+    /** Memperbarui konten popup non-provinsi saat waktu berubah */
     updateUIForTime: function(idxGlobal, localTimeString) {
         if (!this.isOpen()) return;
         const popupEl = this.getElement();
         if (!popupEl) return;
-        const singlePopup = popupEl.querySelector('.weather-popup-content');
-        if (singlePopup) {
+
+        const card = popupEl.querySelector('.weather-popup-card');
+        
+        if (card && card.classList.contains('province-mode')) return;
+
+        if (card) {
             const activeData = mapManager.getActiveLocationData();
-            if (activeData && activeData.hourly?.time) {
+            if (activeData && activeData.tipadm !== 1 && activeData.hourly?.time) {
                 try {
-                    const hourly = activeData.hourly;
-                    if (idxGlobal >= hourly.time.length) return; 
+                    if (idxGlobal >= activeData.hourly.time.length) return; 
+                    
                     const formattedTime = utils.formatLocalTimestampString(localTimeString); 
-                    const dataPoint = utils.extractHourlyDataPoint(hourly, idxGlobal);
+                    const dataPoint = utils.extractHourlyDataPoint(activeData.hourly, idxGlobal);
                     const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
-                    const timeEl = singlePopup.querySelector('#popup-time'); if (timeEl) timeEl.textContent = formattedTime;
-                    const iconEl = singlePopup.querySelector('#popup-icon'); if (iconEl) iconEl.className = ikon;
-                    const tempEl = singlePopup.querySelector('#popup-temp'); if (tempEl) tempEl.textContent = `${dataPoint.suhu?.toFixed(1) ?? "-"}°C`;
-                    const descEl = singlePopup.querySelector('#popup-desc'); if (descEl) descEl.textContent = `(${deskripsi})`;
-                    const feelsLikeEl = singlePopup.querySelector('#popup-feelslike'); if (feelsLikeEl) feelsLikeEl.innerHTML = `Terasa: <b>${dataPoint.terasa?.toFixed(1) ?? "-"}°C</b>`;
-                    const humidityEl = singlePopup.querySelector('#popup-humidity'); if (humidityEl) humidityEl.innerHTML = `Kelembapan: <b>${dataPoint.kelembapan ?? "-"}%</b>`;
-                    const precipEl = singlePopup.querySelector('#popup-precipitation'); if (precipEl) precipEl.innerHTML = `Presipitasi: <b>${dataPoint.prob_presipitasi ?? "-"}%</b>`;
-                    const windEl = singlePopup.querySelector('#popup-wind'); if (windEl) windEl.innerHTML = `Angin: <b>${dataPoint.kecepatan_angin_10m ?? "-"} m/s</b> dari arah ${dataPoint.arah_angin_10m ?? "-"}°`;
-                } catch (e) { console.warn("Error updating single popup DOM:", e); }
+                    
+                    const timeEl = card.querySelector('.popup-time'); 
+                    if (timeEl) timeEl.textContent = formattedTime;
+                    
+                    const iconEl = card.querySelector('.popup-icon-container i');
+                    if (iconEl) iconEl.className = ikon;
+                    
+                    const tempEl = card.querySelector('.popup-temp');
+                    if (tempEl) tempEl.textContent = `${dataPoint.suhu?.toFixed(1) ?? "-"}°`;
+                    
+                    const descEl = card.querySelector('.popup-desc');
+                    if (descEl) descEl.textContent = deskripsi;
+
+                    const gridItems = card.querySelectorAll('.popup-detail-item span');
+                    if (gridItems.length >= 4) {
+                        gridItems[0].textContent = `Terasa: ${dataPoint.terasa?.toFixed(1) ?? "-"}°`;
+                        gridItems[1].textContent = `${dataPoint.kelembapan ?? "-"}%`;
+                        gridItems[2].textContent = `${dataPoint.prob_presipitasi ?? "-"}%`;
+                        gridItems[3].textContent = `${dataPoint.kecepatan_angin_10m ?? "-"} m/s`;
+                    }
+
+                } catch (e) { console.warn("Error updating popup DOM:", e); }
             }
-        }
-        const clusterPopup = popupEl.querySelector('.cluster-popup-content');
-        if (clusterPopup) {
-            try {
-                const clusterItems = clusterPopup.querySelectorAll('.cluster-item');
-                clusterItems.forEach(item => {
-                    const id = item.dataset.id;
-                    if (!id) return;
-                    const itemData = cacheManager.get(id);
-                    if (!itemData?.hourly?.time) return;
-                    if (idxGlobal >= itemData.hourly.time.length) return; 
-                    const itemHourly = itemData.hourly;
-                    const itemDataPoint = utils.extractHourlyDataPoint(itemHourly, idxGlobal);
-                    const { deskripsi: itemDeskripsi } = utils.getWeatherInfo(itemDataPoint.weather_code, itemDataPoint.is_day); 
-                    const suhuEl = item.querySelector('.item-suhu');
-                    const descEl = item.querySelector('.item-desc');
-                    if (suhuEl) suhuEl.textContent = `${itemDataPoint.suhu?.toFixed(1) ?? '-'}°C`;
-                    if (descEl) descEl.textContent = itemDeskripsi;
-                });
-            } catch (e) { console.warn("Error updating cluster popup DOM:", e); }
         }
     }
 };

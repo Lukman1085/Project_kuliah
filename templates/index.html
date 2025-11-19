@@ -30,8 +30,12 @@
     <div id="search-wrapper">
         <div id="search-container">
             <input type="text" id="search-bar" placeholder="Cari lokasi..." autocomplete="off" />
-            <button id="search-btn">
-                <img src="static/icons8-search.svg" width="20" height="20" alt="Cari" />
+            <button id="search-btn" aria-label="Cari">
+                <!-- Ikon Kaca Pembesar SVG Inline -->
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
             </button>
         </div>
         <div id="suggestions-dropdown" ></div>
@@ -47,9 +51,9 @@
             <div id="sidebar-loading" style="display: none;">
                 <i class="wi wi-day-sunny"></i> Memuat data...
             </div>
+            
+            <!-- BLOK 1: DETAIL CUACA (Untuk Kab/Kota/Kec) -->
             <div id="sidebar-weather-details" style="display: none;">
-                <!-- HAPUS div .location-label-subtitle yang lama jika tidak ingin duplikat, 
-                     atau biarkan untuk breadcrumb -->
                 <div id="sidebar-location-label-weather" class="location-label-subtitle"></div>
                 
                 <!-- ===== STRUKTUR BARU: INFORMASI CUACA UTAMA ===== -->
@@ -94,22 +98,26 @@
                 <div id="sidebar-daily-forecast-list">
                     <!-- Item prakiraan harian akan ditambahkan di sini -->
                 </div>
+            </div> <!-- END sidebar-weather-details -->
 
-                <div id="sidebar-sub-region-container" style="display: none;">
-                    <h3 id="sidebar-sub-region-title">Prakiraan Wilayah Bawahan</h3>
-                    <div id="sidebar-sub-region-loading" style="display: none; text-align: center; color: #777; margin: 20px 0;">
-                        <i class="wi wi-day-sunny" style="font-size: 1.5rem; display: block; margin-bottom: 5px;"></i> 
-                        Memuat data wilayah...
-                    </div>
-                    <div id="sidebar-sub-region-list">
-                        <!-- Item sub-wilayah akan dirender oleh JS di sini -->
-                    </div>
-                </div>
-
-            </div>
+            <!-- BLOK 2: DETAIL PROVINSI (Hanya Label) -->
             <div id="sidebar-province-details" style="display: none;">
-                <!-- Konten akan di-render oleh JS, termasuk elemen label baru -->
+                <!-- Konten akan di-render oleh JS -->
             </div>
+
+            <!-- BLOK 3: SUB WILAYAH (Dipindahkan KELUAR dari weather-details) -->
+            <!-- Ini sekarang independen dan bisa muncul baik di mode Provinsi maupun mode Kab/Kota -->
+            <div id="sidebar-sub-region-container" style="display: none;">
+                <h3 id="sidebar-sub-region-title">Prakiraan Wilayah Bawahan</h3>
+                <div id="sidebar-sub-region-loading" style="display: none; text-align: center; color: #777; margin: 20px 0;">
+                    <i class="wi wi-day-sunny" style="font-size: 1.5rem; display: block; margin-bottom: 5px;"></i> 
+                    Memuat data wilayah...
+                </div>
+                <div id="sidebar-sub-region-list">
+                    <!-- Item sub-wilayah akan dirender oleh JS di sini -->
+                </div>
+            </div>
+
         </div>
     </div>
     <button id="sidebar-toggle-btn" aria-label="Buka detail lokasi">&gt;</button>

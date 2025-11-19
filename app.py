@@ -392,7 +392,7 @@ def get_sub_wilayah_cuaca():
     try:
         parent_id = request.args.get('id')
         parent_tipadm_str = request.args.get('tipadm')
-
+        
         if not parent_id or not parent_tipadm_str:
             return jsonify({"error": "Parameter 'id' dan 'tipadm' diperlukan"}), 400
         
@@ -403,24 +403,23 @@ def get_sub_wilayah_cuaca():
         target_tipadm = parent_tipadm + 1
 
         query_text = None
-        # Gunakan pencocokan ID langsung, bukan LIKE
         params = {"parent_id": parent_id} 
 
-        if target_tipadm == 2: # Induk = Provinsi (1), Anak = Kab/Kota (2)
+        if target_tipadm == 2: 
             query_text = """
                 SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
                 FROM wilayah_administratif
                 WHERE "TIPADM" = 2 AND "KDPPUM" = :parent_id
                 AND "KDPKAB" IS NOT NULL AND "WADMKK" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
             """
-        elif target_tipadm == 3: # Induk = Kab/Kota (2), Anak = Kecamatan (3)
+        elif target_tipadm == 3: 
             query_text = """
                 SELECT "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
                 FROM wilayah_administratif
                 WHERE "TIPADM" = 3 AND "KDPKAB" = :parent_id
                 AND "KDCPUM" IS NOT NULL AND "WADMKC" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
             """
-        elif target_tipadm == 4: # Induk = Kecamatan (3), Anak = Kel/Desa (4)
+        elif target_tipadm == 4: 
             query_text = """
                 SELECT "KDEPUM" as id, "WADMKD" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
                 FROM wilayah_administratif
@@ -431,23 +430,18 @@ def get_sub_wilayah_cuaca():
         if query_text:
             query = text(query_text)
             result = session.execute(query, params)
-            # Buat daftar info sub-wilayah (hanya geo dan nama)
             sub_wilayah_info = [dict(row) for row in result.mappings()]
             
             if not sub_wilayah_info:
                 print(f"Tidak ditemukan sub-wilayah untuk {parent_id} (TIPADM {parent_tipadm})")
                 return jsonify([]) # Kembalikan list kosong jika tidak ada anak
 
-            # Gunakan ulang fungsi process_wilayah_data untuk mendapatkan data cuaca
-            # Ini akan otomatis menangani caching dan panggilan API (nyata atau dummy)
             print(f"Memproses data cuaca untuk {len(sub_wilayah_info)} sub-wilayah...")
             data_cuaca_lengkap = process_wilayah_data(sub_wilayah_info)
             
-            # Kembalikan sebagai list, urutkan berdasarkan nama
             sorted_data = sorted(data_cuaca_lengkap.values(), key=lambda x: x.get('nama_simpel', ''))
             return jsonify(sorted_data)
         else:
-            # Jika induk adalah Kelurahan (TIPADM 4) atau tidak valid
             return jsonify([])
 
     except Exception as e:
