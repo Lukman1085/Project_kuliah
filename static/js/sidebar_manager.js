@@ -6,27 +6,19 @@ import { mapManager } from "./map_manager.js";
 /** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
 export const sidebarManager = { 
     _isSidebarOpen: false,
-    _subRegionData: null, // <-- MODIFIKASI: State untuk data sub-wilayah
+    _subRegionData: null, 
 
-    // FUNGSI BARU: Tempat menyimpan referensi elemen DOM
     elements: {},
 
-    // FUNGSI BARU: Dipanggil oleh main.js untuk 'menyuntikkan' elemen DOM
     initDOM: function(domElements) {
         this.elements = domElements;
-        // domElements akan berisi: 
-        // { sidebarEl, toggleBtnEl, closeBtnEl, sidebarContentEl, sidebarLocationNameEl, 
-        //   sidebarPlaceholderEl, sidebarLoadingEl, sidebarWeatherDetailsEl, sidebarProvinceDetailsEl,
-        //   subRegionContainerEl, subRegionTitleEl, subRegionLoadingEl, subRegionListEl }
         console.log("Elemen DOM Sidebar telah di-set di sidebarManager.");
     },
 
-    // Properti untuk elemen detail cuaca
     _timeEl: null, _iconEl: null, _tempEl: null, _descEl: null,
     _feelsLikeEl: null, _humidityEl: null, _precipEl: null, _windEl: null,
     _dailyListEl: null,
 
-    // FUNGSI BARU: Dipanggil oleh main.js untuk 'menyuntikkan' elemen detail cuaca
     initWeatherElements: function(weatherElements) {
         this._timeEl = weatherElements.timeEl;
         this._iconEl = weatherElements.iconEl;
@@ -45,20 +37,20 @@ export const sidebarManager = {
     },
 
     openSidebar: function() {
-        // Ganti referensi global ke referensi internal 'this.elements'
         const { sidebarEl, toggleBtnEl } = this.elements;
         if (!sidebarEl || !toggleBtnEl || this._isSidebarOpen) return;
         
-        mapManager.removeActiveMarkerHighlight(); 
+        mapManager.removeActiveMarkerHighlight(null, true); 
         sidebarEl.classList.add('sidebar-open');
         this._isSidebarOpen = true;
         toggleBtnEl.innerHTML = '&lt;';
         toggleBtnEl.setAttribute('aria-label', 'Tutup detail lokasi');
         this.renderSidebarContent(); 
-        mapManager.setActiveMarkerHighlight(mapManager.getActiveLocationId()); 
+        
+        const activeId = mapManager.getActiveLocationId();
+        if(activeId) mapManager.setActiveMarkerHighlight(activeId); 
     },
 
-    // Modifikasi: closeSidebar tidak lagi memaksa hapus highlight
     closeSidebar: function() {
         const { sidebarEl, toggleBtnEl } = this.elements;
         if (!sidebarEl || !toggleBtnEl || !this._isSidebarOpen) return;
@@ -71,9 +63,7 @@ export const sidebarManager = {
         const activeId = mapManager.getActiveLocationId();
         if (!activeId) { return } 
         
-        // Panggil fungsi ini, mapManager akan memutuskan apakah highlight perlu dihapus
-        // berdasarkan apakah popup masih terbuka atau tidak
-        mapManager.removeActiveMarkerHighlight(activeId); 
+        mapManager.removeActiveMarkerHighlight(activeId, false); 
     },
 
     toggleSidebar: function() { 
@@ -138,13 +128,19 @@ export const sidebarManager = {
         labelEl.id = 'sidebar-location-label-province'; 
         labelEl.textContent = mapManager.getActiveLocationLabel();
         container.appendChild(labelEl);
-        const infoEl = document.createElement('p');
-        infoEl.textContent = '(Detail informasi provinsi akan ditampilkan di sini.)';
-        infoEl.style.textAlign = 'center';
-        infoEl.style.marginTop = '20px';
-        container.appendChild(infoEl);
+        // const infoEl = document.createElement('p');
+        // infoEl.textContent = '(Menampilkan daftar wilayah administratif di bawah provinsi ini)';
+        // infoEl.style.textAlign = 'center';
+        // infoEl.style.marginTop = '10px';
+        // infoEl.style.fontSize = '0.9rem';
+        // infoEl.style.color = '#666';
+        // container.appendChild(infoEl);
         container.style.display = 'block';
         sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName();
+
+        const activeData = mapManager.getActiveLocationData();
+        this._subRegionData = null;
+        this._fetchAndRenderSubRegions(activeData);
     },
 
     _createDailyForecastItem: function(date, code, maxT, minT, timeZone) {
@@ -185,27 +181,22 @@ export const sidebarManager = {
         const labelEl = sidebarEl.querySelector('#sidebar-location-label-weather');
         if (labelEl) labelEl.textContent = mapManager.getActiveLocationLabel();
 
-        // === LOGIKA BARU UNTUK PROVINSI (TIPADM = 1) ===
         const isProvinsi = (activeData.tipadm === 1);
-        
         const currentConditionsEl = sidebarEl.querySelector('#sidebar-current-conditions');
         const dailyForecastTitleEl = sidebarEl.querySelector('#sidebar-daily-forecast-title');
         const dailyForecastListEl = sidebarEl.querySelector('#sidebar-daily-forecast-list');
 
         if (isProvinsi) {
-            // Sembunyikan detail cuaca utama & harian untuk provinsi
             if (currentConditionsEl) currentConditionsEl.style.display = 'none';
             if (dailyForecastTitleEl) dailyForecastTitleEl.style.display = 'none';
             if (dailyForecastListEl) dailyForecastListEl.style.display = 'none';
             
-            // Langsung fetch sub-wilayah
             this._subRegionData = null;
             this._fetchAndRenderSubRegions(activeData);
-            return; // Keluar, tidak perlu render cuaca detail
+            return; 
         } 
         
-        // === LOGIKA UNTUK NON-PROVINSI (Tetap Tampilkan) ===
-        if (currentConditionsEl) currentConditionsEl.style.display = 'block'; // Pastikan muncul kembali
+        if (currentConditionsEl) currentConditionsEl.style.display = 'block'; 
         if (dailyForecastTitleEl) dailyForecastTitleEl.style.display = 'block';
         if (dailyForecastListEl) dailyForecastListEl.style.display = 'flex';
 
@@ -216,13 +207,7 @@ export const sidebarManager = {
         if (listContainer) {
             listContainer.innerHTML = ''; 
             if (daily?.time) {
-                // ... (kode render daily forecast tetap sama)
-                const todayIndex = daily.time.indexOf(new Date().toISOString().split('T')[0]); // Simplifikasi date string
-                 // Gunakan logika tanggal yang lebih robust dari kode asli Anda jika perlu
-                 // Di sini saya singkat agar fokus ke logika provinsi
-                 const startIndex = 0; // Simplified
                  const endIndex = Math.min(7, daily.time.length);
-
                  const fragment = document.createDocumentFragment();
                  for (let i = 0; i < endIndex; i++) {
                      const date = daily.time[i], code = daily.weather_code?.[i], maxT = daily.temperature_2m_max?.[i], minT = daily.temperature_2m_min?.[i];
@@ -246,88 +231,92 @@ export const sidebarManager = {
             this.updateCurrentConditions(null, null, null);
         }
         
-        // Panggil fetcher sub-wilayah untuk non-provinsi juga (jika ada, misal kabupaten)
         this._subRegionData = null; 
         this._fetchAndRenderSubRegions(activeData); 
     },
 
-    // ===== FUNGSI BARU (1/3): Fetch Sub-Wilayah =====
     _fetchAndRenderSubRegions: async function(activeData) {
         const { subRegionContainerEl, subRegionLoadingEl, subRegionListEl, subRegionTitleEl } = this.elements;
         
-        // 1. Validasi
-        if (!activeData || !activeData.id || activeData.tipadm === undefined) {
-            console.log("Data aktif tidak memiliki ID atau TIPADM, skip sub-wilayah.");
+        if (!activeData || !activeData.id) {
             return; 
         }
 
-        // 2. Jangan tampilkan jika kita ada di level terendah
-        if (activeData.tipadm >= 4) {
-            console.log(`Level terendah (TIPADM ${activeData.tipadm}), tidak ada sub-wilayah.`);
+        // Pastikan tipadm number
+        const tipadm = Number(activeData.tipadm);
+
+        // TIPADM 4 (Desa) tidak punya sub-wilayah
+        if (tipadm >= 4) {
+            if (subRegionContainerEl) subRegionContainerEl.style.display = 'none';
             return; 
         }
 
-        // 3. Tampilkan UI Loading
         if (subRegionContainerEl) subRegionContainerEl.style.display = 'block';
         if (subRegionLoadingEl) subRegionLoadingEl.style.display = 'block';
         if (subRegionListEl) subRegionListEl.innerHTML = '';
 
-        // 4. Sesuaikan Judul
         const titles = { 1: "Kab/Kota", 2: "Kecamatan", 3: "Kel/Desa" };
-        const titleKey = activeData.tipadm; // 1, 2, atau 3
+        const titleKey = tipadm; 
         if (subRegionTitleEl) subRegionTitleEl.textContent = `Prakiraan per ${titles[titleKey] || 'Wilayah Bawahan'}`;
 
-        // 5. Fetch Data
         try {
             const protocol = window.location.protocol;
             const hostname = window.location.hostname;
             const port = '5000';
             const baseUrl = `${protocol}//${hostname}:${port}`;
             
-            const resp = await fetch(`${baseUrl}/api/sub-wilayah-cuaca?id=${activeData.id}&tipadm=${activeData.tipadm}`);
+            const url = `${baseUrl}/api/sub-wilayah-cuaca?id=${encodeURIComponent(activeData.id)}&tipadm=${tipadm}`;
+
+            const resp = await fetch(url);
             
             if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
             
             const data = await resp.json();
-            this._subRegionData = data; // Simpan data di state manajer
+            this._subRegionData = data; 
 
             if (subRegionLoadingEl) subRegionLoadingEl.style.display = 'none';
 
-            if (data.length === 0) {
+            if (!data || data.length === 0) {
                 if (subRegionTitleEl) subRegionTitleEl.textContent = `Tidak ada data ${titles[titleKey] || 'sub-wilayah'}`;
+                if (subRegionListEl) subRegionListEl.innerHTML = '<div style="padding:10px; text-align:center; color:#777;">Data sub-wilayah tidak tersedia.</div>';
                 return;
             }
 
-            // 6. Render list untuk pertama kali
             const currentTimeIndex = timeManager.getSelectedTimeIndex();
             this._renderSubRegionList(currentTimeIndex);
 
         } catch (e) {
             console.error("Gagal fetch sub-wilayah:", e);
             if (subRegionLoadingEl) subRegionLoadingEl.style.display = 'none';
-            if (subRegionTitleEl) subRegionTitleEl.textContent = "Gagal memuat data sub-wilayah";
+            if (subRegionTitleEl) subRegionTitleEl.textContent = "Gagal memuat data";
+            if (subRegionListEl) subRegionListEl.innerHTML = `<div style="padding:10px; text-align:center; color:red;">Error: ${e.message}</div>`;
         }
     },
 
-    // ===== FUNGSI BARU (2/3): Render Sub-Wilayah =====
-    // Modifikasi: Menambahkan deskripsi cuaca ke item list
     _renderSubRegionList: function(timeIndex) {
         const { subRegionListEl } = this.elements;
-        if (!subRegionListEl || !this._subRegionData || this._subRegionData.length === 0) {
+        
+        if (!subRegionListEl) {
+            return;
+        }
+        if (!this._subRegionData || this._subRegionData.length === 0) {
             return; 
         }
 
         if (timeIndex < 0) {
-             console.warn("Indeks waktu tidak valid untuk render sub-list.");
+             subRegionListEl.innerHTML = '<div style="padding:10px; text-align:center;">Menunggu sinkronisasi waktu...</div>';
              return;
         }
 
         const fragment = document.createDocumentFragment();
-
+        
         for (const subRegion of this._subRegionData) {
             const hourly = subRegion.hourly;
-            if (!hourly || !hourly.time || timeIndex >= hourly.time.length) {
+            if (!hourly || !hourly.time) {
                 continue; 
+            }
+            if (timeIndex >= hourly.time.length) {
+                continue;
             }
 
             const dataPoint = {
@@ -337,30 +326,26 @@ export const sidebarManager = {
             };
             const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day);
 
-            // Buat Container Item
             const item = document.createElement('div');
             item.className = 'sub-region-item';
             
-            // Kolom 1: Info Teks (Nama + Deskripsi)
             const infoCol = document.createElement('div');
-            infoCol.className = 'sub-region-info-col'; // Class baru untuk styling fleksibel
+            infoCol.className = 'sub-region-info-col'; 
 
             const nameEl = document.createElement('span');
             nameEl.className = 'sub-region-item-name';
             nameEl.textContent = subRegion.nama_simpel || 'N/A';
             
-            const descEl = document.createElement('span'); // Elemen deskripsi baru
+            const descEl = document.createElement('span'); 
             descEl.className = 'sub-region-item-desc';
             descEl.textContent = deskripsi;
 
             infoCol.appendChild(nameEl);
             infoCol.appendChild(descEl);
 
-            // Kolom 2: Ikon
             const iconEl = document.createElement('i');
             iconEl.className = `sub-region-item-icon ${ikon}`;
             
-            // Kolom 3: Suhu
             const tempEl = document.createElement('span');
             tempEl.className = 'sub-region-item-temp';
             tempEl.textContent = `${dataPoint.suhu?.toFixed(1) ?? '-'}°C`;
@@ -380,9 +365,9 @@ export const sidebarManager = {
         
         if (!this._isSidebarOpen || !sidebarContentEl) { return; }
         
-        this._hideAllSidebarSections(); // Ini sudah menggunakan this.elements
+        this._hideAllSidebarSections(); 
         
-        if (sidebarLocationNameEl) sidebarLocationNameEl.textContent = 'Detail Lokasi'; // Default
+        if (sidebarLocationNameEl) sidebarLocationNameEl.textContent = 'Detail Lokasi'; 
         
         const lblWeather = sidebarEl.querySelector('#sidebar-location-label-weather');
         const lblProvince = sidebarEl.querySelector('#sidebar-location-label-province');
@@ -408,9 +393,6 @@ export const sidebarManager = {
     },
 
     updateCurrentConditions: function(dataPoint, formattedTime, weatherInfo) {
-        // Fungsi ini sudah menggunakan properti internal (this._timeEl, dll.),
-        // jadi tidak perlu diubah, HANYA perlu ditambahkan null safety check.
-        
         if (dataPoint && formattedTime && weatherInfo) {
             if (this._timeEl) this._timeEl.textContent = formattedTime;
             if (this._iconEl) this._iconEl.className = weatherInfo.ikon;
@@ -432,18 +414,16 @@ export const sidebarManager = {
         }
     },
 
-    // ===== FUNGSI BARU (3/3): Modifikasi updateUIForTime =====
     updateUIForTime: function(idxGlobal, localTimeString, activeData) {
         if (!this._isSidebarOpen) {
             return;
         }
         
-        // Update kondisi saat ini (kode yang sudah ada)
         if (activeData && activeData.hourly?.time) {
             try {
                 const hourly = activeData.hourly;
                 if (idxGlobal >= hourly.time.length) {
-                     // Jika indeks tidak valid, setidaknya coba update sub-list
+                    // Jika index di luar batas data aktif, TETAP render sub-wilayah jika ada
                     this._renderSubRegionList(idxGlobal);
                     return;
                 }
@@ -456,10 +436,7 @@ export const sidebarManager = {
             }
         }
 
-        // MODIFIKASI:
-        // Render ulang daftar sub-wilayah dengan data indeks waktu yang baru
-        // Ini dipanggil bahkan jika activeData null (untuk menyembunyikan/membersihkan)
-        // atau jika data cuaca activeData tidak ada (jika sub-wilayah masih ada)
+        // PENTING: Render ulang daftar sub-wilayah saat waktu berubah
         this._renderSubRegionList(idxGlobal);
     }
 };

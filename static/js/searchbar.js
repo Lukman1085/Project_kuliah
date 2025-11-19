@@ -64,7 +64,7 @@ export const searchBarManager = {
                     console.log("Search click: Meminta sidebar dibuka.");
                     document.dispatchEvent(new CustomEvent('requestSidebarOpen'));
                 }
-        }, 500); 
+        }, 700); 
     },
 
     /** 🔍 Merender hasil pencarian ke dropdown */
