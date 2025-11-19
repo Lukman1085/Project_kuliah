@@ -293,7 +293,7 @@ export const mapManager = {
         }
     },
 
-    handleClusterClick: function(feature, coordinates) {
+    handleClusterClick: async function(feature, coordinates) { // <-- TAMBAHKAN 'async' DI SINI
         const map = this.getMap(); 
         if (!map) return;
 
@@ -305,65 +305,71 @@ export const mapManager = {
         popupManager.close(true);
         const clusterId = feature.properties.cluster_id;
         const source = map.getSource('data-cuaca-source'); 
-        const pointCount = feature.properties.point_count;
+        if (!source || typeof source.getClusterLeaves !== 'function') return; // Cek keamanan
         
-        source.getClusterLeaves(clusterId, 100, 0, (err, leaves) => { 
-            if (err) { return; }
-            
-            // [AUDIT FIX] Gunakan generateLoadingPopupContent
-            const loadingContent = popupManager.generateLoadingPopupContent('Memuat Klaster...');
-            const loadingPopupRef = popupManager.open(coordinates, loadingContent);
+        const pointCount = feature.properties.point_count;
+
+        // [AUDIT FIX] Gunakan generateLoadingPopupContent
+        const loadingContent = popupManager.generateLoadingPopupContent('Memuat Klaster...');
+        const loadingPopupRef = popupManager.open(coordinates, loadingContent);
+
+        try {
+            // PERUBAHAN UTAMA: Gunakan await dan hilangkan callback
+            const leaves = await source.getClusterLeaves(clusterId, 100, 0); 
             
             if (!loadingPopupRef) return;
             const idsToFetch = leaves.map(leaf => leaf.id || leaf.properties.id).filter(Boolean);
 
-            fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`)
-            .then(response => response.json())
-            .then(dataDetailCuaca => {
-                if (popupManager.getInstance() !== loadingPopupRef) { return; } 
+            const response = await fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`);
+            const dataDetailCuaca = await response.json();
+            
+            if (popupManager.getInstance() !== loadingPopupRef) { return; } 
+            
+            const idxDisplay = timeManager.getSelectedTimeIndex();
+            const items = [];
+
+            // Menyiapkan array item untuk generator
+            for (const id in dataDetailCuaca) {
+                const data = dataDetailCuaca[id];
+                if (!data) continue; 
                 
-                const idxDisplay = timeManager.getSelectedTimeIndex();
-                const items = [];
+                if (!cacheManager.get(id)) this._processIncomingData(id, data);
+                this._updateMapStateForFeature(id, data, false);
 
-                // Menyiapkan array item untuk generator
-                for (const id in dataDetailCuaca) {
-                        const data = dataDetailCuaca[id];
-                        if (!data) continue; 
-                        
-                        if (!cacheManager.get(id)) this._processIncomingData(id, data);
-                        this._updateMapStateForFeature(id, data, false);
+                const extractedData = utils.extractHourlyDataPoint(data.hourly, idxDisplay);
+                const { deskripsi } = utils.getWeatherInfo(extractedData.weather_code, extractedData.is_day); 
+                
+                items.push({
+                    nama: data.nama_simpel,
+                    suhu: `${extractedData.suhu?.toFixed(1) ?? '-'}°C`,
+                    desc: deskripsi,
+                    onClick: () => {
+                        if (popupManager.getInstance() === loadingPopupRef) popupManager.close(true); 
+                        const clickProps = {
+                            id: data.id,
+                            nama_simpel: data.nama_simpel,
+                            nama_label: data.nama_label,
+                            lat: data.latitude,
+                            lon: data.longitude,
+                            tipadm: data.tipadm
+                        };
+                        this.handleUnclusteredClick(clickProps); 
+                    }
+                });
+            }
 
-                        const extractedData = utils.extractHourlyDataPoint(data.hourly, idxDisplay);
-                        const { deskripsi } = utils.getWeatherInfo(extractedData.weather_code, extractedData.is_day); 
-                        
-                        items.push({
-                            nama: data.nama_simpel,
-                            suhu: `${extractedData.suhu?.toFixed(1) ?? '-'}°C`,
-                            desc: deskripsi,
-                            onClick: () => {
-                                if (popupManager.getInstance() === loadingPopupRef) popupManager.close(true); 
-                                const clickProps = {
-                                    id: data.id,
-                                    nama_simpel: data.nama_simpel,
-                                    nama_label: data.nama_label,
-                                    lat: data.latitude,
-                                    lon: data.longitude,
-                                    tipadm: data.tipadm
-                                };
-                                this.handleUnclusteredClick(clickProps); 
-                            }
-                        });
-                }
-
-                // [AUDIT FIX] Gunakan generateClusterPopupContent
-                const titleText = pointCount > 100 ? `Menampilkan 100 dari ${pointCount} Lokasi:` : `${pointCount} Lokasi:`;
-                const popupContent = popupManager.generateClusterPopupContent(titleText, items);
-                popupManager.setDOMContent(popupContent);
-            })
-            .catch(error => {
-                    if (popupManager.getInstance() === loadingPopupRef) { popupManager.setHTML('Gagal memuat data klaster.'); }
-            });
-        });
+            // [AUDIT FIX] Gunakan generateClusterPopupContent
+            const titleText = pointCount > 100 ? `Menampilkan 100 dari ${pointCount} Lokasi:` : `${pointCount} Lokasi:`;
+            const popupContent = popupManager.generateClusterPopupContent(titleText, items);
+            popupManager.setDOMContent(popupContent);
+            
+        } catch (error) {
+            // Tangani error dari getClusterLeaves atau fetch
+            console.error('Gagal memuat data klaster:', error);
+            if (loadingPopupRef && popupManager.getInstance() === loadingPopupRef) { 
+                popupManager.setHTML('Gagal memuat data klaster.'); 
+            }
+        }
     }, 
 
     handleProvinceClick: function(props, coordinates) {
