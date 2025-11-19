@@ -47,6 +47,33 @@ body { margin: 0; padding: 0; }
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* ======================================================= */
+/* --- ADAPTIVE POPUP RADIUS (Harmonisasi dengan Pointer) --- */
+/* ======================================================= */
+/* Logika: Matikan radius di sudut yang memiliki 'ekor' agar menyatu sempurna */
+
+/* 1. Anchor Top-Left (Ekor di Kiri Atas) -> Matikan Radius Kiri Atas */
+.maplibregl-popup-anchor-top-left .maplibregl-popup-content {
+    border-top-left-radius: 0 !important;
+}
+
+/* 2. Anchor Top-Right (Ekor di Kanan Atas) -> Matikan Radius Kanan Atas */
+.maplibregl-popup-anchor-top-right .maplibregl-popup-content {
+    border-top-right-radius: 0 !important;
+}
+
+/* 3. Anchor Bottom-Left (Ekor di Kiri Bawah) -> Matikan Radius Kiri Bawah */
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-content {
+    border-bottom-left-radius: 0 !important;
+}
+
+/* 4. Anchor Bottom-Right (Ekor di Kanan Bawah) -> Matikan Radius Kanan Bawah */
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-content {
+    border-bottom-right-radius: 0 !important;
+}
+
+/* ======================================================= */
+
 .maplibregl-popup-close-button {
     color: #555;
     font-size: 18px;
