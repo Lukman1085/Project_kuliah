@@ -7,13 +7,11 @@ export const popupManager = {
     _currentInstance: null,
     _internalCloseFlag: false,
 
-    /** * GENERATOR 1: POPUP LENGKAP (Mini Sidebar) untuk Non-Provinsi 
-     */
+    /** * GENERATOR 1: POPUP LENGKAP (Mini Sidebar) untuk Non-Provinsi */
     generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
         const container = document.createElement('div');
-        container.className = 'weather-popup-card'; // Class baru untuk styling css
+        container.className = 'weather-popup-card';
 
-        // Header: Nama & Waktu
         const header = document.createElement('div');
         header.className = 'popup-header';
         header.innerHTML = `
@@ -22,7 +20,6 @@ export const popupManager = {
         `;
         container.appendChild(header);
 
-        // Main Weather: Icon & Temp
         const mainRow = document.createElement('div');
         mainRow.className = 'popup-main-row';
         mainRow.innerHTML = `
@@ -34,7 +31,6 @@ export const popupManager = {
         `;
         container.appendChild(mainRow);
 
-        // Details Grid (Mini Version of Sidebar)
         const detailsGrid = document.createElement('div');
         detailsGrid.className = 'popup-details-grid';
         
@@ -52,7 +48,6 @@ export const popupManager = {
         `;
         container.appendChild(detailsGrid);
 
-        // Footer: Action Button
         const footer = document.createElement('div');
         footer.className = 'popup-footer';
         const button = document.createElement('button');
@@ -67,9 +62,7 @@ export const popupManager = {
         return container;
     },
 
-    /** * GENERATOR 2: POPUP PROVINSI (Minimalis)
-     * Hanya Nama Wilayah & Tombol Lihat Detail (Sub-wilayah di sidebar)
-     */
+    /** * GENERATOR 2: POPUP PROVINSI (Minimalis) */
     generateProvincePopupContent: function(namaSimpel, namaLabel) {
         const container = document.createElement('div');
         container.className = 'weather-popup-card province-mode';
@@ -100,6 +93,82 @@ export const popupManager = {
 
         return container;
     },
+
+    /** * GENERATOR 3: POPUP LOADING (Konsisten) */
+    generateLoadingPopupContent: function(nama) {
+        const container = document.createElement('div');
+        container.className = 'weather-popup-card';
+        
+        // Header Sederhana
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        header.innerHTML = `<div class="popup-title">${nama}</div>`;
+        container.appendChild(header);
+
+        // Body dengan Spinner
+        const body = document.createElement('div');
+        body.style.padding = '30px 20px';
+        body.style.textAlign = 'center';
+        body.innerHTML = `
+            <i class="wi wi-day-sunny" style="font-size: 2rem; color: #0056b3; animation: spin-slow 2s linear infinite;"></i>
+            <div style="margin-top: 10px; color: #666; font-size: 0.9rem;">Memuat data...</div>
+            <style>@keyframes spin-slow { 100% { transform: rotate(360deg); } }</style>
+        `;
+        container.appendChild(body);
+
+        return container;
+    },
+
+    /** * GENERATOR 4: POPUP CLUSTER LIST (Konsisten) */
+    generateClusterPopupContent: function(titleText, items) {
+        const container = document.createElement('div');
+        container.className = 'weather-popup-card'; // Reuse base style
+        container.style.width = '280px';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        header.innerHTML = `<div class="popup-title" style="font-size: 0.95rem;">${titleText}</div>`;
+        container.appendChild(header);
+
+        // Scrollable Content List
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'cluster-popup-content'; // Style lama utk scroll
+        // Override style agar sesuai kartu
+        contentDiv.style.maxHeight = '220px'; 
+        contentDiv.style.overflowY = 'auto';
+        contentDiv.style.backgroundColor = '#fff';
+
+        items.forEach(itemData => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'cluster-item'; // Style lama utk hover
+            // Inline style untuk perbaikan layout
+            itemEl.style.padding = '8px 12px';
+            itemEl.style.borderBottom = '1px solid #f0f0f0';
+            itemEl.style.display = 'flex';
+            itemEl.style.justifyContent = 'space-between';
+            itemEl.style.alignItems = 'center';
+            
+            itemEl.innerHTML = `
+                <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${itemData.nama}</span>
+                <div style="text-align: right;">
+                    <span style="font-weight: 700; color: #0056b3; font-size: 0.9rem;">${itemData.suhu}</span>
+                    <br>
+                    <span style="font-size: 0.7rem; color: #888;">${itemData.desc}</span>
+                </div>
+            `;
+            
+            itemEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if(itemData.onClick) itemData.onClick();
+            });
+
+            contentDiv.appendChild(itemEl);
+        });
+        container.appendChild(contentDiv);
+
+        return container;
+    },
     
     open: function(lngLat, content, options = { maxWidth: '300px', closeButton: true }) {
         const map = mapManager.getMap(); 
@@ -109,7 +178,6 @@ export const popupManager = {
         if (!Array.isArray(lngLat) || lngLat.length !== 2) { return null; }
         
         try {
-            // Gunakan offset agar popup tidak menutupi marker persis
             const popupOptions = { ...options, offset: 15 };
             const newPopup = new maplibregl.Popup(popupOptions).setLngLat(lngLat);
             
@@ -163,16 +231,12 @@ export const popupManager = {
         const popupEl = this.getElement();
         if (!popupEl) return;
 
-        // Cek apakah ini popup "Mini Sidebar" (weather-popup-card)
         const card = popupEl.querySelector('.weather-popup-card');
         
-        // Jika ini popup provinsi, jangan update cuaca!
         if (card && card.classList.contains('province-mode')) return;
 
-        // Update logika untuk popup biasa
         if (card) {
             const activeData = mapManager.getActiveLocationData();
-            // Pastikan bukan provinsi dan data valid
             if (activeData && activeData.tipadm !== 1 && activeData.hourly?.time) {
                 try {
                     if (idxGlobal >= activeData.hourly.time.length) return; 
@@ -181,7 +245,6 @@ export const popupManager = {
                     const dataPoint = utils.extractHourlyDataPoint(activeData.hourly, idxGlobal);
                     const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
                     
-                    // Update DOM Elements secara spesifik agar tidak redraw total (flicker)
                     const timeEl = card.querySelector('.popup-time'); 
                     if (timeEl) timeEl.textContent = formattedTime;
                     
@@ -194,7 +257,6 @@ export const popupManager = {
                     const descEl = card.querySelector('.popup-desc');
                     if (descEl) descEl.textContent = deskripsi;
 
-                    // Update details grid items (agak tricky karena generated string, tapi kita bisa update urutan)
                     const gridItems = card.querySelectorAll('.popup-detail-item span');
                     if (gridItems.length >= 4) {
                         gridItems[0].textContent = `Terasa: ${dataPoint.terasa?.toFixed(1) ?? "-"}°`;

@@ -38,9 +38,6 @@ export const mapManager = {
     getActiveLocationLabel: function() { return this._activeLocationLabel; },
     getActiveLocationData: function() { return this._activeLocationData; },
     
-    /** * FUNGSI BARU: Sanitasi Nilai State 
-     * Mencegah crash 'Expected value to be of type number, but found null'
-     */
     _sanitizeStateValue: function(val, fallback) {
         if (val === null || val === undefined || isNaN(Number(val))) {
             return fallback;
@@ -54,12 +51,10 @@ export const mapManager = {
         
         try {
             const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: id }) || {};
-            // Jika sudah aktif, jangan set ulang (optimasi)
             if (currentState.active) return; 
 
             const newState = {
                 hasData: currentState.hasData || false,
-                // Sanitasi data agar tidak null
                 suhu: this._sanitizeStateValue(currentState.suhu, -999), 
                 precip: this._sanitizeStateValue(currentState.precip, -1),
                 active: true
@@ -69,24 +64,17 @@ export const mapManager = {
         } catch (e) { console.error("Error setting active highlight:", e); }
     },
 
-    /**
-     * LOGIKA BARU: Kill-Switch Highlight
-     * @param {string|null} idToRemove - ID yang akan dimatikan
-     * @param {boolean} forceRemove - JIKA TRUE, abaikan status sidebar/popup (Wajib mati)
-     */
     removeActiveMarkerHighlight: function(idToRemove = null, forceRemove = false) { 
         const map = this.getMap(); 
         const targetId = idToRemove || this._previousActiveLocationId;
 
         if (!targetId || !map || !map.getSource('data-cuaca-source')) return;
 
-        // Cek logika persisten (Hanya jika TIDAK dipaksa mati)
         if (!forceRemove) {
             const isTargetActive = (String(targetId) === String(this._activeLocationId));
             const isSidebarOpen = sidebarManager.isOpen();
             const isPopupOpen = popupManager.isOpen();
 
-            // Jika target masih menjadi lokasi aktif DAN UI masih terbuka, pertahankan highlight
             if (isTargetActive && (isSidebarOpen || isPopupOpen)) {
                 console.log(`Menahan highlight untuk ${targetId} (Sidebar: ${isSidebarOpen}, Popup: ${isPopupOpen})`);
                 return; 
@@ -96,7 +84,6 @@ export const mapManager = {
         console.log(`Highlight OFF: ${targetId} (Force: ${forceRemove})`);
         try {
             const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: targetId });
-            // Hanya update jika statusnya aktif
             if (currentState?.active) {
                 const newState = {
                     hasData: currentState.hasData || false,
@@ -114,20 +101,13 @@ export const mapManager = {
     },
 
     resetActiveLocationState: function() {
-        // Dipanggil saat Popup ditutup atau klik area kosong
         console.log("Resetting active location state...");
         
         const idToReset = this._activeLocationId;
         
-        // Cek apakah sidebar masih terbuka? Jika ya, jangan reset ID global, hanya coba remove highlight via logic persisten
-        // TAPI, instruksi Tuan: "Terhapus HANYA saat Sidebar tertutup DAN popup ditutup"
-        
         if (sidebarManager.isOpen()) {
-             // Jika sidebar buka, jangan null-kan _activeLocationId, karena sidebar butuh referensi
-             // Coba remove highlight, tapi logic removeActiveMarkerHighlight(force=false) akan menahannya
              this.removeActiveMarkerHighlight(idToReset, false);
         } else {
-            // Jika sidebar tutup dan popup tutup (karena fungsi ini dipanggil popup close), maka reset total
             this._activeLocationId = null; 
             if (idToReset) { 
                 this.removeActiveMarkerHighlight(idToReset, false); 
@@ -176,7 +156,7 @@ export const mapManager = {
                             id: p.id, 
                             nama_simpel: p.nama_simpel, 
                             nama_label: p.nama_label, 
-                            tipadm: 1, // PENTING: Marker provinsi
+                            tipadm: 1,
                             type: 'provinsi' 
                         } 
                     }));
@@ -300,7 +280,6 @@ export const mapManager = {
                     { source: 'data-cuaca-source', id: id },
                     {
                         hasData: true,
-                        // PENTING: Gunakan sanitasi agar tidak crash
                         suhu: this._sanitizeStateValue(suhu, -999),
                         precip: this._sanitizeStateValue(precip, -1),
                         active: isActive 
@@ -313,8 +292,6 @@ export const mapManager = {
             } catch (e) { }
         }
     },
-
-    // --- FUNGSI-FUNGSI HANDLE KLIK ---
 
     handleClusterClick: function(feature, coordinates) {
         const map = this.getMap(); 
@@ -332,7 +309,11 @@ export const mapManager = {
         
         source.getClusterLeaves(clusterId, 100, 0, (err, leaves) => { 
             if (err) { return; }
-            const loadingPopupRef = popupManager.open(coordinates, 'Memuat data klaster...');
+            
+            // [AUDIT FIX] Gunakan generateLoadingPopupContent
+            const loadingContent = popupManager.generateLoadingPopupContent('Memuat Klaster...');
+            const loadingPopupRef = popupManager.open(coordinates, loadingContent);
+            
             if (!loadingPopupRef) return;
             const idsToFetch = leaves.map(leaf => leaf.id || leaf.properties.id).filter(Boolean);
 
@@ -341,17 +322,10 @@ export const mapManager = {
             .then(dataDetailCuaca => {
                 if (popupManager.getInstance() !== loadingPopupRef) { return; } 
                 
-                const popupContent = document.createElement('div');
-                popupContent.className = 'cluster-popup-content'; 
-                
-                const title = document.createElement('b');
-                title.textContent = pointCount > 100 ? `Menampilkan 100 dari ${pointCount} Lokasi:` : `${pointCount} Lokasi:`;
-                
-                popupContent.appendChild(title);
-                popupContent.appendChild(document.createElement('hr'));
-                
                 const idxDisplay = timeManager.getSelectedTimeIndex();
+                const items = [];
 
+                // Menyiapkan array item untuk generator
                 for (const id in dataDetailCuaca) {
                         const data = dataDetailCuaca[id];
                         if (!data) continue; 
@@ -360,35 +334,30 @@ export const mapManager = {
                         this._updateMapStateForFeature(id, data, false);
 
                         const extractedData = utils.extractHourlyDataPoint(data.hourly, idxDisplay);
-                        const displayData = { 
-                            nama_simpel: data.nama_simpel, 
-                            suhu: extractedData.suhu, 
-                            code: extractedData.weather_code, 
-                            is_day: extractedData.is_day 
-                        };
-                        const { deskripsi } = utils.getWeatherInfo(displayData.code, displayData.is_day); 
-                        const item = document.createElement('div');
-                        item.className = 'cluster-item'; 
+                        const { deskripsi } = utils.getWeatherInfo(extractedData.weather_code, extractedData.is_day); 
                         
-                        const textContent = `${displayData.nama_simpel} (${displayData.suhu?.toFixed(1) ?? '-'}°C, ${deskripsi})`;
-                        item.textContent = textContent;
-                        
-                        item.addEventListener('click', (event) => {
-                            event.stopPropagation();
-                            if (popupManager.getInstance() === loadingPopupRef) popupManager.close(true); 
-                            
-                            const clickProps = {
-                                id: data.id,
-                                nama_simpel: data.nama_simpel,
-                                nama_label: data.nama_label,
-                                lat: data.latitude,
-                                lon: data.longitude,
-                                tipadm: data.tipadm
-                            };
-                            this.handleUnclusteredClick(clickProps); 
+                        items.push({
+                            nama: data.nama_simpel,
+                            suhu: `${extractedData.suhu?.toFixed(1) ?? '-'}°C`,
+                            desc: deskripsi,
+                            onClick: () => {
+                                if (popupManager.getInstance() === loadingPopupRef) popupManager.close(true); 
+                                const clickProps = {
+                                    id: data.id,
+                                    nama_simpel: data.nama_simpel,
+                                    nama_label: data.nama_label,
+                                    lat: data.latitude,
+                                    lon: data.longitude,
+                                    tipadm: data.tipadm
+                                };
+                                this.handleUnclusteredClick(clickProps); 
+                            }
                         });
-                        popupContent.appendChild(item);
                 }
+
+                // [AUDIT FIX] Gunakan generateClusterPopupContent
+                const titleText = pointCount > 100 ? `Menampilkan 100 dari ${pointCount} Lokasi:` : `${pointCount} Lokasi:`;
+                const popupContent = popupManager.generateClusterPopupContent(titleText, items);
                 popupManager.setDOMContent(popupContent);
             })
             .catch(error => {
@@ -398,14 +367,13 @@ export const mapManager = {
     }, 
 
     handleProvinceClick: function(props, coordinates) {
-        // Reroute ke handleUnclusteredClick agar logika terpusat
         const provinceProps = {
             id: props.id,
             nama_simpel: props.nama_simpel,
             nama_label: props.nama_label,
             lat: coordinates[1],
             lon: coordinates[0],
-            tipadm: 1 // Paksa 1
+            tipadm: 1 
         };
         this.handleUnclusteredClick(provinceProps);
     }, 
@@ -417,28 +385,22 @@ export const mapManager = {
         
         console.log(`Handling Click: ${nama_simpel} (${id}, TIPADM: ${tipadm})`); 
         
-        // 1. Tutup popup LAMA (Internal Action)
         popupManager.close(true);
 
-        // 2. FORCE REMOVE Highlight lama (Kill-Switch)
-        // Ini menjamin hanya 1 marker yang aktif
         const previousId = this._activeLocationId;
         if (previousId && previousId !== id) { 
-             this.removeActiveMarkerHighlight(previousId, true); // FORCE = true
+             this.removeActiveMarkerHighlight(previousId, true); 
         }
 
-        // 3. Set ID Aktif BARU
         this._activeLocationId = id;
         this._activeLocationSimpleName = nama_simpel; 
         this._activeLocationLabel = nama_label; 
         this._previousActiveLocationId = previousId;
 
-        // 4. Set highlight BARU
         this.setActiveMarkerHighlight(id); 
 
         const tipadmInt = parseInt(tipadm, 10);
 
-        // KASUS A: PROVINSI (TIPADM 1)
         if (tipadmInt === 1) {
             this._activeLocationData = {
                 id: id,
@@ -459,7 +421,6 @@ export const mapManager = {
             return; 
         }
 
-        // KASUS B: NON-PROVINSI (TIPADM > 1)
         const cachedData = cacheManager.get(id);
         if (inflightIds.has(id)) {
             this._handleInflightState(props, coordinates);
@@ -473,7 +434,11 @@ export const mapManager = {
     _handleInflightState: function(props, coordinates) {
         this._activeLocationData = null; 
         this._isClickLoading = true;
-        popupManager.open(coordinates, `<b>${props.nama_simpel}</b><br>Memuat data...`);
+        
+        // [AUDIT FIX] Gunakan generateLoadingPopupContent
+        const loadingContent = popupManager.generateLoadingPopupContent(props.nama_simpel);
+        popupManager.open(coordinates, loadingContent);
+        
         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
     },
 
@@ -488,7 +453,6 @@ export const mapManager = {
         
         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
         
-        // [AUDIT FIX 1] Langsung render popup (renderRichPopup akan melakukan .open())
         this._renderRichPopup(data, coordinates);
     },
 
@@ -504,8 +468,10 @@ export const mapManager = {
         this._isClickLoading = true; 
         inflightIds.add(id);
         
-        // Buka popup loading dulu
-        const loadingPopupRef = popupManager.open(coordinates, `<b>${nama_simpel}</b><br>Memuat data...`);
+        // [AUDIT FIX] Gunakan generateLoadingPopupContent
+        const loadingContent = popupManager.generateLoadingPopupContent(nama_simpel);
+        const loadingPopupRef = popupManager.open(coordinates, loadingContent);
+        
         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent(); 
         
         try {
@@ -518,19 +484,16 @@ export const mapManager = {
             
             this._processIncomingData(id, data);
             
-            // Pastikan ID masih aktif (user belum klik tempat lain saat loading)
             if (this._activeLocationId === id) {
                 this._activeLocationData = data;
                 this._activeLocationData.tipadm = tipadm;
                 this._isClickLoading = false;
                 this._updateMapStateForFeature(id, data, true); 
                 
-                // [AUDIT FIX 1] Panggil renderRichPopup yang sekarang aman
                 this._renderRichPopup(data, coordinates);
 
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
             } else {
-                // Jika user sudah pindah, jangan highlight, tapi simpan data di map state (non-aktif)
                 this._updateMapStateForFeature(id, data, false); 
             }
         } catch (e) { 
@@ -539,7 +502,6 @@ export const mapManager = {
                 this._isClickLoading = false; 
                 this._activeLocationData = null;
                 
-                // [AUDIT FIX 2] Matikan Highlight jika fetch gagal untuk mencegah error WebGL "Zombie State"
                 this.removeActiveMarkerHighlight(id, true); 
 
                 if (popupManager.getInstance() === loadingPopupRef) { 
@@ -557,7 +519,6 @@ export const mapManager = {
         const hasGlobalTimeDataNow = timeManager.getGlobalTimeLookup().length > 0;
         const localTimeStringNow = hasGlobalTimeDataNow ? timeManager.getGlobalTimeLookup()[idxLocal] : null;
 
-        // [AUDIT FIX 1] Logika Popup yang benar: Buka popup baru, jangan hanya setContent
         if (hasGlobalTimeDataNow && localTimeStringNow && data.hourly?.time && idxLocal < data.hourly.time.length) {
             const popupData = utils.extractHourlyDataPoint(data.hourly, idxLocal);
             const { deskripsi, ikon } = utils.getWeatherInfo(popupData.weather_code, popupData.is_day);
@@ -565,12 +526,9 @@ export const mapManager = {
             
             const popupContentElement = popupManager.generatePopupContent(data.nama_simpel, popupData, deskripsi, ikon, formattedTime);
             
-            // GANTI INI: popupManager.setDOMContent(popupElement); 
-            // MENJADI INI: Buka paksa popupnya
             popupManager.open(coordinates, popupContentElement);
             
         } else {
-            // Fallback text
             const content = `<b>${data.nama_simpel}</b><br>${hasGlobalTimeDataNow ? 'Data cuaca tidak valid.' : 'Data waktu belum siap.'}`;
             popupManager.open(coordinates, content);
         }

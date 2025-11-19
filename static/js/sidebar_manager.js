@@ -281,6 +281,16 @@ export const sidebarManager = {
                 if (subRegionListEl) subRegionListEl.innerHTML = '<div style="padding:10px; text-align:center; color:#777;">Data sub-wilayah tidak tersedia.</div>';
                 return;
             }
+            
+            // [AUDIT FIX: Time Injection]
+            // Cek jika Time Manager belum punya data global, gunakan data sub-wilayah pertama untuk inisialisasi
+            const isTimeNotSynced = (timeManager.getGlobalTimeLookup().length === 0);
+            if (isTimeNotSynced && data[0] && data[0].hourly?.time) {
+                console.log("[Time Injection] Menginisialisasi waktu dari data sub-wilayah provinsi.");
+                timeManager.setGlobalTimeLookup(data[0].hourly.time);
+                const realStartDate = new Date(data[0].hourly.time[0]);
+                timeManager.initializeOrSync(realStartDate);
+            }
 
             const currentTimeIndex = timeManager.getSelectedTimeIndex();
             this._renderSubRegionList(currentTimeIndex);
