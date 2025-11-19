@@ -45,7 +45,7 @@ export const popupManager = {
         `;
 
         detailsGrid.innerHTML = `
-            ${createDetailItem('wi-thermometer', `Feels: ${data.terasa?.toFixed(1) ?? '-'}°`)}
+            ${createDetailItem('wi-thermometer', `Terasa: ${data.terasa?.toFixed(1) ?? '-'}°`)}
             ${createDetailItem('wi-humidity', `${data.kelembapan ?? '-'}%`)}
             ${createDetailItem('wi-raindrop', `${data.prob_presipitasi ?? '-'}%`)}
             ${createDetailItem('wi-strong-wind', `${data.kecepatan_angin_10m ?? '-'} m/s`)}
@@ -197,7 +197,7 @@ export const popupManager = {
                     // Update details grid items (agak tricky karena generated string, tapi kita bisa update urutan)
                     const gridItems = card.querySelectorAll('.popup-detail-item span');
                     if (gridItems.length >= 4) {
-                        gridItems[0].textContent = `Feels: ${dataPoint.terasa?.toFixed(1) ?? "-"}°`;
+                        gridItems[0].textContent = `Terasa: ${dataPoint.terasa?.toFixed(1) ?? "-"}°`;
                         gridItems[1].textContent = `${dataPoint.kelembapan ?? "-"}%`;
                         gridItems[2].textContent = `${dataPoint.prob_presipitasi ?? "-"}%`;
                         gridItems[3].textContent = `${dataPoint.kecepatan_angin_10m ?? "-"} m/s`;
