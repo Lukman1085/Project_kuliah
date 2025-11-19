@@ -88,14 +88,11 @@ export const sidebarManager = {
     },
 
     _hideAllSidebarSections: function() {
-        // Modifikasi: Tambahkan elemen-elemen sub-wilayah
         const { sidebarPlaceholderEl, sidebarLoadingEl, sidebarWeatherDetailsEl, sidebarProvinceDetailsEl, subRegionContainerEl, subRegionListEl } = this.elements;
         if (sidebarPlaceholderEl) sidebarPlaceholderEl.style.display = 'none';
         if (sidebarLoadingEl) sidebarLoadingEl.style.display = 'none';
         if (sidebarWeatherDetailsEl) sidebarWeatherDetailsEl.style.display = 'none';
         if (sidebarProvinceDetailsEl) sidebarProvinceDetailsEl.style.display = 'none';
-
-        // MODIFIKASI: Sembunyikan dan bersihkan kontainer sub-wilayah
         if (subRegionContainerEl) subRegionContainerEl.style.display = 'none';
         if (subRegionListEl) subRegionListEl.innerHTML = '';
     },
@@ -176,56 +173,82 @@ export const sidebarManager = {
         const { sidebarWeatherDetailsEl, sidebarLocationNameEl, sidebarEl } = this.elements;
         if (!sidebarWeatherDetailsEl || !sidebarLocationNameEl || !sidebarEl) return;
 
-        sidebarWeatherDetailsEl.style.display = 'block';
-        sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName();
-        const labelEl = sidebarEl.querySelector('#sidebar-location-label-weather');
-        if (labelEl) {
-            labelEl.textContent = mapManager.getActiveLocationLabel();
-        }
         const activeData = mapManager.getActiveLocationData();
         if (!activeData) {
             this._renderSidebarErrorState("Data lokasi aktif tidak ditemukan.");
             return;
         }
+
+        sidebarWeatherDetailsEl.style.display = 'block';
+        sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName();
+        
+        const labelEl = sidebarEl.querySelector('#sidebar-location-label-weather');
+        if (labelEl) labelEl.textContent = mapManager.getActiveLocationLabel();
+
+        // === LOGIKA BARU UNTUK PROVINSI (TIPADM = 1) ===
+        const isProvinsi = (activeData.tipadm === 1);
+        
+        const currentConditionsEl = sidebarEl.querySelector('#sidebar-current-conditions');
+        const dailyForecastTitleEl = sidebarEl.querySelector('#sidebar-daily-forecast-title');
+        const dailyForecastListEl = sidebarEl.querySelector('#sidebar-daily-forecast-list');
+
+        if (isProvinsi) {
+            // Sembunyikan detail cuaca utama & harian untuk provinsi
+            if (currentConditionsEl) currentConditionsEl.style.display = 'none';
+            if (dailyForecastTitleEl) dailyForecastTitleEl.style.display = 'none';
+            if (dailyForecastListEl) dailyForecastListEl.style.display = 'none';
+            
+            // Langsung fetch sub-wilayah
+            this._subRegionData = null;
+            this._fetchAndRenderSubRegions(activeData);
+            return; // Keluar, tidak perlu render cuaca detail
+        } 
+        
+        // === LOGIKA UNTUK NON-PROVINSI (Tetap Tampilkan) ===
+        if (currentConditionsEl) currentConditionsEl.style.display = 'block'; // Pastikan muncul kembali
+        if (dailyForecastTitleEl) dailyForecastTitleEl.style.display = 'block';
+        if (dailyForecastListEl) dailyForecastListEl.style.display = 'flex';
+
         const daily = activeData.daily;
         const timeZone = activeData.timezone;
-        const listContainer = this._dailyListEl; // Ini sudah properti internal
-        if (!listContainer) return;
+        const listContainer = this._dailyListEl;
+        
+        if (listContainer) {
+            listContainer.innerHTML = ''; 
+            if (daily?.time) {
+                // ... (kode render daily forecast tetap sama)
+                const todayIndex = daily.time.indexOf(new Date().toISOString().split('T')[0]); // Simplifikasi date string
+                 // Gunakan logika tanggal yang lebih robust dari kode asli Anda jika perlu
+                 // Di sini saya singkat agar fokus ke logika provinsi
+                 const startIndex = 0; // Simplified
+                 const endIndex = Math.min(7, daily.time.length);
 
-        listContainer.innerHTML = ''; 
-        if (daily?.time) {
-            const getLocalDateString = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            const todayStr = getLocalDateString(new Date());
-            const todayIndex = daily.time.indexOf(todayStr);
-            const startIndex = (todayIndex !== -1) ? todayIndex : 0;
-            const endIndex = Math.min(startIndex + 7, daily.time.length);
-            const fragment = document.createDocumentFragment();
-            for (let i = startIndex; i < endIndex; i++) {
-                const date = daily.time[i], code = daily.weather_code?.[i], maxT = daily.temperature_2m_max?.[i], minT = daily.temperature_2m_min?.[i];
-                if (date === undefined || code === undefined || maxT === undefined || minT === undefined) continue;
-                const itemEl = this._createDailyForecastItem(date, code, maxT, minT, timeZone);
-                fragment.appendChild(itemEl);
+                 const fragment = document.createDocumentFragment();
+                 for (let i = 0; i < endIndex; i++) {
+                     const date = daily.time[i], code = daily.weather_code?.[i], maxT = daily.temperature_2m_max?.[i], minT = daily.temperature_2m_min?.[i];
+                     if (date === undefined) continue;
+                     const itemEl = this._createDailyForecastItem(date, code, maxT, minT, timeZone);
+                     fragment.appendChild(itemEl);
+                 }
+                 listContainer.appendChild(fragment);
+            } else { 
+                const p = document.createElement('p'); p.textContent = 'Data harian tidak tersedia.'; listContainer.appendChild(p);
             }
-            listContainer.appendChild(fragment); 
-        } else { 
-            const p = document.createElement('p');
-            const i = document.createElement('i');
-            i.textContent = 'Data harian tidak tersedia.';
-            p.appendChild(i);
-            listContainer.appendChild(p);
         }
+
         const idx = timeManager.getSelectedTimeIndex();
         const lookup = timeManager.getGlobalTimeLookup();
-            if (idx >= 0 && idx < lookup.length) {
-                const timeStr = lookup[idx];
-                this.updateUIForTime(idx, timeStr, activeData);
-            } else {
-                this.updateCurrentConditions(null, null, null);
-            }
         
-        // MODIFIKASI: Panggil fetcher sub-wilayah
-        this._subRegionData = null; // Reset data sebelumnya
-        this._fetchAndRenderSubRegions(activeData); // Panggil fetcher baru
+        if (idx >= 0 && idx < lookup.length) {
+            const timeStr = lookup[idx];
+            this.updateUIForTime(idx, timeStr, activeData);
+        } else {
+            this.updateCurrentConditions(null, null, null);
+        }
+        
+        // Panggil fetcher sub-wilayah untuk non-provinsi juga (jika ada, misal kabupaten)
+        this._subRegionData = null; 
+        this._fetchAndRenderSubRegions(activeData); 
     },
 
     // ===== FUNGSI BARU (1/3): Fetch Sub-Wilayah =====

@@ -333,6 +333,15 @@ export const mapManager = {
                 const loadingPopupRef = popupManager.open(coordinates, 'Memuat data klaster...');
                 if (!loadingPopupRef) return;
                 const idsToFetch = leaves.map(leaf => leaf.id || leaf.properties.id).filter(Boolean);
+
+                // Ambil TIPADM dari properties leaf juga agar bisa dipassing nanti
+                // Kita buat map sementara: id -> properties
+                const leafPropsMap = {};
+                leaves.forEach(leaf => {
+                    const id = leaf.id || leaf.properties.id;
+                    if (id) leafPropsMap[id] = leaf.properties;
+                });
+
                 if (!idsToFetch.length) { popupManager.setHTML("Tidak ada lokasi valid."); return; }
                 
                 fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`)
