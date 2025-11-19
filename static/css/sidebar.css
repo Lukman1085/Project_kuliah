@@ -147,7 +147,7 @@
     display: block;
     margin-bottom: 15px;
     font-size: 2.5rem;
-    color: #3498db;
+    color: #0056b3;
     animation: spin-slow 3s linear infinite; /* Animasi putar pelan */
 }
 @keyframes spin-slow { 100% { transform: rotate(360deg); } }
@@ -296,8 +296,10 @@
     padding-bottom: 15px;
     gap: 12px; /* Jarak antar kartu harian */
     
+    /* Scrollbar Styling (Firefox) */
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f1f5f9;
     /* Sembunyikan scrollbar tapi tetap bisa scroll */
-    scrollbar-width: none;  /* Firefox */
     -ms-overflow-style: none;  /* IE/Edge */
 }
 #sidebar-daily-forecast-list::-webkit-scrollbar { 
@@ -309,7 +311,7 @@
     flex-direction: column;
     align-items: center;
     flex-shrink: 0;
-    width: 100px; /* Lebar tetap */
+    width: 120px; /* Lebar tetap */
     padding: 15px 10px;
     
     /* Style Kartu Modern */
