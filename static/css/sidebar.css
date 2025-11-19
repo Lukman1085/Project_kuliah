@@ -152,6 +152,21 @@
 }
 @keyframes spin-slow { 100% { transform: rotate(360deg); } }
 
+#sidebar-sub-region-loading {
+    text-align: center;
+    color: #95a5a6;
+    margin-top: 60px;
+    font-weight: 500;
+}
+#sidebar-sub-region-loading i { 
+    display: block;
+    margin-bottom: 15px;
+    font-size: 2.5rem;
+    color: #0056b3;
+    animation: spin-slow 3s linear infinite; /* Animasi putar pelan */
+}
+@keyframes spin-slow { 100% { transform: rotate(360deg); } }
+
 /* Breadcrumb / Subtitle */
 .location-label-subtitle {
     font-size: 0.9rem;
