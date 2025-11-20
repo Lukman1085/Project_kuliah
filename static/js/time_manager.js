@@ -4,7 +4,7 @@ import { popupManager } from "./popup_manager.js";
 import { sidebarManager } from "./sidebar_manager.js";
 import { mapManager } from "./map_manager.js";
 
-/** ⏰ TIME MANAGER: Mengelola state waktu dan update UI terkait waktu */
+/** ⏰ TIME MANAGER */
 export const timeManager = {
     _selectedTimeIndex: -1, 
     _globalTimeLocalLookup: [], 
@@ -18,6 +18,7 @@ export const timeManager = {
         console.log("Elemen DOM Waktu telah di-set di timeManager.");
     },
 
+    // ... (Fungsi Helper Date & Index SAMA) ...
     getPredictedDateFromIndex: function(index) {
         const startDate = this.getPredictedStartDate(); 
         if (index < 0 || index > 335 || !startDate) { return null; }
@@ -25,7 +26,6 @@ export const timeManager = {
         predictedDate.setHours(predictedDate.getHours() + index);
         return predictedDate;
     },
-    
     calculateCurrentHourIndex: function(startDate) {
         const now = new Date();
         let hourOfDay = now.getHours();
@@ -37,7 +37,6 @@ export const timeManager = {
         const correctedIndex = (diffDays * 24) + roundedHour;
         return Math.max(0, Math.min(335, correctedIndex));
     },
-
     initializeOrSync: function(realStartDate) {
         console.log(`Menyinkronkan waktu dengan data asli...`);
         this.setPredictedStartDate(realStartDate);
@@ -51,7 +50,6 @@ export const timeManager = {
             this.updateUIWithRealData();
         }
     },
-    
     init: function() {
         const now = new Date();
         this._predictedStartDate = new Date(now);
@@ -102,50 +100,12 @@ export const timeManager = {
             dateDisplay.textContent = dateToShow; hourDisplay.textContent = hourToShow;
     },
 
-    /** * [REVISI] Update Feature State DAN Source Property */
+    /** * [TAHAP D] Update UI Map (HTML Marker)
+     * Menggunakan logika DOM Manipulation, bukan GL Feature State
+     */
     updateMapFeaturesForTime: function(idxGlobal) {
-        const map = mapManager.getMap();
-        if (this._globalTimeLocalLookup.length === 0) { return; }
-        if (!map || !map.getSource('data-cuaca-source')) return; 
-        
-        if (idxGlobal === undefined || idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) {
-            idxGlobal = this._selectedTimeIndex; 
-        }
-        if (idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) return; 
-        
-        // 1. Update Warna & Angka (Feature State - Paint Properties)
-        const visibleFeatures = map.querySourceFeatures('data-cuaca-source', { filter: ['!', ['has', 'point_count']] });
-        const activeIdStr = String(mapManager.getActiveLocationId());
-
-        for (const feature of visibleFeatures) {
-            const featureId = feature.id;
-            const featureIdStr = String(featureId);
-            const cachedData = cacheManager.get(featureId);
-            const isActive = (featureIdStr === activeIdStr);
-            let stateData = { hasData: false, active: isActive }; 
-            
-            if (cachedData && cachedData.hourly?.time && idxGlobal < cachedData.hourly.time.length) {
-                const hourly = cachedData.hourly;
-                const rawTemp = hourly.temperature_2m?.[idxGlobal];
-                const rawPrecip = hourly.precipitation_probability?.[idxGlobal];
-                const tempColor = utils.getTempColor(rawTemp);
-                const precipColor = utils.getPrecipColor(rawPrecip);
-
-                stateData = {
-                    hasData: true,
-                    suhu: rawTemp ?? -999,
-                    precip: rawPrecip ?? -1,
-                    temp_color: tempColor,    // Paint Property
-                    precip_color: precipColor, // Paint Property
-                    active: isActive 
-                };
-            }
-            try { map.setFeatureState({ source: 'data-cuaca-source', id: featureId }, stateData); } catch(e) { }
-        }
-
-        // 2. [BARU] Update Bentuk Ikon (Source Data - Layout Property Workaround)
-        // Kita memanggil fungsi baru di mapManager
-        mapManager.updateIconsForTime(idxGlobal);
+        // Cukup panggil fungsi update di mapManager
+        mapManager.updateAllMarkersForTime();
     },
     
     updateUIWithRealData: function() {
