@@ -1,6 +1,9 @@
 body { margin: 0; padding: 0; }
 #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1;}
 
+/* Font cantik untuk angka/teks (Opsional, menggunakan sans-serif default jika tidak ada) */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap');
+
 #koordinat-info {
     position: absolute; 
     bottom: 35px; 
@@ -35,196 +38,239 @@ body { margin: 0; padding: 0; }
 
 
 /* ======================================================= */
-/* --- STYLING POPUP BARU (MINI SIDEBAR STYLE) --- */
+/* --- STYLING POPUP (MINI SIDEBAR STYLE) --- */
 /* ======================================================= */
-
-/* Override MapLibre default styles untuk popup lebih bersih */
 .maplibregl-popup-content {
-    padding: 0 !important; /* Hilangkan padding default */
+    padding: 0 !important; 
     border-radius: 12px !important;
     box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
     overflow: hidden;
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* ======================================================= */
-/* --- ADAPTIVE POPUP RADIUS (Harmonisasi dengan Pointer) --- */
-/* ======================================================= */
-/* Logika: Matikan radius di sudut yang memiliki 'ekor' agar menyatu sempurna */
-
-/* 1. Anchor Top-Left (Ekor di Kiri Atas) -> Matikan Radius Kiri Atas */
-.maplibregl-popup-anchor-top-left .maplibregl-popup-content {
-    border-top-left-radius: 0 !important;
-}
-
-/* 2. Anchor Top-Right (Ekor di Kanan Atas) -> Matikan Radius Kanan Atas */
-.maplibregl-popup-anchor-top-right .maplibregl-popup-content {
-    border-top-right-radius: 0 !important;
-}
-
-/* 3. Anchor Bottom-Left (Ekor di Kiri Bawah) -> Matikan Radius Kiri Bawah */
-.maplibregl-popup-anchor-bottom-left .maplibregl-popup-content {
-    border-bottom-left-radius: 0 !important;
-}
-
-/* 4. Anchor Bottom-Right (Ekor di Kanan Bawah) -> Matikan Radius Kanan Bawah */
-.maplibregl-popup-anchor-bottom-right .maplibregl-popup-content {
-    border-bottom-right-radius: 0 !important;
-}
-
-/* ======================================================= */
+.maplibregl-popup-anchor-top-left .maplibregl-popup-content { border-top-left-radius: 0 !important; }
+.maplibregl-popup-anchor-top-right .maplibregl-popup-content { border-top-right-radius: 0 !important; }
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-content { border-bottom-left-radius: 0 !important; }
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-content { border-bottom-right-radius: 0 !important; }
 
 .maplibregl-popup-close-button {
-    color: #555;
-    font-size: 18px;
-    top: 5px;
-    right: 5px;
-    z-index: 10;
-    background: rgba(255,255,255,0.5);
+    color: #555; font-size: 18px; top: 5px; right: 5px; z-index: 10;
+    background: rgba(255,255,255,0.5); border-radius: 50%; width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center; border: none;
+}
+.maplibregl-popup-close-button:hover { background: rgba(255,255,255,0.8); }
+
+.weather-popup-card { width: 260px; background-color: #fff; color: #333; display: flex; flex-direction: column; }
+.popup-header { background-color: #f8f9fa; padding: 12px 15px 8px 15px; border-bottom: 1px solid #eee; }
+.popup-title { font-size: 1.1rem; font-weight: 700; color: #2c3e50; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 15px; }
+.popup-time { font-size: 0.75rem; color: #7f8c8d; margin-top: 2px; font-weight: 500; }
+.popup-main-row { display: flex; align-items: center; padding: 15px; background: linear-gradient(135deg, #0056b3 0%, #004494 100%); color: white; }
+.popup-icon-container { flex: 0 0 60px; text-align: center; }
+.popup-icon-container i { font-size: 2.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
+.popup-temp-container { flex-grow: 1; padding-left: 10px; }
+.popup-temp { font-size: 2.2rem; font-weight: 700; line-height: 1; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.popup-desc { font-size: 0.9rem; font-weight: 500; opacity: 0.9; margin-top: 4px; text-transform: capitalize; }
+.popup-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 15px; background-color: #fff; }
+.popup-detail-item { font-size: 0.8rem; color: #555; display: flex; align-items: center; }
+.popup-detail-item i { width: 20px; text-align: center; color: #0056b3; margin-right: 6px; font-size: 1rem; }
+.popup-footer { padding: 10px 15px; border-top: 1px solid #eee; background-color: #f8f9fa; }
+.popup-btn-detail { width: 100%; padding: 8px 0; background-color: #e9ecef; color: #2c3e50; border: none; border-radius: 6px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; }
+.popup-btn-detail:hover { background-color: #dfe4ea; color: #0056b3; }
+
+.weather-popup-card.province-mode .popup-subtitle { font-size: 0.7rem; font-weight: 700; color: #0056b3; letter-spacing: 1px; margin-bottom: 4px; }
+.weather-popup-card.province-mode .popup-title.large { font-size: 1.3rem; margin-top: 0; }
+.weather-popup-card.province-mode .popup-body-text { padding: 20px 15px; text-align: center; font-size: 0.9rem; color: #7f8c8d; background-color: #fff; font-style: italic; }
+
+
+/* ======================================================= */
+/* --- NEW: BEAUTIFUL HTML MARKER STYLING (TAHAP ESTETIKA) --- */
+/* ======================================================= */
+
+/* Container Utama (Wrapper) */
+.marker-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer; /* Ubah jadi pointer agar jelas bisa diklik */
+    transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    will-change: transform;
+    font-family: 'Manrope', 'Segoe UI', sans-serif;
+    /* Pastikan marker ada di atas peta dasar tapi di bawah popup */
+    z-index: 10; 
+}
+
+/* Saat di-hover, marker naik dan membesar sedikit */
+.marker-container:hover {
+    transform: scale(1.1) translateY(-5px);
+    z-index: 9999; /* Paling atas saat hover */
+}
+.marker-container:hover .marker-capsule {
+    box-shadow: 0 12px 24px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* 1. Badge Nama Wilayah (Di Atas) */
+.location-badge {
+    background: rgba(26, 26, 26, 0.9); /* Hampir hitam transparan */
+    backdrop-filter: blur(4px);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    margin-bottom: 6px; /* Jarak ke kapsul */
+    position: relative;
+    white-space: nowrap;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    pointer-events: none; /* Klik tembus ke container */
+}
+
+/* Panah kecil di bawah badge nama */
+.location-badge::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 4px 4px 0;
+    border-style: solid;
+    border-color: rgba(26, 26, 26, 0.9) transparent transparent transparent;
+}
+
+/* 2. Kapsul Utama (Pill Shape) */
+.marker-capsule {
+    background: #fff;
+    border-radius: 50px;
+    padding: 4px 8px 4px 4px; /* Kiri lebih tipis karena ada lingkaran */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.05);
+    transition: transform 0.3s, box-shadow 0.3s;
+    position: relative;
+}
+
+/* 3. Lingkaran Ikon Cuaca (Kiri - Besar) */
+.main-icon-wrapper {
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px; /* Ukuran ikon cuaca */
+    color: #fff;
+    transition: background 0.5s ease; /* Transisi warna background halus */
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+}
+.main-icon-wrapper i {
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));
+}
+
+/* 4. Stack Kanan (Info Detail) */
+.status-stack {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    padding-right: 2px;
+}
+
+/* --- Composite Thermometer --- */
+.thermo-stack {
+    position: relative;
+    width: 14px; 
+    height: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
 }
-.maplibregl-popup-close-button:hover {
-    background: rgba(255,255,255,0.8);
-}
-
-/* Kartu Utama Popup */
-.weather-popup-card {
-    width: 260px;
-    background-color: #fff;
-    color: #333;
-    display: flex;
-    flex-direction: column;
-}
-
-/* --- HEADER --- */
-.popup-header {
-    background-color: #f8f9fa;
-    padding: 12px 15px 8px 15px;
-    border-bottom: 1px solid #eee;
-}
-.popup-title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #2c3e50;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-right: 15px;
-}
-.popup-time {
-    font-size: 0.75rem;
-    color: #7f8c8d;
-    margin-top: 2px;
-    font-weight: 500;
-}
-
-/* --- MAIN ROW (Icon & Temp) --- */
-.popup-main-row {
-    display: flex;
-    align-items: center;
-    padding: 15px;
-    background: linear-gradient(135deg, #0056b3 0%, #004494 100%); /* Senada Sidebar */
-    color: white;
-}
-.popup-icon-container {
-    flex: 0 0 60px;
-    text-align: center;
-}
-.popup-icon-container i {
-    font-size: 2.5rem;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-}
-.popup-temp-container {
-    flex-grow: 1;
-    padding-left: 10px;
-}
-.popup-temp {
-    font-size: 2.2rem;
-    font-weight: 700;
+.thermo-stack i {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
     line-height: 1;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
-.popup-desc {
-    font-size: 0.9rem;
-    font-weight: 500;
-    opacity: 0.9;
-    margin-top: 4px;
-    text-transform: capitalize;
+/* Frame (Bingkai) */
+.thermo-frame {
+    color: #333;
+    z-index: 2;
+}
+/* Isi (Liquid) */
+.thermo-liquid {
+    z-index: 1; 
+    transition: color 0.3s ease;
+    transform: translate(-50%, -50%) scale(0.9); /* Sedikit kecilkan agar pas */
 }
 
-/* --- DETAILS GRID --- */
-.popup-details-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    padding: 10px 15px;
-    background-color: #fff;
+/* --- Rain Icon Box --- */
+.rain-icon-box {
+    width: 14px; 
+    height: 14px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
 }
-.popup-detail-item {
-    font-size: 0.8rem;
-    color: #555;
-    display: flex;
-    align-items: center;
+.rain-icon-box i {
+    font-size: 12px;
+    transition: color 0.3s ease;
 }
-.popup-detail-item i {
+
+/* 5. Dekorasi Bawah (Anchor & Pulse) */
+.marker-anchor {
+    width: 6px;
+    height: 6px;
+    background: #fff;
+    border-radius: 50%;
+    margin-top: 2px; /* Jarak dari kapsul */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    z-index: -1;
+    position: relative;
+}
+
+.marker-pulse {
+    position: absolute;
+    bottom: -4px; /* Posisi relatif terhadap bottom container */
+    left: 50%;
+    transform: translateX(-50%);
     width: 20px;
-    text-align: center;
-    color: #0056b3; /* Warna aksen biru */
-    margin-right: 6px;
-    font-size: 1rem;
+    height: 20px;
+    background: rgba(0, 123, 255, 0.4); /* Warna pulse biru default */
+    border-radius: 50%;
+    z-index: -2;
+    animation: pulse 2s infinite;
+    pointer-events: none;
 }
 
-/* --- FOOTER --- */
-.popup-footer {
-    padding: 10px 15px;
-    border-top: 1px solid #eee;
-    background-color: #f8f9fa;
-}
-.popup-btn-detail {
-    width: 100%;
-    padding: 8px 0;
-    background-color: #e9ecef;
-    color: #2c3e50;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-.popup-btn-detail:hover {
-    background-color: #dfe4ea;
-    color: #0056b3;
+@keyframes pulse {
+    0% { transform: translateX(-50%) scale(0.5); opacity: 0.8; }
+    100% { transform: translateX(-50%) scale(2.5); opacity: 0; }
 }
 
-/* ======================================================= */
-/* --- MODE KHUSUS: PROVINSI (TIPADM 1) --- */
-/* ======================================================= */
-
-.weather-popup-card.province-mode .popup-subtitle {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: #0056b3;
-    letter-spacing: 1px;
-    margin-bottom: 4px;
+/* --- TEMA WARNA CUACA (Gradient Backgrounds) --- */
+/* Cerah / Siang */
+.marker-theme-sunny .main-icon-wrapper { 
+    background: linear-gradient(135deg, #FFC107, #FF9800); 
 }
-.weather-popup-card.province-mode .popup-title.large {
-    font-size: 1.3rem; /* Nama lebih besar */
-    margin-top: 0;
+/* Berawan */
+.marker-theme-cloudy .main-icon-wrapper { 
+    background: linear-gradient(135deg, #90A4AE, #546E7A); 
 }
-.weather-popup-card.province-mode .popup-body-text {
-    padding: 20px 15px;
-    text-align: center;
-    font-size: 0.9rem;
-    color: #7f8c8d;
-    background-color: #fff;
-    font-style: italic;
+/* Hujan */
+.marker-theme-rain .main-icon-wrapper { 
+    background: linear-gradient(135deg, #42A5F5, #1E88E5); 
 }
-/* Sembunyikan yang tidak perlu di mode provinsi jika terbawa structure lain, 
-   tapi di generator kita sudah buat structure beda, jadi aman. */
+/* Badai / Ekstrem */
+.marker-theme-storm .main-icon-wrapper { 
+    background: linear-gradient(135deg, #546E7A, #263238); 
+}
+/* Malam (Clear) */
+.marker-theme-night .main-icon-wrapper {
+    background: linear-gradient(135deg, #2c3e50, #34495e);
+}

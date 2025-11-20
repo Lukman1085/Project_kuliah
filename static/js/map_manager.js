@@ -6,50 +6,35 @@ import { sidebarManager } from "./sidebar_manager.js";
 
 export const inflightIds = new Set();
 
-/** 🗺️ MAP MANAGER: Mengelola Peta & HTML MARKERS */
+/** 🗺️ MAP MANAGER: Mengelola Peta & HTML MARKERS (ESTETIKA VERSION) */
 export const mapManager = { 
     _map: null, 
-    
-    // [BARU] Registri Marker HTML: { "featureId": maplibregl.Marker }
     _markers: {}, 
 
     setMap: function(mapInstance) {
         this._map = mapInstance;
         console.log("Map instance telah di-set di mapManager.");
         
-        // Listener untuk sinkronisasi marker HTML saat peta digeser/zoom
-        mapInstance.on('move', () => {
-            this.renderMarkers();
-        });
-        
-        mapInstance.on('moveend', () => {
-            this.renderMarkers();
-        });
+        mapInstance.on('move', () => { this.renderMarkers(); });
+        mapInstance.on('moveend', () => { this.renderMarkers(); });
     },
 
     getMap: function() {
-        if (!this._map) {
-            console.error("mapManager.getMap() dipanggil sebelum map di-set!");
-            return null;
-        }
+        if (!this._map) { console.error("mapManager.getMap() dipanggil sebelum map di-set!"); return null; }
         return this._map;
     },
 
-    // ... (Getter/Setter Variables tetap sama) ...
     _isLoading: false, _isClickLoading: false, _activeLocationId: null, _activeLocationSimpleName: null, _activeLocationLabel: null, _activeLocationData: null, _previousActiveLocationId: null,
     getIsLoading: function() { return this._isLoading; }, getIsClickLoading: function() { return this._isClickLoading; }, getActiveLocationId: function() { return this._activeLocationId; }, getActiveLocationSimpleName: function() { return this._activeLocationSimpleName; }, getActiveLocationLabel: function() { return this._activeLocationLabel; }, getActiveLocationData: function() { return this._activeLocationData; },
     
-    // [BARU] Core Logic: Render HTML Markers berdasarkan Viewport
+    // --- MARKER RENDERING ENGINE ---
     renderMarkers: function() {
         const map = this.getMap();
         if (!map) return;
 
-        // 1. Query fitur yang terlihat (hanya titik unclustered)
         const features = map.queryRenderedFeatures({ layers: ['unclustered-point-hit-target'] });
-        
         const currentIds = new Set();
 
-        // 2. Loop fitur terlihat -> Buat marker jika belum ada
         features.forEach(feature => {
             const id = feature.id; 
             const coords = feature.geometry.coordinates;
@@ -58,7 +43,6 @@ export const mapManager = {
             currentIds.add(String(id));
 
             if (!this._markers[id]) {
-                // Buat Marker Baru
                 const markerEl = this._createMarkerElement(id, props);
                 const newMarker = new maplibregl.Marker({
                     element: markerEl,
@@ -69,18 +53,14 @@ export const mapManager = {
                 .addTo(map);
 
                 this._markers[id] = newMarker;
+                this._updateMarkerContent(id); // Isi konten awal
                 
-                // Langsung isi konten awal
-                this._updateMarkerContent(id);
-                
-                // Jika marker ini adalah marker aktif, terapkan highlight visual
                 if (String(id) === String(this._activeLocationId)) {
                      this._applyHighlightStyle(id, true);
                 }
             }
         });
 
-        // 3. Hapus marker yang sudah tidak terlihat (Cleanup)
         for (const id in this._markers) {
             if (!currentIds.has(id)) {
                 this._markers[id].remove();
@@ -89,26 +69,46 @@ export const mapManager = {
         }
     },
 
-    // Helper: Membuat Elemen DOM Marker
+    // [ESTETIKA] Membuat Elemen Marker Struktur Baru (Capsule + Stack)
     _createMarkerElement: function(id, props) {
-        // [PERBAIKAN CRITICAL] Sanitasi ID: Ganti titik dengan dash agar valid untuk querySelector
         const safeId = String(id).replace(/\./g, '-');
 
         const container = document.createElement('div');
-        container.className = 'custom-marker-container';
+        container.className = 'marker-container'; // Container utama animasi hover
         container.id = `marker-${safeId}`;
         
+        // Struktur HTML Estetika (Mirip Example)
         container.innerHTML = `
-            <div class="marker-row-icons">
-                <i class="wi wi-na marker-icon-weather" id="icon-weather-${safeId}"></i>
-                <div class="marker-thermo-stack">
-                    <i class="wi wi-thermometer-exterior marker-thermo-frame"></i>
-                    <i class="wi wi-thermometer-internal marker-thermo-fill" id="icon-thermo-${safeId}"></i>
+            <!-- Badge Nama (Atas) -->
+            <div class="location-badge">${props.nama_simpel}</div>
+
+            <!-- Kapsul Utama -->
+            <div class="marker-capsule" id="capsule-${safeId}">
+                
+                <!-- Ikon Cuaca (Lingkaran Kiri) -->
+                <div class="main-icon-wrapper">
+                    <i id="icon-weather-${safeId}" class="wi wi-na"></i>
                 </div>
-                <i class="wi wi-raindrop marker-icon-rain" id="icon-rain-${safeId}"></i>
+
+                <!-- Stack Info (Kanan) -->
+                <div class="status-stack">
+                    
+                    <!-- Thermometer Composite -->
+                    <div class="thermo-stack">
+                        <i class="wi wi-thermometer-internal thermo-liquid" id="icon-thermo-${safeId}"></i>
+                        <i class="wi wi-thermometer-exterior thermo-frame"></i>
+                    </div>
+
+                    <!-- Rain Icon -->
+                    <div class="rain-icon-box">
+                        <i class="wi wi-raindrop" id="icon-rain-${safeId}"></i>
+                    </div>
+                </div>
             </div>
-            <div class="marker-row-label">${props.nama_simpel}</div>
-            <div class="marker-dot"></div>
+
+            <!-- Dekorasi Bawah -->
+            <div class="marker-anchor"></div>
+            <div class="marker-pulse"></div>
         `;
 
         container.addEventListener('click', (e) => {
@@ -125,14 +125,15 @@ export const mapManager = {
         return container;
     },
 
-    // Helper: Update Konten Visual Marker (Ringan & Cepat)
+    // [ESTETIKA] Update Konten Visual (Warna, Ikon, dan Tema)
     _updateMarkerContent: function(id) {
         const markerInstance = this._markers[id];
         if (!markerInstance) return;
 
         const safeId = String(id).replace(/\./g, '-');
-
         const el = markerInstance.getElement();
+        
+        const capsuleEl = el.querySelector(`#capsule-${safeId}`);
         const weatherIconEl = el.querySelector(`#icon-weather-${safeId}`);
         const thermoIconEl = el.querySelector(`#icon-thermo-${safeId}`);
         const rainIconEl = el.querySelector(`#icon-rain-${safeId}`);
@@ -147,108 +148,101 @@ export const mapManager = {
             const temp = hourly.temperature_2m?.[idx];
             const precip = hourly.precipitation_probability?.[idx];
 
+            // 1. Dapatkan Info Cuaca & Tema
             const weatherInfo = utils.getWeatherInfo(code, isDay);
-            
-            if (weatherIconEl) weatherIconEl.className = `wi ${weatherInfo.raw_icon_name} marker-icon-weather`;
+            const themeClass = utils.getWeatherTheme(code, isDay);
+
+            // 2. Update Tema Kapsul (Background Gradient)
+            // Hapus semua class tema lama, tambahkan yang baru
+            capsuleEl.className = `marker-capsule ${themeClass}`;
+
+            // 3. Update Ikon Utama
+            if (weatherIconEl) weatherIconEl.className = `wi ${weatherInfo.raw_icon_name}`;
+
+            // 4. Update Warna Cairan Termometer
             if (thermoIconEl) thermoIconEl.style.color = utils.getTempColor(temp);
-            if (rainIconEl) rainIconEl.style.color = utils.getPrecipColor(precip);
+
+            // 5. Update Warna Hujan (HSL)
+            if (rainIconEl) rainIconEl.style.color = utils.getRainColor(precip);
             
             el.style.opacity = 1;
         } else {
-            if (weatherIconEl) weatherIconEl.className = 'wi wi-na marker-icon-weather';
+            // Loading / No Data state
+            if (capsuleEl) capsuleEl.className = 'marker-capsule marker-theme-cloudy'; // Default theme
+            if (weatherIconEl) weatherIconEl.className = 'wi wi-na';
             if (thermoIconEl) thermoIconEl.style.color = '#ccc';
             if (rainIconEl) rainIconEl.style.color = '#ccc';
             el.style.opacity = 0.7;
         }
     },
 
-    // [BARU] Update SEMUA marker yang ada di layar
     updateAllMarkersForTime: function() {
         for (const id in this._markers) {
             this._updateMarkerContent(id);
         }
     },
     
-    // --- FUNGSI HIGHLIGHT (DIKEMBALIKAN & DISESUAIKAN) ---
+    // --- LOGIC HIGHLIGHT (DISESUAIKAN UNTUK DESAIN BARU) ---
     
-    // Helper internal untuk mengubah style visual
     _applyHighlightStyle: function(id, isActive) {
         if (this._markers[id]) {
-            const dot = this._markers[id].getElement().querySelector('.marker-dot');
-            if(dot) {
+            // Kita highlight bagian kapsulnya saja agar terlihat "terpilih"
+            const safeId = String(id).replace(/\./g, '-');
+            const capsule = this._markers[id].getElement().querySelector(`#capsule-${safeId}`);
+            
+            if(capsule) {
                 if (isActive) {
-                    dot.style.backgroundColor = '#e74c3c'; // Merah (Aktif)
-                    dot.style.borderColor = '#fff';
-                    dot.style.transform = 'scale(1.3)';
+                    capsule.style.border = '2px solid #e74c3c';
+                    capsule.style.transform = 'scale(1.15)';
                 } else {
-                    dot.style.backgroundColor = '#ffffff'; // Putih (Normal)
-                    dot.style.borderColor = '#007bff';
-                    dot.style.transform = 'scale(1)';
+                    capsule.style.border = 'none';
+                    capsule.style.transform = 'scale(1)';
                 }
             }
-            // Tambahkan class ke container utama untuk z-index
+            
             const container = this._markers[id].getElement();
             if (isActive) container.classList.add('active-marker');
             else container.classList.remove('active-marker');
         }
     },
 
-    // Fungsi yang dipanggil oleh Sidebar/Popup/Click Handler
     setActiveMarkerHighlight: function(id) {
         this._applyHighlightStyle(id, true);
-        // Opsional: Simpan ID sebagai previous
-        // console.log(`Highlight ON: ${id}`);
     },
 
     removeActiveMarkerHighlight: function(idToRemove = null, forceRemove = false) { 
         const targetId = idToRemove || this._previousActiveLocationId;
-        
         if (!targetId) return;
 
         if (!forceRemove) {
             const isTargetActive = (String(targetId) === String(this._activeLocationId));
             const isSidebarOpen = sidebarManager.isOpen();
             const isPopupOpen = popupManager.isOpen();
-
-            if (isTargetActive && (isSidebarOpen || isPopupOpen)) {
-                return; 
-            }
+            if (isTargetActive && (isSidebarOpen || isPopupOpen)) { return; }
         }
 
         this._applyHighlightStyle(targetId, false);
-        // console.log(`Highlight OFF: ${targetId}`);
-
-        if (!idToRemove) {
-            this._previousActiveLocationId = null;
-        }
+        if (!idToRemove) { this._previousActiveLocationId = null; }
     },
 
     resetActiveLocationState: function() {
-        // Simpan ID lama untuk di-unhighlight
         const idToReset = this._activeLocationId;
         
         if (sidebarManager.isOpen()) {
              this.removeActiveMarkerHighlight(idToReset, false);
         } else {
             this._activeLocationId = null; 
-            if (idToReset) { 
-                this.removeActiveMarkerHighlight(idToReset, false); 
-            }
+            if (idToReset) { this.removeActiveMarkerHighlight(idToReset, false); }
             this._activeLocationSimpleName = null; 
             this._activeLocationLabel = null; 
             this._activeLocationData = null;
             this._isClickLoading = false;
             this._previousActiveLocationId = null;
             
-            if (timeManager.getGlobalTimeLookup().length > 0) {
-                timeManager.updateUIWithRealData(); 
-            } else {
-                timeManager.updateTimePickerDisplayOnly(); 
-            }
+            if (timeManager.getGlobalTimeLookup().length > 0) { timeManager.updateUIWithRealData(); } 
+            else { timeManager.updateTimePickerDisplayOnly(); }
         }
     },
-
-    // ... (Sisanya tetap sama seperti sebelumnya) ...
     
     dataController: null, 
     perbaruiPetaGeo: async function() {

@@ -145,6 +145,50 @@ export const utils = {
     },
     // --- END SECTION ---
 
+    // --- [NEW] ESTETIKA LOGIC (TAHAP E) ---
+    
+    /** * Menentukan TEMA warna marker berdasarkan kode cuaca & waktu.
+     * Output class CSS: 'marker-theme-sunny', 'marker-theme-rain', dll.
+     */
+    getWeatherTheme: function(code, isDay) {
+        // Jika malam hari dan cerah/berawan tipis -> Tema Malam
+        if ((isDay === 0 || isDay === false) && [0, 1, 2].includes(code)) {
+            return 'marker-theme-night';
+        }
+
+        // Mapping WMO Code ke Tema
+        if ([0, 1].includes(code)) return 'marker-theme-sunny';      // Cerah
+        if ([2, 3, 45, 48].includes(code)) return 'marker-theme-cloudy'; // Berawan/Kabut
+        if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return 'marker-theme-rain'; // Hujan
+        if ([71, 73, 75, 77, 85, 86].includes(code)) return 'marker-theme-rain'; // Salju (pakai biru rain dulu)
+        if ([95, 96, 99].includes(code)) return 'marker-theme-storm';    // Badai
+        
+        return 'marker-theme-cloudy'; // Default
+    },
+
+    getTempColor: function(temp) {
+        if (temp === null || temp === undefined) return '#cccccc'; 
+        if (temp <= 16) return '#039BE5';      // Dingin (Biru)
+        if (temp <= 24) return '#43A047';      // Nyaman (Hijau)
+        if (temp <= 32) return '#FB8C00';      // Hangat (Oranye)
+        return '#E53935';                      // Panas (Merah)
+    },
+
+    /** * Warna HSL untuk ikon hujan. 
+     * 0% = Abu-abu, 100% = Biru Neon Terang 
+     */
+    getRainColor: function(prob) {
+        if (prob === null || prob === undefined || prob === 0) return '#cccccc'; // Kering (Abu)
+        
+        // Logic HSL: Hue 210 (Biru Langit).
+        // Saturasi naik dari 50% ke 100%.
+        // Lightness turun dari 85% (pucat) ke 45% (pekat).
+        const sat = 50 + (prob / 2); 
+        const light = 85 - (prob * 0.4); 
+        return `hsl(210, ${sat}%, ${light}%)`;
+    },
+    // --- END ESTETIKA LOGIC ---
+
     formatLocalTimestampString: function(localTimeString) {
         if (!localTimeString) return "Error Waktu";
         try {
