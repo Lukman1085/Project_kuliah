@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // --- [PERBAIKAN TAHAP D] LIST INTERACTIVE LAYERS YANG BENAR ---
         // Ganti 'unclustered-point-temp-circle' menjadi 'unclustered-point-hit-target'
-        const allInteractiveLayers = [ 'cluster-background-layer', 'unclustered-point-hit-target', 'provinsi-point-circle' ];
+        const allInteractiveLayers = [ 'cluster-background-layer', 'unclustered-point-hit-target', 'provinsi-point-hit-target' ];
         
         map.on('click', (e) => {
             // Gunakan try-catch untuk mencegah crash jika layer belum siap (safety)
@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (layerId === 'cluster-background-layer') { 
                 mapManager.handleClusterClick(feature, coordinates); 
             }
-            else if (layerId === 'provinsi-point-circle') { 
+            else if (layerId === 'provinsi-point-hit-target') { 
                 mapManager.handleProvinceClick(props, coordinates); 
             }
             // [PERBAIKAN] Tangani layer invisible hit target

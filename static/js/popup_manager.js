@@ -7,6 +7,10 @@ export const popupManager = {
     _currentInstance: null,
     _internalCloseFlag: false,
 
+    // [BARU] Menyimpan tipe popup aktif untuk update logika
+    _activePopupType: null, // 'weather', 'province', 'cluster', 'loading'
+    _activeClusterItemsGenerator: null, // Fungsi callback untuk re-generate item klaster
+
     /** * GENERATOR 1: POPUP LENGKAP (Mini Sidebar) untuk Non-Provinsi */
     generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
         const container = document.createElement('div');
@@ -119,38 +123,39 @@ export const popupManager = {
         return container;
     },
 
-    /** * GENERATOR 4: POPUP CLUSTER LIST (Konsisten) */
+    /** * GENERATOR 4: POPUP CLUSTER LIST (DIPERBARUI DENGAN IKON) */
     generateClusterPopupContent: function(titleText, items) {
         const container = document.createElement('div');
-        container.className = 'weather-popup-card'; // Reuse base style
-        container.style.width = '280px';
+        container.className = 'weather-popup-card'; 
+        container.style.width = '300px'; // Sedikit diperlebar agar ikon muat
 
-        // Header
         const header = document.createElement('div');
         header.className = 'popup-header';
         header.innerHTML = `<div class="popup-title" style="font-size: 0.95rem;">${titleText}</div>`;
         container.appendChild(header);
 
-        // Scrollable Content List
         const contentDiv = document.createElement('div');
-        contentDiv.className = 'cluster-popup-content'; // Style lama utk scroll
-        // Override style agar sesuai kartu
+        contentDiv.className = 'cluster-popup-content'; 
         contentDiv.style.maxHeight = '220px'; 
         contentDiv.style.overflowY = 'auto';
         contentDiv.style.backgroundColor = '#fff';
+        contentDiv.id = 'cluster-popup-list'; // ID untuk referensi update
 
         items.forEach(itemData => {
             const itemEl = document.createElement('div');
-            itemEl.className = 'cluster-item'; // Style lama utk hover
-            // Inline style untuk perbaikan layout
+            itemEl.className = 'cluster-item'; 
             itemEl.style.padding = '8px 12px';
             itemEl.style.borderBottom = '1px solid #f0f0f0';
             itemEl.style.display = 'flex';
             itemEl.style.justifyContent = 'space-between';
             itemEl.style.alignItems = 'center';
             
+            // [PERBAIKAN 3] Menambahkan Ikon Cuaca Dinamis
             itemEl.innerHTML = `
-                <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${itemData.nama}</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="${itemData.icon || 'wi wi-na'}" style="font-size:1.4rem; color:#555; width:24px; text-align:center;"></i>
+                    <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${itemData.nama}</span>
+                </div>
                 <div style="text-align: right;">
                     <span style="font-weight: 700; color: #0056b3; font-size: 0.9rem;">${itemData.suhu}</span>
                     <br>
@@ -186,11 +191,22 @@ export const popupManager = {
             
             this._currentInstance = newPopup;
             
+            // Deteksi tipe popup berdasarkan konten class
+            if (content instanceof HTMLElement) {
+                if (content.querySelector('.cluster-popup-content')) this._activePopupType = 'cluster';
+                else if (content.classList.contains('province-mode')) this._activePopupType = 'province';
+                else this._activePopupType = 'weather';
+            } else {
+                this._activePopupType = 'loading'; // Asumsi default string html
+            }
+            
             newPopup.once('close', () => {
                     const wasInternal = this._internalCloseFlag;
                     this._internalCloseFlag = false;
                     if (this._currentInstance === newPopup) {
                         this._currentInstance = null;
+                        this._activePopupType = null;
+                        this._activeClusterItemsGenerator = null;
                     } 
                     if (!wasInternal) {
                         mapManager.resetActiveLocationState(); 
@@ -216,7 +232,7 @@ export const popupManager = {
                 this._currentInstance = null;
             }
         }
-        this._internalCloseFlag = false; // Reset flag
+        this._internalCloseFlag = false; 
     },
 
     isOpen: function() { return !!this._currentInstance && this._currentInstance.isOpen(); },
@@ -225,17 +241,30 @@ export const popupManager = {
     setHTML: function(htmlContent) { if (this.isOpen() && typeof htmlContent === 'string') this._currentInstance.setHTML(htmlContent); },
     setDOMContent: function(domElement) { if (this.isOpen() && domElement instanceof HTMLElement) this._currentInstance.setDOMContent(domElement); },
     
-    /** Memperbarui konten popup non-provinsi saat waktu berubah */
+    // [BARU] Setter untuk generator cluster agar bisa dipanggil ulang
+    setClusterGenerator: function(generatorFn) {
+        this._activeClusterItemsGenerator = generatorFn;
+    },
+
+    /** Memperbarui konten popup saat waktu berubah */
     updateUIForTime: function(idxGlobal, localTimeString) {
         if (!this.isOpen()) return;
+        
+        // [PERBAIKAN 2] Logika Update Popup Klaster yang Konsisten
+        if (this._activePopupType === 'cluster' && this._activeClusterItemsGenerator) {
+            const newData = this._activeClusterItemsGenerator();
+            if (newData && newData.items) {
+                const newContent = this.generateClusterPopupContent(newData.title, newData.items);
+                this.setDOMContent(newContent);
+            }
+            return;
+        }
+
         const popupEl = this.getElement();
         if (!popupEl) return;
-
         const card = popupEl.querySelector('.weather-popup-card');
         
-        if (card && card.classList.contains('province-mode')) return;
-
-        if (card) {
+        if (card && !card.classList.contains('province-mode') && !card.querySelector('.cluster-popup-content')) {
             const activeData = mapManager.getActiveLocationData();
             if (activeData && activeData.tipadm !== 1 && activeData.hourly?.time) {
                 try {
@@ -247,13 +276,10 @@ export const popupManager = {
                     
                     const timeEl = card.querySelector('.popup-time'); 
                     if (timeEl) timeEl.textContent = formattedTime;
-                    
                     const iconEl = card.querySelector('.popup-icon-container i');
                     if (iconEl) iconEl.className = ikon;
-                    
                     const tempEl = card.querySelector('.popup-temp');
                     if (tempEl) tempEl.textContent = `${dataPoint.suhu?.toFixed(1) ?? "-"}°`;
-                    
                     const descEl = card.querySelector('.popup-desc');
                     if (descEl) descEl.textContent = deskripsi;
 
@@ -264,7 +290,6 @@ export const popupManager = {
                         gridItems[2].textContent = `${dataPoint.prob_presipitasi ?? "-"}%`;
                         gridItems[3].textContent = `${dataPoint.kecepatan_angin_10m ?? "-"} m/s`;
                     }
-
                 } catch (e) { console.warn("Error updating popup DOM:", e); }
             }
         }
