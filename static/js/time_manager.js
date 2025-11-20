@@ -20,9 +20,7 @@ export const timeManager = {
 
     getPredictedDateFromIndex: function(index) {
         const startDate = this.getPredictedStartDate(); 
-        if (index < 0 || index > 335 || !startDate) {
-            return null;
-        }
+        if (index < 0 || index > 335 || !startDate) { return null; }
         const predictedDate = new Date(startDate);
         predictedDate.setHours(predictedDate.getHours() + index);
         return predictedDate;
@@ -43,7 +41,6 @@ export const timeManager = {
     initializeOrSync: function(realStartDate) {
         console.log(`Menyinkronkan waktu dengan data asli...`);
         this.setPredictedStartDate(realStartDate);
-        
         if (!this._userHasChangedTime) {
             console.log("Menyinkronkan jam ke data asli.");
             const correctedIndex = this.calculateCurrentHourIndex(realStartDate);
@@ -61,11 +58,8 @@ export const timeManager = {
         this._predictedStartDate.setDate(now.getDate() - 7); 
         this._predictedStartDate.setHours(0, 0, 0, 0); 
         console.log(`Tanggal mulai prediksi dihitung: ${this._predictedStartDate.toISOString()}`);
-        
         this._selectedTimeIndex = this.calculateCurrentHourIndex(this._predictedStartDate);
-        
         console.log(`Indeks awal diprediksi: ${this._selectedTimeIndex}`);
-        
         this.updateTimePickerDisplayOnly(); 
         this.updateNavigationButtonsState(this._selectedTimeIndex); 
     },
@@ -92,37 +86,26 @@ export const timeManager = {
     updateTimePickerDisplayOnly: function(useRealData = false) {
             const { dateDisplay, hourDisplay } = this.elements;
             if (!dateDisplay || !hourDisplay) return;
-            
             const idx = this._selectedTimeIndex;
-            let dateToShow;
-            let hourToShow = "--:--";
+            let dateToShow; let hourToShow = "--:--";
             if (useRealData && this._globalTimeLocalLookup.length > idx && idx >= 0) {
                 const realTimeString = this._globalTimeLocalLookup[idx];
                 const [datePart, timePart] = realTimeString.split('T');
-                dateToShow = utils.formatDateDisplayFromString(datePart); 
-                hourToShow = timePart;
+                dateToShow = utils.formatDateDisplayFromString(datePart); hourToShow = timePart;
             } else {
                 const predictedDate = this.getPredictedDateFromIndex(idx); 
                 if (predictedDate) {
                     dateToShow = utils.formatDateDisplayFromDateObject(predictedDate); 
                     hourToShow = String(predictedDate.getHours()).padStart(2, '0') + ":00";
-                } else {
-                    dateToShow = "Memuat..."; 
-                }
+                } else { dateToShow = "Memuat..."; }
             }
-            dateDisplay.textContent = dateToShow;
-            hourDisplay.textContent = hourToShow;
+            dateDisplay.textContent = dateToShow; hourDisplay.textContent = hourToShow;
     },
 
-    /** * [TAHAP B] Update Feature State dengan Data Lengkap (Warna & Ikon) 
-     * Memperbarui state fitur peta berdasarkan waktu (loop efisien)
-     */
+    /** * [REVISI] Update Feature State DAN Source Property */
     updateMapFeaturesForTime: function(idxGlobal) {
         const map = mapManager.getMap();
-        
-        if (this._globalTimeLocalLookup.length === 0) {
-                return;
-        }
+        if (this._globalTimeLocalLookup.length === 0) { return; }
         if (!map || !map.getSource('data-cuaca-source')) return; 
         
         if (idxGlobal === undefined || idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) {
@@ -130,9 +113,8 @@ export const timeManager = {
         }
         if (idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) return; 
         
-        const visibleFeatures = map.querySourceFeatures('data-cuaca-source', { 
-            filter: ['!', ['has', 'point_count']] 
-        });
+        // 1. Update Warna & Angka (Feature State - Paint Properties)
+        const visibleFeatures = map.querySourceFeatures('data-cuaca-source', { filter: ['!', ['has', 'point_count']] });
         const activeIdStr = String(mapManager.getActiveLocationId());
 
         for (const feature of visibleFeatures) {
@@ -140,21 +122,12 @@ export const timeManager = {
             const featureIdStr = String(featureId);
             const cachedData = cacheManager.get(featureId);
             const isActive = (featureIdStr === activeIdStr);
-            
-            // Default state jika data tidak ada
             let stateData = { hasData: false, active: isActive }; 
             
             if (cachedData && cachedData.hourly?.time && idxGlobal < cachedData.hourly.time.length) {
                 const hourly = cachedData.hourly;
-                
-                // 1. Ekstrak data mentah
                 const rawTemp = hourly.temperature_2m?.[idxGlobal];
                 const rawPrecip = hourly.precipitation_probability?.[idxGlobal];
-                const rawCode = hourly.weather_code?.[idxGlobal];
-                const rawIsDay = hourly.is_day?.[idxGlobal];
-
-                // 2. Hitung properti visual (Warna & Nama Ikon)
-                const weatherInfo = utils.getWeatherInfo(rawCode, rawIsDay);
                 const tempColor = utils.getTempColor(rawTemp);
                 const precipColor = utils.getPrecipColor(rawPrecip);
 
@@ -162,34 +135,24 @@ export const timeManager = {
                     hasData: true,
                     suhu: rawTemp ?? -999,
                     precip: rawPrecip ?? -1,
-                    
-                    // [TAHAP B] Data Baru untuk Styling Marker
-                    icon_name: weatherInfo.raw_icon_name, // Nama file SVG (misal: 'wi-day-sunny')
-                    temp_color: tempColor,                // Hex color (misal: '#ff0000')
-                    precip_color: precipColor,            // Hex color (misal: '#0000ff')
-                    
+                    temp_color: tempColor,    // Paint Property
+                    precip_color: precipColor, // Paint Property
                     active: isActive 
                 };
             }
-            try {
-                map.setFeatureState({ source: 'data-cuaca-source', id: featureId }, stateData); 
-            } catch(e) {
-                    // console.warn(`Gagal set state (updateMapFeaturesForTime) untuk ${featureId}:`, e.message);
-            }
+            try { map.setFeatureState({ source: 'data-cuaca-source', id: featureId }, stateData); } catch(e) { }
         }
+
+        // 2. [BARU] Update Bentuk Ikon (Source Data - Layout Property Workaround)
+        // Kita memanggil fungsi baru di mapManager
+        mapManager.updateIconsForTime(idxGlobal);
     },
     
     updateUIWithRealData: function() {
         const idx = this._selectedTimeIndex;
         console.log(`UI Update (Real Data) triggered for Index: ${idx}`);
-        if (this._globalTimeLocalLookup.length === 0) { 
-            console.error("updateUIWithRealData dipanggil secara tidak benar (data belum siap).");
-            return;
-        }
-        if (idx < 0 || idx >= this._globalTimeLocalLookup.length) {
-                console.error(`Indeks ${idx} tidak valid untuk globalTimeLocalLookup`);
-                return;
-        }
+        if (this._globalTimeLocalLookup.length === 0) { console.error("updateUIWithRealData dipanggil secara tidak benar (data belum siap)."); return; }
+        if (idx < 0 || idx >= this._globalTimeLocalLookup.length) { console.error(`Indeks ${idx} tidak valid untuk globalTimeLocalLookup`); return; }
         const localTimeString = this._globalTimeLocalLookup[idx];
         const activeData = mapManager.getActiveLocationData();
         this.updateTimePickerDisplayOnly(true); 
@@ -200,7 +163,7 @@ export const timeManager = {
     },
 
     handleTimeChange: function(newIndex) {
-        newIndex = Math.max(0, Math.min(335, newIndex)); // Clamp
+        newIndex = Math.max(0, Math.min(335, newIndex)); 
         if (newIndex !== this._selectedTimeIndex) {
             this._userHasChangedTime = true;
             this._selectedTimeIndex = newIndex;
