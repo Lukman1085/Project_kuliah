@@ -11,21 +11,15 @@ export const timeManager = {
     _predictedStartDate: null,
     _userHasChangedTime: false, 
 
-    // FUNGSI BARU: Tempat menyimpan referensi elemen DOM
     elements: {},
 
-    // FUNGSI BARU: Dipanggil oleh main.js untuk 'menyuntikkan' elemen DOM
     initDOM: function(domElements) {
         this.elements = domElements;
-        // domElements akan berisi:
-        // { prevDayBtn, nextDayBtn, dateDisplay, hourDisplay, 
-        //   prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn }
         console.log("Elemen DOM Waktu telah di-set di timeManager.");
     },
 
-    // FUNGSI BARU (DIPINDAHKAN DARI UTILS.JS)
     getPredictedDateFromIndex: function(index) {
-        const startDate = this.getPredictedStartDate(); // Gunakan 'this'
+        const startDate = this.getPredictedStartDate(); 
         if (index < 0 || index > 335 || !startDate) {
             return null;
         }
@@ -34,7 +28,6 @@ export const timeManager = {
         return predictedDate;
     },
     
-    /** Menghitung indeks jam saat ini (disentralisasi) */
     calculateCurrentHourIndex: function(startDate) {
         const now = new Date();
         let hourOfDay = now.getHours();
@@ -47,7 +40,6 @@ export const timeManager = {
         return Math.max(0, Math.min(335, correctedIndex));
     },
 
-    /** Logika terpusat untuk menyinkronkan waktu saat data asli tiba */
     initializeOrSync: function(realStartDate) {
         console.log(`Menyinkronkan waktu dengan data asli...`);
         this.setPredictedStartDate(realStartDate);
@@ -74,7 +66,6 @@ export const timeManager = {
         
         console.log(`Indeks awal diprediksi: ${this._selectedTimeIndex}`);
         
-        // Panggil fungsi-fungsi ini SETELAH initDOM dipanggil di main.js
         this.updateTimePickerDisplayOnly(); 
         this.updateNavigationButtonsState(this._selectedTimeIndex); 
     },
@@ -90,9 +81,7 @@ export const timeManager = {
         console.log(`Tanggal mulai prediksi DISINKRONKAN ke data asli: ${date.toISOString()}`);
     },
     updateNavigationButtonsState: function(currentIndex) {
-        // Ambil elemen dari properti 'elements'
         const { prevDayBtn, nextDayBtn, prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn } = this.elements;
-
         if (prevDayBtn) prevDayBtn.disabled = (currentIndex < 24);
         if (nextDayBtn) nextDayBtn.disabled = (currentIndex >= 312); 
         if (prevThreeHourBtn) prevThreeHourBtn.disabled = (currentIndex < 3);
@@ -101,7 +90,6 @@ export const timeManager = {
         if (nextThreeHourBtn) nextThreeHourBtn.disabled = (currentIndex >= 333); 
     },
     updateTimePickerDisplayOnly: function(useRealData = false) {
-            // Ambil elemen dari properti 'elements'
             const { dateDisplay, hourDisplay } = this.elements;
             if (!dateDisplay || !hourDisplay) return;
             
@@ -126,9 +114,10 @@ export const timeManager = {
             hourDisplay.textContent = hourToShow;
     },
 
-    /** Memperbarui state fitur peta berdasarkan waktu (loop efisien) */
+    /** * [TAHAP B] Update Feature State dengan Data Lengkap (Warna & Ikon) 
+     * Memperbarui state fitur peta berdasarkan waktu (loop efisien)
+     */
     updateMapFeaturesForTime: function(idxGlobal) {
-        // Ambil map melalui mapManager
         const map = mapManager.getMap();
         
         if (this._globalTimeLocalLookup.length === 0) {
@@ -145,18 +134,40 @@ export const timeManager = {
             filter: ['!', ['has', 'point_count']] 
         });
         const activeIdStr = String(mapManager.getActiveLocationId());
+
         for (const feature of visibleFeatures) {
             const featureId = feature.id;
             const featureIdStr = String(featureId);
             const cachedData = cacheManager.get(featureId);
             const isActive = (featureIdStr === activeIdStr);
+            
+            // Default state jika data tidak ada
             let stateData = { hasData: false, active: isActive }; 
+            
             if (cachedData && cachedData.hourly?.time && idxGlobal < cachedData.hourly.time.length) {
                 const hourly = cachedData.hourly;
+                
+                // 1. Ekstrak data mentah
+                const rawTemp = hourly.temperature_2m?.[idxGlobal];
+                const rawPrecip = hourly.precipitation_probability?.[idxGlobal];
+                const rawCode = hourly.weather_code?.[idxGlobal];
+                const rawIsDay = hourly.is_day?.[idxGlobal];
+
+                // 2. Hitung properti visual (Warna & Nama Ikon)
+                const weatherInfo = utils.getWeatherInfo(rawCode, rawIsDay);
+                const tempColor = utils.getTempColor(rawTemp);
+                const precipColor = utils.getPrecipColor(rawPrecip);
+
                 stateData = {
                     hasData: true,
-                    suhu: hourly.temperature_2m?.[idxGlobal] ?? -999, 
-                    precip: hourly.precipitation_probability?.[idxGlobal] ?? -1, 
+                    suhu: rawTemp ?? -999,
+                    precip: rawPrecip ?? -1,
+                    
+                    // [TAHAP B] Data Baru untuk Styling Marker
+                    icon_name: weatherInfo.raw_icon_name, // Nama file SVG (misal: 'wi-day-sunny')
+                    temp_color: tempColor,                // Hex color (misal: '#ff0000')
+                    precip_color: precipColor,            // Hex color (misal: '#0000ff')
+                    
                     active: isActive 
                 };
             }
@@ -168,7 +179,6 @@ export const timeManager = {
         }
     },
     
-    /** Memperbarui semua UI yang bergantung pada waktu */
     updateUIWithRealData: function() {
         const idx = this._selectedTimeIndex;
         console.log(`UI Update (Real Data) triggered for Index: ${idx}`);
@@ -189,7 +199,6 @@ export const timeManager = {
         this.updateNavigationButtonsState(idx); 
     },
 
-    /** Handler utama saat waktu diubah oleh pengguna */
     handleTimeChange: function(newIndex) {
         newIndex = Math.max(0, Math.min(335, newIndex)); // Clamp
         if (newIndex !== this._selectedTimeIndex) {

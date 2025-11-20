@@ -13,6 +13,15 @@ export const mapManager = {
     setMap: function(mapInstance) {
         this._map = mapInstance;
         console.log("Map instance telah di-set di mapManager.");
+        
+        // --- [TAHAP A] TRIGGER PRELOAD ASET ---
+        if (mapInstance.loaded()) {
+            utils.preloadMarkerAssets(mapInstance);
+        } else {
+            mapInstance.once('load', () => {
+                utils.preloadMarkerAssets(mapInstance);
+            });
+        }
     },
 
     getMap: function() {
@@ -53,12 +62,9 @@ export const mapManager = {
             const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: id }) || {};
             if (currentState.active) return; 
 
-            const newState = {
-                hasData: currentState.hasData || false,
-                suhu: this._sanitizeStateValue(currentState.suhu, -999), 
-                precip: this._sanitizeStateValue(currentState.precip, -1),
-                active: true
-            };
+            // Note: Kita tidak mereset warna di sini, hanya flag active.
+            // Warna akan diurus oleh siklus update timeManager/mapManager
+            const newState = { ...currentState, active: true };
             map.setFeatureState({ source: 'data-cuaca-source', id: id }, newState); 
             console.log(`Highlight ON: ${id}`);
         } catch (e) { console.error("Error setting active highlight:", e); }
@@ -76,7 +82,6 @@ export const mapManager = {
             const isPopupOpen = popupManager.isOpen();
 
             if (isTargetActive && (isSidebarOpen || isPopupOpen)) {
-                console.log(`Menahan highlight untuk ${targetId} (Sidebar: ${isSidebarOpen}, Popup: ${isPopupOpen})`);
                 return; 
             }
         }
@@ -85,12 +90,7 @@ export const mapManager = {
         try {
             const currentState = map.getFeatureState({ source: 'data-cuaca-source', id: targetId });
             if (currentState?.active) {
-                const newState = {
-                    hasData: currentState.hasData || false,
-                    suhu: this._sanitizeStateValue(currentState.suhu, -999),
-                    precip: this._sanitizeStateValue(currentState.precip, -1),
-                    active: false
-                };
+                const newState = { ...currentState, active: false };
                 map.setFeatureState({ source: 'data-cuaca-source', id: targetId }, newState);
             }
         } catch (e) { console.error("Error removing highlight:", e); }
@@ -102,7 +102,6 @@ export const mapManager = {
 
     resetActiveLocationState: function() {
         console.log("Resetting active location state...");
-        
         const idToReset = this._activeLocationId;
         
         if (sidebarManager.isOpen()) {
@@ -267,14 +266,27 @@ export const mapManager = {
         return didInitTime; 
     },
     
+    /** * [TAHAP B] Update Map State saat data baru masuk.
+     * Disinkronkan dengan logika di time_manager agar properti visual (warna/ikon) langsung tersedia.
+     */
     _updateMapStateForFeature: function(id, data, isActive) {
         const map = this.getMap(); 
         if (!map) return;
 
         const idxSaatIni = timeManager.getSelectedTimeIndex();
         if (data?.hourly?.time && idxSaatIni >= 0 && idxSaatIni < data.hourly.time.length) {
+            
+            // 1. Ambil data mentah
             const suhu = data.hourly.temperature_2m?.[idxSaatIni];
             const precip = data.hourly.precipitation_probability?.[idxSaatIni];
+            const code = data.hourly.weather_code?.[idxSaatIni];
+            const isDay = data.hourly.is_day?.[idxSaatIni];
+
+            // 2. Hitung properti visual (sama seperti time_manager)
+            const weatherInfo = utils.getWeatherInfo(code, isDay);
+            const tempColor = utils.getTempColor(suhu);
+            const precipColor = utils.getPrecipColor(precip);
+
             try {
                 map.setFeatureState(
                     { source: 'data-cuaca-source', id: id },
@@ -282,6 +294,12 @@ export const mapManager = {
                         hasData: true,
                         suhu: this._sanitizeStateValue(suhu, -999),
                         precip: this._sanitizeStateValue(precip, -1),
+                        
+                        // [TAHAP B] Inject Properti Visual
+                        icon_name: weatherInfo.raw_icon_name,
+                        temp_color: tempColor,
+                        precip_color: precipColor,
+
                         active: isActive 
                     }
                 );
@@ -293,7 +311,7 @@ export const mapManager = {
         }
     },
 
-    handleClusterClick: async function(feature, coordinates) { // <-- TAMBAHKAN 'async' DI SINI
+    handleClusterClick: async function(feature, coordinates) { 
         const map = this.getMap(); 
         if (!map) return;
 
@@ -305,16 +323,14 @@ export const mapManager = {
         popupManager.close(true);
         const clusterId = feature.properties.cluster_id;
         const source = map.getSource('data-cuaca-source'); 
-        if (!source || typeof source.getClusterLeaves !== 'function') return; // Cek keamanan
+        if (!source || typeof source.getClusterLeaves !== 'function') return; 
         
         const pointCount = feature.properties.point_count;
 
-        // [AUDIT FIX] Gunakan generateLoadingPopupContent
         const loadingContent = popupManager.generateLoadingPopupContent('Memuat Klaster...');
         const loadingPopupRef = popupManager.open(coordinates, loadingContent);
 
         try {
-            // PERUBAHAN UTAMA: Gunakan await dan hilangkan callback
             const leaves = await source.getClusterLeaves(clusterId, 100, 0); 
             
             if (!loadingPopupRef) return;
@@ -328,7 +344,6 @@ export const mapManager = {
             const idxDisplay = timeManager.getSelectedTimeIndex();
             const items = [];
 
-            // Menyiapkan array item untuk generator
             for (const id in dataDetailCuaca) {
                 const data = dataDetailCuaca[id];
                 if (!data) continue; 
@@ -358,13 +373,11 @@ export const mapManager = {
                 });
             }
 
-            // [AUDIT FIX] Gunakan generateClusterPopupContent
             const titleText = pointCount > 100 ? `Menampilkan 100 dari ${pointCount} Lokasi:` : `${pointCount} Lokasi:`;
             const popupContent = popupManager.generateClusterPopupContent(titleText, items);
             popupManager.setDOMContent(popupContent);
             
         } catch (error) {
-            // Tangani error dari getClusterLeaves atau fetch
             console.error('Gagal memuat data klaster:', error);
             if (loadingPopupRef && popupManager.getInstance() === loadingPopupRef) { 
                 popupManager.setHTML('Gagal memuat data klaster.'); 
@@ -441,7 +454,6 @@ export const mapManager = {
         this._activeLocationData = null; 
         this._isClickLoading = true;
         
-        // [AUDIT FIX] Gunakan generateLoadingPopupContent
         const loadingContent = popupManager.generateLoadingPopupContent(props.nama_simpel);
         popupManager.open(coordinates, loadingContent);
         
@@ -474,7 +486,6 @@ export const mapManager = {
         this._isClickLoading = true; 
         inflightIds.add(id);
         
-        // [AUDIT FIX] Gunakan generateLoadingPopupContent
         const loadingContent = popupManager.generateLoadingPopupContent(nama_simpel);
         const loadingPopupRef = popupManager.open(coordinates, loadingContent);
         

@@ -2,6 +2,8 @@ venv/
 
 /legacy_file
 
+/static/images/icons/
+
 *.pyc
 *.pem
 personal_notes.md

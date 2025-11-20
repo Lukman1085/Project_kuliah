@@ -14,18 +14,137 @@ export const utils = {
         if (!info) { return { deskripsi: `Kode ${weather_code}`, ikon: `wi ${default_info[1]}` }; }
         const deskripsi = info[0] || default_info[0];
         const useDayIcon = (is_day === 1 || is_day === true);
-        const icon_class = useDayIcon ? (info[1] || info[2]) : (info[2] || info[1]);
-        return { deskripsi: deskripsi, ikon: `wi ${icon_class || default_info[1]}` };
+        // Kembalikan nama class ikon (string) yang sesuai dengan nama file SVG (tanpa ekstensi)
+        const icon_name = useDayIcon ? (info[1] || info[2]) : (info[2] || info[1]);
+        // Kita kembalikan format class untuk CSS 'wi ...' DAN nama raw untuk keperluan MapLibre image ID
+        return { 
+            deskripsi: deskripsi, 
+            ikon: `wi ${icon_name || default_info[1]}`, // Untuk HTML Class (Sidebar/Popup)
+            raw_icon_name: icon_name || default_info[1]   // Untuk MapLibre Layer (Marker)
+        };
     },
-    // getPredictedDateFromIndex: function(index) {
-    //     const startDate = timeManager.getPredictedStartDate();
-    //     if (index < 0 || index > 335 || !startDate) {
-    //         return null;
-    //     }
-    //     const predictedDate = new Date(startDate);
-    //     predictedDate.setHours(predictedDate.getHours() + index);
-    //     return predictedDate;
-    // },
+
+    // --- [REVISI] SECTION: ICON LOADER ENGINE (TAHAP A - STABILIZED) ---
+
+    /**
+     * Memuat SVG, menyuntikkan dimensi, mengubahnya menjadi Data URI Base64,
+     * memuatnya ke HTMLImageElement, lalu menambahkannya ke style peta.
+     * Metode ini mencegah DOMException pada ImageBitmap.
+     */
+    loadSvgWithDimensions: async function(map, url, id, isSDF = false) {
+        if (map.hasImage(id)) return; // Skip jika sudah ada
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Gagal fetch ${url}`);
+            const svgText = await response.text();
+
+            // 1. Parse XML SVG
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(svgText, "image/svg+xml");
+            const svgElement = xmlDoc.documentElement;
+
+            // 2. Suntikkan dimensi Eksplisit ke XML (PENTING)
+            // Kita set width/height agar browser tahu ukuran render sebelum rasterisasi
+            svgElement.setAttribute("width", "35");
+            svgElement.setAttribute("height", "35");
+
+            // 3. Serialisasi kembali ke string XML
+            const serializer = new XMLSerializer();
+            const newSvgStr = serializer.serializeToString(xmlDoc);
+
+            // 4. Konversi ke Base64 Data URI (Bypass Blob issues)
+            // Menggunakan btoa dengan unescape/encodeURIComponent untuk menangani karakter Unicode jika ada
+            const base64SVG = window.btoa(unescape(encodeURIComponent(newSvgStr)));
+            const dataURI = `data:image/svg+xml;base64,${base64SVG}`;
+
+            // 5. Buat HTMLImageElement (Standard Browser Image)
+            const img = new Image(35, 35);
+            
+            // Wrap onload dalam Promise agar kita bisa await
+            await new Promise((resolve, reject) => {
+                img.onload = () => {
+                    if (!map.hasImage(id)) {
+                        map.addImage(id, img, { sdf: isSDF });
+                        // console.log(`Ikon OK: ${id}`);
+                    }
+                    resolve();
+                };
+                img.onerror = (e) => {
+                    console.error(`Gagal render image ${id}`, e);
+                    reject(e);
+                };
+                img.src = dataURI;
+            });
+
+        } catch (e) {
+            console.error(`Error loading SVG ${id}:`, e);
+        }
+    },
+
+    /**
+     * Orkestrator untuk memuat semua aset marker yang dibutuhkan.
+     */
+    preloadMarkerAssets: async function(map) {
+        console.log("🚧 Memulai Konstruksi Aset Marker (Phase A - Revisi)...");
+        const basePath = "static/images/icons/"; 
+
+        // 1. Muat Komponen Struktur Marker
+        const structuralAssets = [
+            { file: "wi-thermometer-exterior.svg", id: "marker-thermometer-exterior", sdf: false }, 
+            { file: "wi-thermometer-internal.svg", id: "marker-thermometer-internal", sdf: true },  
+            { file: "wi-raindrop.svg", id: "marker-raindrop", sdf: true }                           
+        ];
+
+        const promises = structuralAssets.map(asset => 
+            this.loadSvgWithDimensions(map, `${basePath}${asset.file}`, asset.id, asset.sdf)
+        );
+
+        // 2. Muat Ikon Cuaca Unik
+        const uniqueIcons = new Set();
+        uniqueIcons.add("wi-na"); 
+        
+        Object.values(WMO_CODE_MAP).forEach(val => {
+            if (val[1]) uniqueIcons.add(val[1]);
+            if (val[2]) uniqueIcons.add(val[2]);
+        });
+
+        console.log(`Mendeteksi ${uniqueIcons.size} varian ikon cuaca unik.`);
+
+        uniqueIcons.forEach(iconName => {
+            promises.push(
+                this.loadSvgWithDimensions(map, `${basePath}${iconName}.svg`, iconName, true)
+            );
+        });
+
+        await Promise.all(promises);
+        console.log("✅ Tahap A Selesai (Revisi): Aset marker aman di memori.");
+    },
+
+    // --- END SECTION ---
+
+    // --- [NEW] SECTION: COLOR LOGIC (TAHAP B) ---
+    
+    /** Mengembalikan warna HEX berdasarkan suhu (untuk Termometer Internal) */
+    getTempColor: function(temp) {
+        if (temp === null || temp === undefined) return '#cccccc'; // Abu-abu jika null
+        if (temp < 15) return '#3498db'; // Dingin (Biru)
+        if (temp < 25) return '#2ecc71'; // Nyaman (Hijau)
+        if (temp < 30) return '#f1c40f'; // Hangat (Kuning)
+        if (temp < 34) return '#e67e22'; // Panas (Oranye)
+        return '#e74c3c';                // Ekstrem (Merah)
+    },
+
+    /** Mengembalikan warna HEX berdasarkan probabilitas hujan (untuk Raindrop) */
+    getPrecipColor: function(prob) {
+        if (prob === null || prob === undefined) return '#bdc3c7'; // Abu-abu muda
+        if (prob <= 10) return '#bdc3c7'; // Kering (Abu-abu)
+        if (prob <= 40) return '#85c1e9'; // Potensi Rendah (Biru Pucat)
+        if (prob <= 70) return '#3498db'; // Potensi Sedang (Biru)
+        return '#2980b9';                 // Basah (Biru Tua)
+    },
+    // --- END SECTION ---
+
     formatLocalTimestampString: function(localTimeString) {
         if (!localTimeString) return "Error Waktu";
         try {
