@@ -10,22 +10,16 @@ export const timeManager = {
     _globalTimeLocalLookup: [], 
     _predictedStartDate: null,
     _userHasChangedTime: false, 
-
-    // FUNGSI BARU: Tempat menyimpan referensi elemen DOM
     elements: {},
 
-    // FUNGSI BARU: Dipanggil oleh main.js untuk 'menyuntikkan' elemen DOM
+    // Dipanggil oleh main.js untuk 'menyuntikkan' elemen DOM
     initDOM: function(domElements) {
         this.elements = domElements;
-        // domElements akan berisi:
-        // { prevDayBtn, nextDayBtn, dateDisplay, hourDisplay, 
-        //   prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn }
         console.log("Elemen DOM Waktu telah di-set di timeManager.");
     },
 
-    // FUNGSI BARU (DIPINDAHKAN DARI UTILS.JS)
     getPredictedDateFromIndex: function(index) {
-        const startDate = this.getPredictedStartDate(); // Gunakan 'this'
+        const startDate = this.getPredictedStartDate(); 
         if (index < 0 || index > 335 || !startDate) {
             return null;
         }
@@ -74,10 +68,10 @@ export const timeManager = {
         
         console.log(`Indeks awal diprediksi: ${this._selectedTimeIndex}`);
         
-        // Panggil fungsi-fungsi ini SETELAH initDOM dipanggil di main.js
         this.updateTimePickerDisplayOnly(); 
         this.updateNavigationButtonsState(this._selectedTimeIndex); 
     },
+
     getSelectedTimeIndex: function() { return this._selectedTimeIndex; },
     getGlobalTimeLookup: function() { return this._globalTimeLocalLookup; },
     getPredictedStartDate: function() { return this._predictedStartDate; },
@@ -89,8 +83,8 @@ export const timeManager = {
         this._predictedStartDate = date;
         console.log(`Tanggal mulai prediksi DISINKRONKAN ke data asli: ${date.toISOString()}`);
     },
+
     updateNavigationButtonsState: function(currentIndex) {
-        // Ambil elemen dari properti 'elements'
         const { prevDayBtn, nextDayBtn, prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn } = this.elements;
 
         if (prevDayBtn) prevDayBtn.disabled = (currentIndex < 24);
@@ -100,8 +94,8 @@ export const timeManager = {
         if (nextHourBtn) nextHourBtn.disabled = (currentIndex >= 335);
         if (nextThreeHourBtn) nextThreeHourBtn.disabled = (currentIndex >= 333); 
     },
+
     updateTimePickerDisplayOnly: function(useRealData = false) {
-            // Ambil elemen dari properti 'elements'
             const { dateDisplay, hourDisplay } = this.elements;
             if (!dateDisplay || !hourDisplay) return;
             
@@ -126,45 +120,18 @@ export const timeManager = {
             hourDisplay.textContent = hourToShow;
     },
 
-    /** Memperbarui state fitur peta berdasarkan waktu (loop efisien) */
+    /** * [REVISI] Memperbarui state fitur peta berdasarkan waktu.
+     * Sekarang mendelegasikan tugas ini sepenuhnya ke mapManager
+     * karena mapManager perlu menangani update GeoJSON (Ikon) + FeatureState (Warna)
+     */
     updateMapFeaturesForTime: function(idxGlobal) {
-        // Ambil map melalui mapManager
-        const map = mapManager.getMap();
+        if (idxGlobal === undefined) idxGlobal = this._selectedTimeIndex;
         
-        if (this._globalTimeLocalLookup.length === 0) {
-                return;
-        }
-        if (!map || !map.getSource('data-cuaca-source')) return; 
-        
-        if (idxGlobal === undefined || idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) {
-            idxGlobal = this._selectedTimeIndex; 
-        }
-        if (idxGlobal < 0 || idxGlobal >= this._globalTimeLocalLookup.length) return; 
-        
-        const visibleFeatures = map.querySourceFeatures('data-cuaca-source', { 
-            filter: ['!', ['has', 'point_count']] 
-        });
-        const activeIdStr = String(mapManager.getActiveLocationId());
-        for (const feature of visibleFeatures) {
-            const featureId = feature.id;
-            const featureIdStr = String(featureId);
-            const cachedData = cacheManager.get(featureId);
-            const isActive = (featureIdStr === activeIdStr);
-            let stateData = { hasData: false, active: isActive }; 
-            if (cachedData && cachedData.hourly?.time && idxGlobal < cachedData.hourly.time.length) {
-                const hourly = cachedData.hourly;
-                stateData = {
-                    hasData: true,
-                    suhu: hourly.temperature_2m?.[idxGlobal] ?? -999, 
-                    precip: hourly.precipitation_probability?.[idxGlobal] ?? -1, 
-                    active: isActive 
-                };
-            }
-            try {
-                map.setFeatureState({ source: 'data-cuaca-source', id: featureId }, stateData); 
-            } catch(e) {
-                    // console.warn(`Gagal set state (updateMapFeaturesForTime) untuk ${featureId}:`, e.message);
-            }
+        // Delegasi ke mapManager
+        if (mapManager && typeof mapManager.updateMapFeaturesForTime === 'function') {
+            mapManager.updateMapFeaturesForTime(idxGlobal);
+        } else {
+            console.warn("mapManager.updateMapFeaturesForTime tidak tersedia.");
         }
     },
     
@@ -182,8 +149,12 @@ export const timeManager = {
         }
         const localTimeString = this._globalTimeLocalLookup[idx];
         const activeData = mapManager.getActiveLocationData();
+        
         this.updateTimePickerDisplayOnly(true); 
+        
+        // [REVISI] Panggil fungsi delegasi di atas
         this.updateMapFeaturesForTime(idx); 
+        
         popupManager.updateUIForTime(idx, localTimeString); 
         sidebarManager.updateUIForTime(idx, localTimeString, activeData); 
         this.updateNavigationButtonsState(idx); 
@@ -191,13 +162,15 @@ export const timeManager = {
 
     /** Handler utama saat waktu diubah oleh pengguna */
     handleTimeChange: function(newIndex) {
-        newIndex = Math.max(0, Math.min(335, newIndex)); // Clamp
+        newIndex = Math.max(0, Math.min(335, newIndex)); 
         if (newIndex !== this._selectedTimeIndex) {
             this._userHasChangedTime = true;
             this._selectedTimeIndex = newIndex;
             console.log(`Indeks waktu diubah ke: ${newIndex}`);
+            
             this.updateTimePickerDisplayOnly(this._globalTimeLocalLookup.length > 0); 
             this.updateNavigationButtonsState(newIndex); 
+            
             if (this._globalTimeLocalLookup.length > 0) {
                 this.updateUIWithRealData(); 
             }
