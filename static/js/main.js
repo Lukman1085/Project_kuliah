@@ -9,7 +9,6 @@ import { utils, WMO_CODE_MAP } from './utilities.js';
 import { MAP_STYLE } from './map_style.js';
 import { ResetPitchControl } from './reset_pitch_ctrl.js';
 import { calendarManager } from './calender_manager.js';
-// PERUBAHAN: Impor seluruh manajer, bukan fungsi lepas
 import { searchBarManager } from './searchbar.js';
 
 // ================================================================
@@ -21,7 +20,6 @@ const hostname = window.location.hostname;
 const port = '5000';
 const baseUrl = `${protocol}//${hostname}:${port}`;
 
-// Variabel elemen UI
 let map; 
 let searchDebounceTimer; 
 
@@ -31,7 +29,7 @@ let searchDebounceTimer;
 document.addEventListener('DOMContentLoaded', function() {
 
     // ================================================================
-    // 1. Ambil Elemen UI (Semua dikumpulkan di sini)
+    // 1. Ambil Elemen UI
     // ================================================================
     const sidebarEl = document.getElementById('detail-sidebar');
     const toggleBtnEl = document.getElementById('sidebar-toggle-btn');
@@ -56,14 +54,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const calendarPopup = document.getElementById('calendar-popup');
     const calendarGrid = document.getElementById('calendar-grid');
     const calendarMonthYear = document.getElementById('calendar-month-year');
-    const loadingSpinner = document.getElementById('global-loading-spinner');
+    
     const calendarPrevMonthBtn = document.getElementById('calendar-prev-month'); 
     const calendarNextMonthBtn = document.getElementById('calendar-next-month'); 
     
     const searchInput = document.getElementById('search-bar');
     const suggestionsDropdown = document.getElementById('suggestions-dropdown');
 
-    // MODIFIKASI: Ambil elemen UI baru untuk sub-wilayah
     const subRegionContainerEl = document.getElementById('sidebar-sub-region-container');
     const subRegionTitleEl = document.getElementById('sidebar-sub-region-title');
     const subRegionLoadingEl = document.getElementById('sidebar-sub-region-loading');
@@ -73,27 +70,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // 2. Inisialisasi Manajer (Dependency Injection)
     // ================================================================
     
-    // Kirim elemen-elemen yang dibutuhkan oleh sidebarManager
     sidebarManager.initDOM({
-        sidebarEl, 
-        toggleBtnEl, 
-        closeBtnEl, 
-        sidebarContentEl, 
-        sidebarLocationNameEl,
-        sidebarPlaceholderEl, 
-        sidebarLoadingEl, 
-        sidebarWeatherDetailsEl, 
-        sidebarProvinceDetailsEl,
-        sidebarEl, // Kirim elemen 'sidebarEl' lagi untuk referensi umum jika perlu
-
-        // MODIFIKASI: Tambahkan elemen baru ke injeksi
-        subRegionContainerEl,
-        subRegionTitleEl,
-        subRegionLoadingEl,
-        subRegionListEl
+        sidebarEl, toggleBtnEl, closeBtnEl, sidebarContentEl, sidebarLocationNameEl,
+        sidebarPlaceholderEl, sidebarLoadingEl, sidebarWeatherDetailsEl, sidebarProvinceDetailsEl,
+        sidebarEl, subRegionContainerEl, subRegionTitleEl, subRegionLoadingEl, subRegionListEl
     });
 
-    // Kirim elemen-elemen detail cuaca ke sidebarManager
     sidebarManager.initWeatherElements({
         timeEl: document.getElementById('sidebar-current-time'),
         iconEl: document.getElementById('sidebar-current-icon'),
@@ -106,25 +88,13 @@ document.addEventListener('DOMContentLoaded', function() {
         dailyListEl: document.getElementById('sidebar-daily-forecast-list')
     });
     
-    // Kirim elemen-elemen yang dibutuhkan oleh timeManager
     timeManager.initDOM({
-        prevDayBtn, 
-        nextDayBtn, 
-        dateDisplay, 
-        hourDisplay,
-        prevThreeHourBtn, 
-        prevHourBtn, 
-        nextHourBtn, 
-        nextThreeHourBtn
+        prevDayBtn, nextDayBtn, dateDisplay, hourDisplay,
+        prevThreeHourBtn, prevHourBtn, nextHourBtn, nextThreeHourBtn
     });
 
-    // Kirim elemen-elemen yang dibutuhkan oleh searchBarManager
-    searchBarManager.init({
-        searchInput, 
-        suggestionsDropdown
-    });
+    searchBarManager.init({ searchInput, suggestionsDropdown });
 
-    // Mengaktifkan inisialisasi calendarManager
     calendarManager.initDOM({ calendarPopup, calendarGrid, calendarMonthYear });
 
     // ================================================================
@@ -132,13 +102,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ================================================================
     fetch(`${baseUrl}/api/wmo-codes`)
         .then(res => res.ok ? res.json() : Promise.reject(`Error ${res.status}`))
-        .then(data => { 
-            // Salin properti ke objek yang diimpor
-            Object.assign(WMO_CODE_MAP, data); 
-        })
+        .then(data => { Object.assign(WMO_CODE_MAP, data); })
         .catch(e => console.error("Gagal memuat WMO codes:", e));
 
-    timeManager.init(); // Inisialisasi waktu setelah initDOM dipanggil
+    timeManager.init();
     
     // ================================================================
     // 4. Pasang Event Listener
@@ -151,18 +118,13 @@ document.addEventListener('DOMContentLoaded', function() {
     nextHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 1));
     nextThreeHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 3));
     
-    calendarBtn.addEventListener('click', (e) => { 
-        e.stopPropagation(); 
-        calendarManager.toggleCalendar(); 
-    });
-    
+    calendarBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.toggleCalendar(); });
     calendarPrevMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(-1); });
     calendarNextMonthBtn.addEventListener('click', (e) => { e.stopPropagation(); calendarManager.changeCalendarMonth(1); });
 
     toggleBtnEl.addEventListener('click', () => sidebarManager.toggleSidebar());
     closeBtnEl.addEventListener('click', () => sidebarManager.closeSidebar());
 
-    // PERUBAHAN: Gunakan searchBarManager.fetchLokasi
     searchInput.addEventListener('input', () => {
         clearTimeout(searchDebounceTimer);
         const query = searchInput.value;
@@ -171,54 +133,31 @@ document.addEventListener('DOMContentLoaded', function() {
             suggestionsDropdown.style.display = 'none';
             return;
         }
-        searchDebounceTimer = setTimeout(() => {
-            searchBarManager.fetchLokasi(query); // Panggil metode dari manajer
-        }, 350); 
+        searchDebounceTimer = setTimeout(() => { searchBarManager.fetchLokasi(query); }, 350); 
     });
     searchInput.addEventListener('focus', () => {
         const query = searchInput.value;
-        if (query.length >= 3) {
-            searchBarManager.fetchLokasi(query); // Panggil metode dari manajer
-        }
+        if (query.length >= 3) { searchBarManager.fetchLokasi(query); }
     });
     
-    // Listener global untuk menutup dropdown pencarian DAN kalender
     document.addEventListener('click', function(e) {
         const wrapper = document.getElementById('search-wrapper');
-        if (wrapper && !wrapper.contains(e.target)) {
-            suggestionsDropdown.style.display = 'none';
-        }
-        
+        if (wrapper && !wrapper.contains(e.target)) { suggestionsDropdown.style.display = 'none'; }
         if (calendarPopup && calendarPopup.style.display === 'block') {
-            if (!calendarPopup.contains(e.target) && e.target !== calendarBtn) {
-                calendarManager.toggleCalendar();
-            }
+            if (!calendarPopup.contains(e.target) && e.target !== calendarBtn) { calendarManager.toggleCalendar(); }
         }
     });
     
-    // PERUBAHAN: Gunakan searchBarManager.fetchLokasi
     document.getElementById('search-btn').addEventListener('click', () => {
         const query = searchInput.value;
-        if (query.length < 3) {
-            console.log("Kueri pencarian terlalu pendek untuk diklik");
-            return;
-        }
+        if (query.length < 3) return;
         clearTimeout(searchDebounceTimer);
-        searchBarManager.fetchLokasi(query); // Panggil metode dari manajer
+        searchBarManager.fetchLokasi(query);
         searchInput.focus();
     });
 
-    // Event listener terpusat (Pub/Sub)
-    document.addEventListener('requestSidebarDetail', () => {
-        console.log("Event 'requestSidebarDetail' diterima.");
-        sidebarManager.openSidebarFromPopup();
-    });
-    document.addEventListener('requestSidebarOpen', () => {
-        console.log("Event 'requestSidebarOpen' diterima.");
-        if (!sidebarManager.isOpen()) {
-            sidebarManager.openSidebar();
-        }
-    });
+    document.addEventListener('requestSidebarDetail', () => { sidebarManager.openSidebarFromPopup(); });
+    document.addEventListener('requestSidebarOpen', () => { if (!sidebarManager.isOpen()) { sidebarManager.openSidebar(); } });
 
     // ================================================================
     // 5. Inisialisasi Peta & Event Peta
@@ -231,10 +170,8 @@ document.addEventListener('DOMContentLoaded', function() {
         maxBounds: [[90, -15], [145, 10]]
     });
 
-    // PERUBAHAN KRUSIAL: Kirim instance map ke mapManager
     mapManager.setMap(map);
 
-    // --- Logika Peta on 'load' ---
     map.on('load', () => {
         map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
         map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels', minzoom: 7 });
@@ -243,24 +180,34 @@ document.addEventListener('DOMContentLoaded', function() {
         map.addControl(new ResetPitchControl(), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl());
         
-        // .bind(mapManager) memastikan 'this' di dalam perbaruiPetaGeo adalah mapManager
-        const perbaruiPetaDebounced = utils.debounce(mapManager.perbaruiPetaGeo.bind(mapManager), 700);
-        map.on('moveend', perbaruiPetaDebounced);
+        // --- REVISI TAHAP VEKTOR TILE: PEMBERSIHAN ---
+        // Menghapus listener GeoJSON 'perbaruiPetaGeo' karena sekarang menggunakan Vector Tile
+        // yang dihandle otomatis di map_manager.setMap via event 'move'
         
         map.on('data', (e) => {
             if (e.sourceId === 'data-cuaca-source' && e.isSourceLoaded) {
-                    mapManager.fetchDataForVisibleMarkers(); // Tidak perlu .bind lagi karena sudah di dalam arrow function
+                // Listener untuk source lama (GeoJSON) jika masih digunakan untuk search/highlight tertentu
+                // Tapi untuk render utama marker sudah via renderMarkers()
+                mapManager.fetchDataForVisibleMarkers(); 
             }
         });
 
-        mapManager.perbaruiPetaGeo(); 
+        // Trigger render manual pertama kali
+        mapManager.renderMarkers();
+        mapManager.triggerFetchData();
 
-        // --- Handler Klik Peta ---
-        const allInteractiveLayers = [ 'cluster-background-layer', 'unclustered-point-temp-circle', 'provinsi-point-circle' ];
+        const allInteractiveLayers = [ 'cluster-background-layer', 'unclustered-point-hit-target', 'provinsi-point-hit-target' ];
+        
         map.on('click', (e) => {
-            const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
+            let features = [];
+            try {
+                features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
+            } catch (err) {
+                console.warn("Query feature failed:", err);
+                return;
+            }
 
-            // Logika klik di kanvas kosong untuk menutup sidebar
+            // Logika klik di kanvas kosong
             if (sidebarManager.isOpen() && !features.length) { 
                 const sidebarClicked = e.originalEvent.target.closest('#detail-sidebar');
                 const popupClicked = e.originalEvent.target.closest('.maplibregl-popup');
@@ -269,8 +216,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const pickerClicked = e.originalEvent.target.closest('#datetime-picker-container');
                 const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
                 const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
+                const markerClicked = e.originalEvent.target.closest('.marker-container'); // Cek marker HTML
 
-                if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked) {
+                if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked && !markerClicked) {
                     sidebarManager.closeSidebar(); 
                 }
             }
@@ -285,19 +233,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const props = feature.properties;
             const coordinates = feature.geometry.coordinates.slice();
 
-            if (layerId === 'cluster-background-layer') { mapManager.handleClusterClick(feature, coordinates); }
-            else if (layerId === 'provinsi-point-circle') { 
+            if (layerId === 'cluster-background-layer') { 
+                mapManager.handleClusterClick(feature, coordinates); 
+            }
+            else if (layerId === 'provinsi-point-hit-target') { 
                 mapManager.handleProvinceClick(props, coordinates); 
             }
-            else if (layerId === 'unclustered-point-temp-circle') {
-                // MODIFIKASI: Pastikan 'tipadm' diteruskan
+            else if (layerId === 'unclustered-point-hit-target') {
+                // Fallback untuk klik pada layer hit target invisible
+                // (Walaupun biasanya klik ditangkap oleh HTML marker itu sendiri)
                 const dataUntukHandler = { 
                     id: feature.id, 
                     nama_simpel: props.nama_simpel, 
                     nama_label: props.nama_label, 
                     lat: coordinates[1], 
                     lon: coordinates[0],
-                    tipadm: props.tipadm // <-- Ambil 'tipadm' dari properti fitur
+                    tipadm: props.tipadm 
                 };
                 mapManager.handleUnclusteredClick(dataUntukHandler);
             }
@@ -305,17 +256,21 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Hover pointer & Info koordinat
         map.on('mousemove', (e) => { 
+            try {
                 const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
                 map.getCanvas().style.cursor = features.length ? 'pointer' : '';
-            });
+            } catch(err) {
+            }
+        });
+        
         const infoKoordinat = document.getElementById('koordinat-info'); 
         infoKoordinat.innerHTML = 'Geser kursor di atas peta'; 
         map.on('mousemove', (e) => { 
                 infoKoordinat.innerHTML = `Latitude: ${e.lngLat.lat.toFixed(5)} | Longitude: ${e.lngLat.lng.toFixed(5)}`;
-            });
+        });
         map.on('mouseout', () => { 
                 infoKoordinat.innerHTML = 'Geser kursor di atas peta';
-            });
+        });
 
     }); // Akhir map.on('load')
 }); // Akhir DOMContentLoaded
