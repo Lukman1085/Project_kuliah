@@ -4,138 +4,532 @@ import { popupManager } from "./popup_manager.js";
 import { timeManager } from "./time_manager.js";
 import { sidebarManager } from "./sidebar_manager.js";
 
+// Set untuk melacak ID yang sedang dalam proses fetch agar tidak double-request
 export const inflightIds = new Set();
 
-/** 🗺️ MAP MANAGER */
+/** 🗺️ MAP MANAGER (HYBRID VECTOR + CLIENT CLUSTERING)
+ * * FITUR UTAMA:
+ * 1. Vector Tile Rendering: Geometri diambil instan dari tile MVT/PBF.
+ * 2. Grid-Based Clustering: Pengelompokan marker sisi klien berdasarkan jarak piksel layar.
+ * 3. Interaction Guard: Mencegah fetch API saat user masih berinteraksi (drag/pan).
+ * 4. Handover Maneuver: Logika visual marker aktif yang cerdas (serah terima highlight).
+ */
 export const mapManager = { 
     _map: null, 
-    _markers: {}, 
-    _lastClusterFeature: null,
+    _markers: {}, // Menyimpan instance Single Marker & Cluster Marker
+    _fetchDebounceTimer: null,
+    _isInteracting: false, // Guard: Apakah user sedang menekan mouse/layar?
 
+    /**
+     * Menginisialisasi instance peta dan memasang event listener.
+     */
     setMap: function(mapInstance) {
         this._map = mapInstance;
         console.log("Map instance telah di-set di mapManager.");
+        
+        const container = mapInstance.getContainer();
+
+        // 1. INTERACTION GUARDS (Mencegah "Moveend Hantu")
+        // Deteksi saat user menahan klik/sentuh
+        container.addEventListener('mousedown', () => { this._isInteracting = true; });
+        container.addEventListener('touchstart', () => { this._isInteracting = true; }, { passive: true });
+
+        // Deteksi saat user melepas klik/sentuh (di mana saja di window)
+        window.addEventListener('mouseup', () => { 
+            if (this._isInteracting) {
+                this._isInteracting = false;
+                // Trigger fetch manual saat lepas jari (jika peta sudah diam)
+                if (!mapInstance.isMoving()) this.triggerFetchData(); 
+            }
+        });
+        window.addEventListener('touchend', () => { 
+            if (this._isInteracting) {
+                this._isInteracting = false;
+                if (!mapInstance.isMoving()) this.triggerFetchData();
+            }
+        });
+
+        // 2. VISUAL RENDER (Skeleton & Cluster)
+        // Render ulang marker/cluster setiap kali posisi piksel berubah
         mapInstance.on('move', () => { this.renderMarkers(); });
-        mapInstance.on('moveend', () => { this.renderMarkers(); });
+        mapInstance.on('zoom', () => { this.renderMarkers(); });
+        mapInstance.on('pitch', () => { this.renderMarkers(); }); // Penting untuk mode 3D
+
+        // 3. DATA FETCH (Via API)
+        mapInstance.on('moveend', () => { 
+            this._isInteracting = false; // Safety reset
+            this.renderMarkers(); // Finalize posisi
+            this.triggerFetchData(); // Fetch data (jika guard mengizinkan)
+        });
+        
+        mapInstance.on('sourcedata', (e) => {
+            if (e.sourceId === 'batas-wilayah-vector' && e.isSourceLoaded) {
+                this.renderMarkers();
+            }
+        });
     },
 
-    getMap: function() {
-        if (!this._map) { console.error("mapManager.getMap() dipanggil sebelum map di-set!"); return null; }
-        return this._map;
-    },
+    getMap: function() { return this._map; },
 
-    _isLoading: false, _isClickLoading: false, _activeLocationId: null, _activeLocationSimpleName: null, _activeLocationLabel: null, _activeLocationData: null, _previousActiveLocationId: null,
-    getIsLoading: function() { return this._isLoading; }, getIsClickLoading: function() { return this._isClickLoading; }, getActiveLocationId: function() { return this._activeLocationId; }, getActiveLocationSimpleName: function() { return this._activeLocationSimpleName; }, getActiveLocationLabel: function() { return this._activeLocationLabel; }, getActiveLocationData: function() { return this._activeLocationData; },
+    // State Management
+    _isLoading: false, 
+    _isClickLoading: false, 
+    _activeLocationId: null, 
+    _activeLocationSimpleName: null, 
+    _activeLocationLabel: null, 
+    _activeLocationData: null, 
+    _previousActiveLocationId: null,
+
+    // Getters
+    getIsLoading: function() { return this._isLoading; }, 
+    getIsClickLoading: function() { return this._isClickLoading; }, 
+    getActiveLocationId: function() { return this._activeLocationId; }, 
+    getActiveLocationSimpleName: function() { return this._activeLocationSimpleName; }, 
+    getActiveLocationLabel: function() { return this._activeLocationLabel; }, 
+    getActiveLocationData: function() { return this._activeLocationData; },
     
+    /**
+     * Debounce Fetch.
+     * FITUR UTAMA: Mengecek flag `_isInteracting` sebelum memanggil API.
+     */
+    triggerFetchData: function() {
+        if (this._fetchDebounceTimer) clearTimeout(this._fetchDebounceTimer);
+        this._fetchDebounceTimer = setTimeout(() => {
+            // GUARD: Jangan fetch jika user masih menahan mouse/layar!
+            if (this._isInteracting) {
+                console.log("Fetch dibatalkan: User masih berinteraksi.");
+                return;
+            }
+            this.fetchDataForVisibleMarkers();
+        }, 600); 
+    },
+
+    /**
+     * [ENGINE UTAMA] Client-Side Clustering & Rendering.
+     * Menggabungkan fitur vektor berdasarkan jarak piksel layar.
+     */
     renderMarkers: function() {
         const map = this.getMap();
         if (!map) return;
 
-        // Query kedua layer hit target
-        const features = map.queryRenderedFeatures({ 
-            layers: ['unclustered-point-hit-target', 'provinsi-point-hit-target'] 
-        });
+        const zoom = map.getZoom();
+        let targetLayer = '';
+        let idKey = '';
+        let nameKey = '';
+        let tipadmVal = 0;
+
+        // Konfigurasi Layer berdasarkan Zoom
+        if (zoom <= 7.99) {
+            targetLayer = 'batas-provinsi-layer';
+            idKey = 'KDPPUM'; nameKey = 'WADMPR'; tipadmVal = 1;
+        } else if (zoom <= 10.99) {
+            targetLayer = 'batas-kabupaten-layer';
+            idKey = 'KDPKAB'; nameKey = 'WADMKK'; tipadmVal = 2;
+        } else if (zoom <= 14) {
+            targetLayer = 'batas-kecamatan-layer';
+            idKey = 'KDCPUM'; nameKey = 'WADMKC'; tipadmVal = 3;
+        } else {
+            // Zoom > 14 (Desa) -> Bersihkan semua marker
+            this._clearMarkers(new Set());
+            return;
+        }
         
-        const currentIds = new Set();
+        if (!map.getLayer(targetLayer)) return;
+
+        // 1. Ambil semua fitur di layar
+        const features = map.queryRenderedFeatures({ layers: [targetLayer] });
+        const bounds = map.getBounds();
+        
+        // 2. Pra-proses: Validasi & Deduplikasi (Vector tiles sering punya duplikat di perbatasan tile)
+        const validPoints = [];
+        const processedIds = new Set();
 
         features.forEach(feature => {
-            const id = feature.id; 
-            // [SAFETY] Pastikan ID valid sebelum lanjut
-            if (id === undefined || id === null) return;
-
-            const coords = feature.geometry.coordinates;
             const props = feature.properties;
-            const lat = coords[1];
+            const id = String(props[idKey]);
+            const lat = parseFloat(props.latitude);
+            const lon = parseFloat(props.longitude);
+
+            if (!id || isNaN(lat) || isNaN(lon) || processedIds.has(id)) return;
+            if (!bounds.contains([lon, lat])) return; // Hapus yang di luar layar
+
+            processedIds.add(id);
             
-            currentIds.add(String(id));
+            // Simpan data titik beserta posisi layarnya (Pixel)
+            // map.project() mengubah LatLon ke Pixel x,y. Ini kunci klasterisasi visual!
+            validPoints.push({
+                screenPoint: map.project([lon, lat]),
+                lngLat: [lon, lat],
+                id: id,
+                props: props,
+                tipadm: tipadmVal,
+                name: props[nameKey],
+                label: props.label || props[nameKey]
+            });
+        });
 
-            const zIndexBase = Math.round((90 - lat) * 100);
+        // 3. Algoritma Klasterisasi Grid Sederhana (Greedy)
+        const clusters = []; // Array untuk menampung hasil (Single Marker atau Cluster)
+        
+        // [MODIFIKASI] Agresivitas Klastering ditingkatkan 3x lipat (50 -> 150)
+        const CLUSTER_RADIUS = 90; // Jarak dalam pixel.
 
-            if (!this._markers[id]) {
-                const markerEl = this._createMarkerElement(id, props);
+        // Urutkan berdasarkan latitude agar rendering z-index alami (utara di belakang selatan)
+        validPoints.sort((a, b) => b.lngLat[1] - a.lngLat[1]);
+
+        const usedPoints = new Set();
+
+        validPoints.forEach((point, index) => {
+            if (usedPoints.has(index)) return;
+
+            // Titik ini menjadi pusat klaster baru
+            const currentCluster = {
+                isCluster: false, // Default single
+                centerPoint: point,
+                members: [point]
+            };
+
+            usedPoints.add(index);
+
+            // Cari tetangga yang belum dipakai
+            for (let j = index + 1; j < validPoints.length; j++) {
+                if (usedPoints.has(j)) continue;
+                
+                const neighbor = validPoints[j];
+                // Hitung jarak Euclidean di layar (Pixel)
+                const dx = currentCluster.centerPoint.screenPoint.x - neighbor.screenPoint.x;
+                const dy = currentCluster.centerPoint.screenPoint.y - neighbor.screenPoint.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+
+                if (distance <= CLUSTER_RADIUS) {
+                    currentCluster.members.push(neighbor);
+                    currentCluster.isCluster = true;
+                    usedPoints.add(j);
+                }
+            }
+            clusters.push(currentCluster);
+        });
+
+        // 4. Render ke DOM
+        const activeMarkerIds = new Set();
+
+        clusters.forEach(cluster => {
+            // ID Unik untuk marker di peta (bisa ID lokasi atau ID gabungan klaster)
+            // Untuk klaster, kita pakai ID lokasi pusat + suffix
+            const primaryId = cluster.centerPoint.id; 
+            const markerId = cluster.isCluster ? `cl-${primaryId}` : primaryId;
+            
+            activeMarkerIds.add(markerId);
+
+            const zIndexBase = Math.round((90 - cluster.centerPoint.lngLat[1]) * 100);
+
+            if (!this._markers[markerId]) {
+                // Buat elemen baru
+                let markerEl;
+                
+                if (cluster.isCluster) {
+                    markerEl = this._createClusterElement(cluster.members);
+                } else {
+                    // Single Marker (Skeleton)
+                    const p = cluster.centerPoint;
+                    markerEl = this._createMarkerElement(p.id, {
+                        nama_simpel: p.name,
+                        nama_label: p.label,
+                        tipadm: p.tipadm
+                    });
+                }
+                
                 markerEl.style.zIndex = zIndexBase;
 
                 const newMarker = new maplibregl.Marker({
                     element: markerEl,
-                    anchor: 'bottom', 
-                    offset: [0, 0]    
+                    anchor: 'bottom'
                 })
-                .setLngLat(coords)
+                .setLngLat(cluster.centerPoint.lngLat)
                 .addTo(map);
 
-                this._markers[id] = newMarker;
-                this._updateMarkerContent(id); 
-                
-                if (String(id) === String(this._activeLocationId)) {
-                     this._applyHighlightStyle(id, true);
+                this._markers[markerId] = newMarker;
+
+                // Jika single marker, cek cache cuaca (mungkin user geser dan marker ini muncul lagi)
+                if (!cluster.isCluster) {
+                    this._updateMarkerContent(primaryId);
+                    // Restore highlight
+                    if (primaryId === String(this._activeLocationId)) {
+                         this._applyHighlightStyle(primaryId, true);
+                    }
                 }
+
             } else {
-                // Update Z-Index agar sorting tetap benar saat panning
-                this._markers[id].getElement().style.zIndex = zIndexBase;
+                // Update posisi & z-index (penting saat zoom/pitch berubah)
+                this._markers[markerId].setLngLat(cluster.centerPoint.lngLat);
+                this._markers[markerId].getElement().style.zIndex = zIndexBase;
             }
         });
 
+        this._clearMarkers(activeMarkerIds);
+    },
+
+    /** Hapus marker yang tidak lagi ada di set activeMarkerIds */
+    _clearMarkers: function(activeIds) {
         for (const id in this._markers) {
-            if (!currentIds.has(id)) {
+            if (!activeIds.has(id)) {
                 this._markers[id].remove();
                 delete this._markers[id];
             }
         }
     },
 
+    /**
+     * Membuat elemen DOM untuk Cluster.
+     * @param {Array} members - Array objek point anggota klaster
+     */
+    _createClusterElement: function(members) {
+        const count = members.length;
+        const container = document.createElement('div');
+        container.className = 'marker-container'; // Pakai base class sama agar hover effect jalan
+        
+        // Style Cluster Sederhana (Lingkaran)
+        let bgColor = '#4FC3F7'; // Biru muda (kecil)
+        if (count > 10) bgColor = '#FFD54F'; // Kuning (sedang)
+        if (count > 50) bgColor = '#F06292'; // Merah muda (besar)
+
+        container.innerHTML = `
+            <div class="marker-capsule" style="
+                background: ${bgColor}; 
+                width: 32px; height: 32px; 
+                border-radius: 50%; 
+                display: flex; justify-content: center; align-items: center;
+                border: 2px solid white;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            ">
+                <span style="font-weight:bold; color:#333; font-size:12px;">${count}</span>
+            </div>
+        `;
+
+        // Event Klik Cluster
+        container.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Panggil logika popup list
+            const centerMember = members[0];
+            const coordinates = centerMember.lngLat;
+            
+            const clusterData = {
+                properties: { cluster_id: 'client-side', point_count: count },
+                _directMembers: members 
+            };
+
+            this.handleClientClusterClick(clusterData, coordinates);
+        });
+
+        return container;
+    },
+
+    /**
+     * Fetch Data Cuaca API.
+     * HANYA untuk Single Marker yang terlihat. Cluster diabaikan (hemat API).
+     */
+    fetchDataForVisibleMarkers: async function() {
+        if (this._isInteracting) return; // Double check guard
+
+        const map = this.getMap();
+        if (!map) return;
+        const protocol = window.location.protocol; const hostname = window.location.hostname; const port = '5000'; const baseUrl = `${protocol}//${hostname}:${port}`;
+        const loadingSpinner = document.getElementById('global-loading-spinner');
+        
+        if (this._isLoading) return;
+        
+        const renderedIds = Object.keys(this._markers);
+        
+        // Filter: 
+        // 1. Abaikan ID yang diawali 'cl-' (Cluster)
+        // 2. Ambil yang belum ada cache & belum inflight
+        const idsToFetch = renderedIds.filter(id => {
+            if (id.startsWith('cl-')) return false; // Skip Cluster
+            return !cacheManager.get(id) && !inflightIds.has(id);
+        });
+        
+        let isFirstLoad = (timeManager.getGlobalTimeLookup().length === 0); 
+        
+        if (isFirstLoad && !idsToFetch.length && renderedIds.length > 0) {
+             // Cari satu single marker valid untuk inisialisasi
+             const firstSingle = renderedIds.find(id => !id.startsWith('cl-'));
+             if (firstSingle && !inflightIds.has(firstSingle)) idsToFetch.push(firstSingle);
+        } 
+        
+        if (!idsToFetch.length) { 
+            this.updateAllMarkersForTime();
+            return; 
+        }
+        
+        idsToFetch.forEach(id => inflightIds.add(id));
+        this._isLoading = true; 
+        if (!isFirstLoad && loadingSpinner) { loadingSpinner.style.display = 'block'; }
+        
+        idsToFetch.forEach(id => this._updateMarkerContent(id));
+
+        try {
+            const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`);
+            if (!resp.ok) throw new Error(`Network error ${resp.status}`);
+            const dataMap = await resp.json();
+            
+            for (const id in dataMap) {
+                const data = dataMap[id];
+                const didInitTime = this._processIncomingData(id, data);
+                if (isFirstLoad && didInitTime) { isFirstLoad = false; }
+                
+                const isActive = (String(id) === String(this._activeLocationId));
+                if (isActive && this._isClickLoading) {
+                    this._isClickLoading = false; 
+                    this._activeLocationData = data;
+                    if (sidebarManager.isOpen()) { sidebarManager.renderSidebarContent(); }
+                }
+            }
+        } catch (e) { 
+            console.error("Gagal fetch data cuaca:", e); 
+        } finally {
+            idsToFetch.forEach(id => inflightIds.delete(id));
+            this._isLoading = false; 
+            if (loadingSpinner) loadingSpinner.style.display = 'none';
+            this.updateAllMarkersForTime(); 
+        }
+    },
+
+    // --- EVENT HANDLERS ---
+
+    handleClientClusterClick: async function(clusterData, coordinates) {
+        const members = clusterData._directMembers; 
+        if (!members) return;
+
+        popupManager.close(true);
+        const pointCount = members.length;
+        
+        const loadingContent = popupManager.generateLoadingPopupContent(`Memuat ${pointCount} Lokasi...`);
+        const loadingPopupRef = popupManager.open(coordinates, loadingContent);
+
+        const idsToFetch = members.map(m => m.id).filter(id => !cacheManager.get(id));
+        
+        try {
+            if (idsToFetch.length > 0) {
+                const protocol = window.location.protocol; const hostname = window.location.hostname; const port = '5000'; const baseUrl = `${protocol}//${hostname}:${port}`;
+                const response = await fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`);
+                const newDataMap = await response.json();
+                
+                for (const id in newDataMap) {
+                    this._processIncomingData(id, newDataMap[id]);
+                }
+            }
+
+            if (popupManager.getInstance() !== loadingPopupRef) return;
+
+            const generateItems = () => {
+                const idxDisplay = timeManager.getSelectedTimeIndex();
+                const items = [];
+                
+                members.forEach(member => {
+                    const id = member.id;
+                    let data = cacheManager.get(id);
+                    
+                    if (!data) {
+                         data = { 
+                             id: id, 
+                             nama_simpel: member.name, 
+                             nama_label: member.label,
+                             latitude: member.lngLat[1],
+                             longitude: member.lngLat[0],
+                             tipadm: member.tipadm
+                         };
+                    }
+
+                    let suhuStr = '-';
+                    let descStr = 'Memuat...';
+                    let iconStr = 'wi wi-na';
+
+                    if (data.hourly) {
+                        const extractedData = utils.extractHourlyDataPoint(data.hourly, idxDisplay);
+                        const info = utils.getWeatherInfo(extractedData.weather_code, extractedData.is_day);
+                        suhuStr = `${extractedData.suhu?.toFixed(1) ?? '-'}°C`;
+                        descStr = info.deskripsi;
+                        iconStr = info.ikon;
+                    }
+
+                    items.push({
+                        nama: data.nama_simpel,
+                        suhu: suhuStr,
+                        desc: descStr,
+                        icon: iconStr,
+                        onClick: () => {
+                            if (popupManager.getInstance() === loadingPopupRef) popupManager.close(true);
+                            const clickProps = { 
+                                id: data.id, 
+                                nama_simpel: data.nama_simpel, 
+                                nama_label: data.nama_label || data.nama_simpel, 
+                                lat: data.latitude, 
+                                lon: data.longitude, 
+                                tipadm: data.tipadm 
+                            };
+                            this.handleUnclusteredClick(clickProps);
+                        }
+                    });
+                });
+
+                return {
+                    title: pointCount > 100 ? `Menampilkan 100+ Lokasi:` : `${pointCount} Lokasi di area ini:`,
+                    items: items
+                };
+            };
+
+            popupManager.setClusterGenerator(generateItems);
+            popupManager._activePopupType = 'cluster'; 
+            
+            const initialData = generateItems();
+            const popupContent = popupManager.generateClusterPopupContent(initialData.title, initialData.items);
+            popupManager.setDOMContent(popupContent);
+            
+            this.updateAllMarkersForTime();
+
+        } catch (e) {
+            console.error("Cluster fetch error:", e);
+            if (popupManager.getInstance() === loadingPopupRef) popupManager.setHTML("Gagal memuat data klaster.");
+        }
+    },
+
+    // --- FUNGSI PENDUKUNG (MARKER ELEMENTS & STYLE) ---
+    
     _createMarkerElement: function(id, props) {
         const safeId = String(id).replace(/\./g, '-');
         const tipadm = parseInt(props.tipadm, 10);
         const isProvince = (tipadm === 1);
-
         const container = document.createElement('div');
         container.className = 'marker-container'; 
         container.id = `marker-${safeId}`;
         
         if (isProvince) {
-            // Marker Provinsi
             container.innerHTML = `
                 <div class="location-badge province-badge">${props.nama_simpel}</div>
                 <div class="marker-capsule marker-theme-province" id="capsule-${safeId}">
-                    <div class="main-icon-wrapper">
-                        <i class="wi wi-stars" style="font-size: 16px;"></i>
-                    </div>
-                    <div class="status-stack-province">
-                        <span style="font-size:10px; font-weight:bold; color:#555;">PROV</span>
-                    </div>
+                    <div class="main-icon-wrapper"><i class="wi wi-stars" style="font-size: 16px;"></i></div>
+                    <div class="status-stack-province"><span style="font-size:10px; font-weight:bold; color:#555;">PROV</span></div>
                 </div>
-                <div class="marker-anchor"></div>
-            `;
+                <div class="marker-anchor"></div><div class="marker-pulse"></div>`;
         } else {
-            // Marker Cuaca
             container.innerHTML = `
                 <div class="location-badge">${props.nama_simpel}</div>
                 <div class="marker-capsule" id="capsule-${safeId}">
                     <div class="main-icon-wrapper"><i id="icon-weather-${safeId}" class="wi wi-na"></i></div>
                     <div class="status-stack">
-                        <div class="thermo-stack">
-                            <i class="wi wi-thermometer-internal thermo-liquid" id="icon-thermo-${safeId}"></i>
-                            <i class="wi wi-thermometer-exterior thermo-frame"></i>
-                        </div>
+                        <div class="thermo-stack"><i class="wi wi-thermometer-internal thermo-liquid" id="icon-thermo-${safeId}"></i><i class="wi wi-thermometer-exterior thermo-frame"></i></div>
                         <div class="rain-icon-box"><i class="wi wi-raindrop" id="icon-rain-${safeId}"></i></div>
                     </div>
                 </div>
-                <div class="marker-anchor"></div><div class="marker-pulse"></div>
-            `;
+                <div class="marker-anchor"></div><div class="marker-pulse"></div>`;
         }
 
         container.addEventListener('click', (e) => {
             e.stopPropagation(); 
-            if (isProvince) {
-                // Ambil koordinat dari marker instance karena props mungkin tidak akurat
-                let coords = [null, null];
-                if (this._markers[id]) coords = this._markers[id].getLngLat().toArray();
-                
-                const provProps = { id: id, nama_simpel: props.nama_simpel, nama_label: props.nama_label, lat: coords[1], lon: coords[0], tipadm: 1 };
-                this.handleUnclusteredClick(provProps);
-            } else {
-                this.handleUnclusteredClick({ id: id, nama_simpel: props.nama_simpel, nama_label: props.nama_label, lat: null, lon: null, tipadm: props.tipadm });
-            }
+            this.handleUnclusteredClick({ 
+                id: id, nama_simpel: props.nama_simpel, nama_label: props.nama_label, 
+                lat: null, lon: null, tipadm: props.tipadm 
+            });
         });
         return container;
     },
@@ -143,22 +537,28 @@ export const mapManager = {
     _updateMarkerContent: function(id) {
         const markerInstance = this._markers[id];
         if (!markerInstance) return;
-        
         const el = markerInstance.getElement();
-        // Skip update untuk provinsi (efisiensi)
         if (el.querySelector('.marker-theme-province')) return; 
 
         const safeId = String(id).replace(/\./g, '-');
-        
         const capsuleEl = el.querySelector(`#capsule-${safeId}`);
         const weatherIconEl = el.querySelector(`#icon-weather-${safeId}`);
         const thermoIconEl = el.querySelector(`#icon-thermo-${safeId}`);
         const rainIconEl = el.querySelector(`#icon-rain-${safeId}`);
-
         const cachedData = cacheManager.get(id);
         const idx = timeManager.getSelectedTimeIndex();
 
-        if (cachedData && cachedData.hourly?.time && idx < cachedData.hourly.time.length) {
+        if (!cachedData) {
+            el.classList.add('marker-skeleton'); 
+            if (capsuleEl) capsuleEl.className = 'marker-capsule marker-theme-skeleton';
+            if (weatherIconEl) weatherIconEl.className = 'wi wi-time-4'; 
+            if (thermoIconEl) thermoIconEl.style.color = '#ccc';
+            if (rainIconEl) rainIconEl.style.color = '#ccc';
+            return;
+        } 
+        el.classList.remove('marker-skeleton');
+
+        if (cachedData.hourly?.time && idx < cachedData.hourly.time.length) {
             const hourly = cachedData.hourly;
             const code = hourly.weather_code?.[idx];
             const isDay = hourly.is_day?.[idx];
@@ -172,26 +572,19 @@ export const mapManager = {
             if (weatherIconEl) weatherIconEl.className = `wi ${weatherInfo.raw_icon_name}`;
             if (thermoIconEl) thermoIconEl.style.color = utils.getTempColor(temp);
             if (rainIconEl) rainIconEl.style.color = utils.getRainColor(precip);
-            
             el.style.opacity = 1;
-        } else {
-            if (capsuleEl) capsuleEl.className = 'marker-capsule marker-theme-cloudy'; 
-            if (weatherIconEl) weatherIconEl.className = 'wi wi-na';
-            if (thermoIconEl) thermoIconEl.style.color = '#ccc';
-            if (rainIconEl) rainIconEl.style.color = '#ccc';
-            el.style.opacity = 0.7;
+        } else { el.style.opacity = 0.7; }
+    },
+    
+    updateAllMarkersForTime: function() {
+        for (const id in this._markers) { 
+            if (!id.startsWith('cl-')) this._updateMarkerContent(id); 
         }
     },
 
-    updateAllMarkersForTime: function() {
-        for (const id in this._markers) { this._updateMarkerContent(id); }
-    },
-    
     _applyHighlightStyle: function(id, isActive) {
         if (this._markers[id]) {
-            const safeId = String(id).replace(/\./g, '-');
             const capsule = this._markers[id].getElement().querySelector(`.marker-capsule`); 
-            
             if(capsule) {
                 if (isActive) {
                     capsule.style.border = '2px solid #e74c3c';
@@ -207,26 +600,34 @@ export const mapManager = {
                 container.style.zIndex = 10000; 
             } else {
                 container.classList.remove('active-marker');
-                // Z-Index akan direset oleh renderMarkers pada move berikutnya
             }
         }
     },
-
+    
     setActiveMarkerHighlight: function(id) { this._applyHighlightStyle(id, true); },
+    
     removeActiveMarkerHighlight: function(idToRemove = null, forceRemove = false) { 
         const targetId = idToRemove || this._previousActiveLocationId;
         if (!targetId) return;
+        
+        // [LOGIKA PENGAMAN SIDEBAR]
+        // Jika forceRemove = false, kita cek apakah sidebar terbuka.
+        // Jika ya, jangan hapus highlight (karena sidebar menampilkan data marker ini).
         if (!forceRemove) {
             const isTargetActive = (String(targetId) === String(this._activeLocationId));
             if (isTargetActive && (sidebarManager.isOpen() || popupManager.isOpen())) { return; }
         }
+        
         this._applyHighlightStyle(targetId, false);
         if (!idToRemove) { this._previousActiveLocationId = null; }
     },
+    
     resetActiveLocationState: function() {
         const idToReset = this._activeLocationId;
-        if (sidebarManager.isOpen()) { this.removeActiveMarkerHighlight(idToReset, false); } 
-        else {
+        if (sidebarManager.isOpen()) { 
+            // Jangan paksa hapus jika sidebar terbuka (gunakan mekanisme handover untuk switching)
+            this.removeActiveMarkerHighlight(idToReset, false); 
+        } else {
             this._activeLocationId = null; 
             if (idToReset) { this.removeActiveMarkerHighlight(idToReset, false); }
             this._activeLocationSimpleName = null; this._activeLocationLabel = null; 
@@ -235,96 +636,7 @@ export const mapManager = {
             else { timeManager.updateTimePickerDisplayOnly(); }
         }
     },
-
-    dataController: null, 
-    perbaruiPetaGeo: async function() {
-            const map = this.getMap(); 
-            if (!map) return; 
-            const protocol = window.location.protocol; const hostname = window.location.hostname; const port = '5000'; const baseUrl = `${protocol}//${hostname}:${port}`;
-            if (this.dataController) this.dataController.abort();
-            this.dataController = new AbortController();
-            const signal = this.dataController.signal;
-            cacheManager.cleanExpired();
-            const zoom = map.getZoom();
-            const cuacaSource = () => map.getSource('data-cuaca-source');
-            const provinsiSource = () => map.getSource('provinsi-source');
-            if (zoom <= 7.99) { 
-                for (const id in this._markers) { this._markers[id].remove(); }
-                this._markers = {};
-                if (cuacaSource()) cuacaSource().setData({ type: 'FeatureCollection', features: [] });
-                try {
-                    const resp = await fetch(`${baseUrl}/api/provinsi-info`, { signal });
-                    if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
-                    const provinsiData = await resp.json();
-                    
-                    // [PERBAIKAN FATAL] Tambahkan ID di level root feature
-                    const features = provinsiData.map(p => ({ 
-                        type: 'Feature', 
-                        id: p.id, // <--- PENTING: ID harus ada di sini!
-                        geometry: { type: 'Point', coordinates: [p.lon, p.lat] }, 
-                        properties: { id: p.id, nama_simpel: p.nama_simpel, nama_label: p.nama_label, tipadm: 1, type: 'provinsi' } 
-                    }));
-                    
-                    if (provinsiSource()) provinsiSource().setData({ type: 'FeatureCollection', features: features });
-                    
-                    // Trigger render marker untuk provinsi
-                    this.renderMarkers();
-
-                } catch (e) { if (e.name !== 'AbortError') console.error('Gagal ambil data provinsi:', e); }
-            } else { 
-                if (provinsiSource()) provinsiSource().setData({ type: 'FeatureCollection', features: [] });
-                const bounds = map.getBounds();
-                const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-                try {
-                    const resp = await fetch(`${baseUrl}/api/data-cuaca?bbox=${bbox}&zoom=${zoom}`, { signal });
-                    if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
-                    const geoOnly = await resp.json();
-                    if (!geoOnly || geoOnly.error) { console.error("API Error (geo only):", geoOnly); return; }
-                    const features = geoOnly.map(g => ({ type: 'Feature', id: g.id, geometry: { type: 'Point', coordinates: [g.lon, g.lat] }, properties: { id: g.id, nama_simpel: g.nama_simpel || 'N/A', nama_label: g.nama_label || 'N/A', type: 'kabkec', tipadm: g.tipadm } }));
-                    if (cuacaSource()) cuacaSource().setData({ type: 'FeatureCollection', features: features });
-                    this.renderMarkers();
-                } catch (e) { if (e.name !== 'AbortError') console.error('Gagal ambil geo only data:', e); }
-            }
-    },
-    fetchDataForVisibleMarkers: async function() {
-        const map = this.getMap();
-        if (!map) return;
-        const protocol = window.location.protocol; const hostname = window.location.hostname; const port = '5000'; const baseUrl = `${protocol}//${hostname}:${port}`;
-        const loadingSpinner = document.getElementById('global-loading-spinner');
-        const zoom = map.getZoom();
-        if (zoom <= 7.99 || this._isLoading) return;
-        const visibleFeatures = map.queryRenderedFeatures({ layers: ['unclustered-point-hit-target'] });
-        const idsToFetch = visibleFeatures.map(f => f.id).filter(id => id && !cacheManager.get(id) && !inflightIds.has(id));
-        let isFirstLoad = (timeManager.getGlobalTimeLookup().length === 0); 
-        if (isFirstLoad && !idsToFetch.length && visibleFeatures.length > 0) {
-            const firstVisibleId = visibleFeatures[0].id;
-            if (firstVisibleId && !inflightIds.has(firstVisibleId)) { idsToFetch.push(firstVisibleId); }
-        } else if (!idsToFetch.length) { return; }
-        idsToFetch.forEach(id => inflightIds.add(id));
-        this._isLoading = true; 
-        if (!isFirstLoad && loadingSpinner) { loadingSpinner.style.display = 'block'; }
-        try {
-            const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`);
-            if (!resp.ok) throw new Error(`Network error ${resp.status}`);
-            const dataMap = await resp.json();
-            for (const id in dataMap) {
-                const data = dataMap[id];
-                const didInitTime = this._processIncomingData(id, data);
-                if (isFirstLoad && didInitTime) { isFirstLoad = false; }
-                const isActive = (String(id) === String(this._activeLocationId));
-                if (isActive && this._isClickLoading) {
-                    this._isClickLoading = false; this._activeLocationData = data;
-                    if (sidebarManager.isOpen()) { sidebarManager.renderSidebarContent(); }
-                }
-            }
-        } catch (e) { console.error("Gagal BBOX fetch:", e); }
-        finally {
-            idsToFetch.forEach(id => inflightIds.delete(id));
-            this._isLoading = false; 
-            if (loadingSpinner) loadingSpinner.style.display = 'none';
-            this.updateAllMarkersForTime(); 
-        }
-    },
+    
     _processIncomingData: function(id, data) {
         if (!data) return false; 
         cacheManager.set(id, data);
@@ -339,85 +651,31 @@ export const mapManager = {
         return didInitTime; 
     },
 
-    handleClusterClick: async function(feature, coordinates) { 
-        const map = this.getMap(); if (!map) return;
-        const protocol = window.location.protocol; const hostname = window.location.hostname; const port = '5000'; const baseUrl = `${protocol}//${hostname}:${port}`;
-        popupManager.close(true); 
-        this._lastClusterFeature = { feature, coordinates };
-        const clusterId = feature.properties.cluster_id; const source = map.getSource('data-cuaca-source'); 
-        if (!source || typeof source.getClusterLeaves !== 'function') return;
-        const pointCount = feature.properties.point_count;
-        const loadingContent = popupManager.generateLoadingPopupContent('Memuat Klaster...');
-        const loadingPopupRef = popupManager.open(coordinates, loadingContent);
-        try {
-            const leaves = await source.getClusterLeaves(clusterId, 100, 0); 
-            if (!loadingPopupRef) return;
-            const idsToFetch = leaves.map(leaf => leaf.id || leaf.properties.id).filter(Boolean);
-            const response = await fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`);
-            const dataDetailCuaca = await response.json();
-            if (popupManager.getInstance() !== loadingPopupRef) { return; } 
-            
-            const generateItems = () => {
-                const idxDisplay = timeManager.getSelectedTimeIndex();
-                const items = [];
-                for (const id in dataDetailCuaca) {
-                    const data = dataDetailCuaca[id];
-                    if (!data) continue; 
-                    if (!cacheManager.get(id)) this._processIncomingData(id, data);
-                    const extractedData = utils.extractHourlyDataPoint(data.hourly, idxDisplay);
-                    const { deskripsi, ikon } = utils.getWeatherInfo(extractedData.weather_code, extractedData.is_day); 
-                    items.push({
-                        nama: data.nama_simpel,
-                        suhu: `${extractedData.suhu?.toFixed(1) ?? '-'}°C`,
-                        desc: deskripsi,
-                        icon: ikon, 
-                        onClick: () => {
-                            if (popupManager.getInstance() === loadingPopupRef) popupManager.close(true); 
-                            const clickProps = { id: data.id, nama_simpel: data.nama_simpel, nama_label: data.nama_label, lat: data.latitude, lon: data.longitude, tipadm: data.tipadm };
-                            this.handleUnclusteredClick(clickProps); 
-                        }
-                    });
-                }
-                return {
-                    title: pointCount > 100 ? `Menampilkan 100 dari ${pointCount} Lokasi:` : `${pointCount} Lokasi:`,
-                    items: items
-                };
-            };
-            popupManager.setClusterGenerator(generateItems);
-            
-            // [PERBAIKAN] Set tipe popup secara eksplisit agar updateUIForTime bekerja
-            popupManager._activePopupType = 'cluster';
+    // Fallback Handle Cluster (deprecated)
+    handleClusterClick: function(f, c) { console.warn("Deprecated handleClusterClick called"); },
 
-            const initialData = generateItems();
-            const popupContent = popupManager.generateClusterPopupContent(initialData.title, initialData.items);
-            popupManager.setDOMContent(popupContent);
-            this.updateAllMarkersForTime();
-        } catch (error) { console.error('Gagal memuat data klaster:', error); if (loadingPopupRef && popupManager.getInstance() === loadingPopupRef) { popupManager.setHTML('Gagal memuat data klaster.'); } }
-    }, 
-    
-    handleProvinceClick: function(props, coordinates) { 
-        let finalCoords = coordinates;
-        // Jika koordinat null (dari klik marker), ambil dari instance
-        if ((!finalCoords || !finalCoords[0]) && this._markers[props.id]) {
-            finalCoords = this._markers[props.id].getLngLat().toArray();
-        }
-        const provinceProps = { id: props.id, nama_simpel: props.nama_simpel, nama_label: props.nama_label, lat: finalCoords[1], lon: finalCoords[0], tipadm: 1 }; 
-        this.handleUnclusteredClick(provinceProps); 
-    }, 
-    
     handleUnclusteredClick: function(props) {
         const { id, nama_simpel, nama_label, lat, lon, tipadm } = props;
-        
-        // Safety check jika koordinat masih null
         let coordinates = [lon, lat];
-        if (this._markers[id]) { coordinates = this._markers[id].getLngLat().toArray(); }
-        if (!coordinates || isNaN(coordinates[0])) return;
-
+        if ((!coordinates || coordinates[0] === null) && this._markers[id]) { 
+            coordinates = this._markers[id].getLngLat().toArray(); 
+        }
+        if (!coordinates || isNaN(coordinates[0])) return; 
+        
         console.log(`Handling Click: ${nama_simpel} (${id})`); 
         popupManager.close(true);
+
+        // [HANDOVER MANEUVER]
+        // Jika ada marker lain yang sedang aktif, matikan paksa highlight-nya
+        // meskipun sidebar sedang terbuka. Kita mau ganti fokus.
+        if (this._activeLocationId && String(this._activeLocationId) !== String(id)) {
+             this.removeActiveMarkerHighlight(this._activeLocationId, true); // true = force remove
+        }
+
         this.resetActiveLocationState(); 
         this._activeLocationId = id; this._activeLocationSimpleName = nama_simpel; this._activeLocationLabel = nama_label;
         this.setActiveMarkerHighlight(id); 
+        
         const tipadmInt = parseInt(tipadm, 10);
         if (tipadmInt === 1) {
             this._activeLocationData = { id: id, nama_simpel: nama_simpel, nama_label: nama_label, tipadm: 1, type: 'provinsi' };
@@ -426,9 +684,17 @@ export const mapManager = {
             const popupContent = popupManager.generateProvincePopupContent(nama_simpel, nama_label);
             popupManager.open(coordinates, popupContent); return; 
         }
+
         const cachedData = cacheManager.get(id);
-        if (inflightIds.has(id)) { this._handleInflightState(props, coordinates); } else if (cachedData) { this._handleCacheHit(props, cachedData, coordinates); } else { this._handleCacheMiss(props, coordinates); }
+        if (inflightIds.has(id)) { 
+            this._handleInflightState(props, coordinates); 
+        } else if (cachedData) { 
+            this._handleCacheHit(props, cachedData, coordinates); 
+        } else { 
+            this._handleCacheMiss(props, coordinates); 
+        }
     },
+
     _handleInflightState: function(props, coordinates) {
         this._activeLocationData = null; this._isClickLoading = true;
         const loadingContent = popupManager.generateLoadingPopupContent(props.nama_simpel); popupManager.open(coordinates, loadingContent);

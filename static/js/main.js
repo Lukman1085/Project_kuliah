@@ -55,9 +55,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const calendarGrid = document.getElementById('calendar-grid');
     const calendarMonthYear = document.getElementById('calendar-month-year');
     
-    // Tidak perlu ambil spinner di sini jika mapManager mengelolanya, tapi ok disimpan
-    // const loadingSpinner = document.getElementById('global-loading-spinner');
-    
     const calendarPrevMonthBtn = document.getElementById('calendar-prev-month'); 
     const calendarNextMonthBtn = document.getElementById('calendar-next-month'); 
     
@@ -183,23 +180,25 @@ document.addEventListener('DOMContentLoaded', function() {
         map.addControl(new ResetPitchControl(), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl());
         
-        const perbaruiPetaDebounced = utils.debounce(mapManager.perbaruiPetaGeo.bind(mapManager), 700);
-        map.on('moveend', perbaruiPetaDebounced);
+        // --- REVISI TAHAP VEKTOR TILE: PEMBERSIHAN ---
+        // Menghapus listener GeoJSON 'perbaruiPetaGeo' karena sekarang menggunakan Vector Tile
+        // yang dihandle otomatis di map_manager.setMap via event 'move'
         
         map.on('data', (e) => {
             if (e.sourceId === 'data-cuaca-source' && e.isSourceLoaded) {
-                    mapManager.fetchDataForVisibleMarkers(); 
+                // Listener untuk source lama (GeoJSON) jika masih digunakan untuk search/highlight tertentu
+                // Tapi untuk render utama marker sudah via renderMarkers()
+                mapManager.fetchDataForVisibleMarkers(); 
             }
         });
 
-        mapManager.perbaruiPetaGeo(); 
+        // Trigger render manual pertama kali
+        mapManager.renderMarkers();
+        mapManager.triggerFetchData();
 
-        // --- [PERBAIKAN TAHAP D] LIST INTERACTIVE LAYERS YANG BENAR ---
-        // Ganti 'unclustered-point-temp-circle' menjadi 'unclustered-point-hit-target'
         const allInteractiveLayers = [ 'cluster-background-layer', 'unclustered-point-hit-target', 'provinsi-point-hit-target' ];
         
         map.on('click', (e) => {
-            // Gunakan try-catch untuk mencegah crash jika layer belum siap (safety)
             let features = [];
             try {
                 features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
@@ -217,8 +216,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const pickerClicked = e.originalEvent.target.closest('#datetime-picker-container');
                 const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
                 const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
-                // Cek juga apakah klik di marker HTML (custom-marker-container)
-                const markerClicked = e.originalEvent.target.closest('.custom-marker-container');
+                const markerClicked = e.originalEvent.target.closest('.marker-container'); // Cek marker HTML
 
                 if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked && !markerClicked) {
                     sidebarManager.closeSidebar(); 
@@ -241,10 +239,9 @@ document.addEventListener('DOMContentLoaded', function() {
             else if (layerId === 'provinsi-point-hit-target') { 
                 mapManager.handleProvinceClick(props, coordinates); 
             }
-            // [PERBAIKAN] Tangani layer invisible hit target
             else if (layerId === 'unclustered-point-hit-target') {
-                // Sebenarnya Marker HTML punya handler klik sendiri (di map_manager).
-                // Tapi ini fallback jika user mengklik area kosong di sekitar marker yang masih masuk radius hit-target.
+                // Fallback untuk klik pada layer hit target invisible
+                // (Walaupun biasanya klik ditangkap oleh HTML marker itu sendiri)
                 const dataUntukHandler = { 
                     id: feature.id, 
                     nama_simpel: props.nama_simpel, 
@@ -263,7 +260,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
                 map.getCanvas().style.cursor = features.length ? 'pointer' : '';
             } catch(err) {
-                // Ignore error saat inisialisasi style
             }
         });
         

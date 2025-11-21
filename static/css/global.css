@@ -1,7 +1,6 @@
 body { margin: 0; padding: 0; }
 #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1;}
 
-/* Font cantik untuk angka/teks (Opsional, menggunakan sans-serif default jika tidak ada) */
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap');
 
 #koordinat-info {
@@ -32,14 +31,10 @@ body { margin: 0; padding: 0; }
 .cluster-item { padding: 4px; cursor: pointer; }
 .cluster-item:hover { background-color: #f0f0f0; }
 
-/* Teks Presipitasi & Ikon Cuaca (Tetap) */
 .map-precip-text { font-family: sans-serif; font-size: 10px; font-weight: bold; line-height: 1; }
 .map-weather-icon { font-size: 14px; line-height: 1; }
 
-
-/* ======================================================= */
-/* --- STYLING POPUP (MINI SIDEBAR STYLE) --- */
-/* ======================================================= */
+/* --- STYLING POPUP --- */
 .maplibregl-popup-content {
     padding: 0 !important; 
     border-radius: 12px !important;
@@ -47,17 +42,11 @@ body { margin: 0; padding: 0; }
     overflow: hidden;
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
-
-/* [PERBAIKAN 1] Z-INDEX POPUP TERTINGGI */
-.maplibregl-popup {
-    z-index: 20000 !important; 
-}
-
+.maplibregl-popup { z-index: 20000 !important; }
 .maplibregl-popup-anchor-top-left .maplibregl-popup-content { border-top-left-radius: 0 !important; }
 .maplibregl-popup-anchor-top-right .maplibregl-popup-content { border-top-right-radius: 0 !important; }
 .maplibregl-popup-anchor-bottom-left .maplibregl-popup-content { border-bottom-left-radius: 0 !important; }
 .maplibregl-popup-anchor-bottom-right .maplibregl-popup-content { border-bottom-right-radius: 0 !important; }
-
 .maplibregl-popup-close-button {
     color: #555; font-size: 18px; top: 5px; right: 5px; z-index: 10;
     background: rgba(255,255,255,0.5); border-radius: 50%; width: 24px; height: 24px;
@@ -81,183 +70,79 @@ body { margin: 0; padding: 0; }
 .popup-footer { padding: 10px 15px; border-top: 1px solid #eee; background-color: #f8f9fa; }
 .popup-btn-detail { width: 100%; padding: 8px 0; background-color: #e9ecef; color: #2c3e50; border: none; border-radius: 6px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; }
 .popup-btn-detail:hover { background-color: #dfe4ea; color: #0056b3; }
-
 .weather-popup-card.province-mode .popup-subtitle { font-size: 0.7rem; font-weight: 700; color: #0056b3; letter-spacing: 1px; margin-bottom: 4px; }
 .weather-popup-card.province-mode .popup-title.large { font-size: 1.3rem; margin-top: 0; }
 .weather-popup-card.province-mode .popup-body-text { padding: 20px 15px; text-align: center; font-size: 0.9rem; color: #7f8c8d; background-color: #fff; font-style: italic; }
 
-
-/* ======================================================= */
-/* --- NEW: BEAUTIFUL HTML MARKER STYLING --- */
-/* ======================================================= */
-
+/* --- MARKER STYLING --- */
 .marker-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    cursor: pointer; 
-    transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-    will-change: transform;
-    font-family: 'Manrope', 'Segoe UI', sans-serif;
-    z-index: 10; 
+    display: flex; flex-direction: column; align-items: center;
+    cursor: pointer; transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    will-change: transform; z-index: 10; 
 }
+.marker-container:hover { transform: scale(1.1) translateY(-5px); z-index: 9999; }
+.marker-container:hover .marker-capsule { box-shadow: 0 12px 24px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.1); }
 
-.marker-container:hover {
-    transform: scale(1.1) translateY(-5px);
-    z-index: 9999; 
-}
-.marker-container:hover .marker-capsule {
-    box-shadow: 0 12px 24px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.1);
-}
-
-/* 1. Badge Nama Wilayah */
 .location-badge {
-    background: rgba(26, 26, 26, 0.9); 
-    backdrop-filter: blur(4px);
-    color: #fff;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-    margin-bottom: 6px; 
-    position: relative;
-    white-space: nowrap;
-    max-width: 140px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: center;
-    pointer-events: none; 
+    background: rgba(26, 26, 26, 0.9); backdrop-filter: blur(4px); color: #fff;
+    padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15); margin-bottom: 6px; position: relative;
+    white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; text-align: center; pointer-events: none; 
 }
 .location-badge::after {
-    content: '';
-    position: absolute;
-    bottom: -4px;
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 4px 4px 0;
-    border-style: solid;
-    border-color: rgba(26, 26, 26, 0.9) transparent transparent transparent;
+    content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+    border-width: 4px 4px 0; border-style: solid; border-color: rgba(26, 26, 26, 0.9) transparent transparent transparent;
 }
+.province-badge { background: rgba(139, 69, 19, 0.95); }
+.province-badge::after { border-color: rgba(139, 69, 19, 0.95) transparent transparent transparent; }
 
-/* [BARU] Badge Khusus Provinsi (Warna Emas/Coklat) */
-.province-badge {
-    background: rgba(139, 69, 19, 0.95); /* Coklat tua elegan */
-}
-.province-badge::after {
-    border-color: rgba(139, 69, 19, 0.95) transparent transparent transparent;
-}
-
-
-/* 2. Kapsul Utama */
 .marker-capsule {
-    background: #fff;
-    border-radius: 50px;
-    padding: 4px 8px 4px 4px; 
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    background: #fff; border-radius: 50px; padding: 4px 8px 4px 4px; display: flex; align-items: center; gap: 8px;
     box-shadow: 0 6px 16px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.05);
-    transition: transform 0.3s, box-shadow 0.3s;
-    position: relative;
+    transition: transform 0.3s, box-shadow 0.3s; position: relative;
 }
 
-/* 3. Lingkaran Ikon Cuaca */
 .main-icon-wrapper {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 18px; 
-    color: #fff;
-    transition: background 0.5s ease; 
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+    width: 36px; height: 36px; border-radius: 50%; display: flex; justify-content: center; align-items: center;
+    font-size: 18px; color: #fff; transition: background 0.5s ease; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
 }
-.main-icon-wrapper i {
-    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));
-}
+.main-icon-wrapper i { filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1)); }
 
-/* 4. Stack Kanan */
-.status-stack {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    gap: 2px;
-    padding-right: 2px;
-}
+.status-stack { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; padding-right: 2px; }
+.status-stack-province { display: flex; align-items: center; justify-content: center; padding-right: 4px; }
 
-/* [BARU] Stack Kanan Provinsi (Simpel) */
-.status-stack-province {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding-right: 4px;
-}
-
-.thermo-stack {
-    position: relative;
-    width: 14px; 
-    height: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.thermo-stack i {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 14px;
-    line-height: 1;
-}
+.thermo-stack { position: relative; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
+.thermo-stack i { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 14px; line-height: 1; }
 .thermo-frame { color: #333; z-index: 2; }
 .thermo-liquid { z-index: 1; transition: color 0.3s ease; transform: translate(-50%, -50%) scale(0.9); }
 
 .rain-icon-box { width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
 .rain-icon-box i { font-size: 12px; transition: color 0.3s ease; }
 
-/* 5. Dekorasi Bawah */
 .marker-anchor {
-    width: 6px;
-    height: 6px;
-    background: #fff;
-    border-radius: 50%;
-    margin-top: 2px; 
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    z-index: -1;
-    position: relative;
+    width: 6px; height: 6px; background: #fff; border-radius: 50%; margin-top: 2px; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: -1; position: relative;
 }
-
 .marker-pulse {
-    position: absolute;
-    bottom: -4px; 
-    left: 50%;
-    transform: translateX(-50%);
-    width: 20px;
-    height: 20px;
-    background: rgba(0, 123, 255, 0.4); 
-    border-radius: 50%;
-    z-index: -2;
-    animation: pulse 2s infinite;
-    pointer-events: none;
+    position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+    width: 20px; height: 20px; background: rgba(0, 123, 255, 0.4); border-radius: 50%;
+    z-index: -2; animation: pulse 2s infinite; pointer-events: none;
 }
+@keyframes pulse { 0% { transform: translateX(-50%) scale(0.5); opacity: 0.8; } 100% { transform: translateX(-50%) scale(2.5); opacity: 0; } }
 
-@keyframes pulse {
-    0% { transform: translateX(-50%) scale(0.5); opacity: 0.8; }
-    100% { transform: translateX(-50%) scale(2.5); opacity: 0; }
-}
-
-/* --- TEMA WARNA CUACA --- */
+/* --- TEMA --- */
 .marker-theme-sunny .main-icon-wrapper { background: linear-gradient(135deg, #FFC107, #FF9800); }
 .marker-theme-cloudy .main-icon-wrapper { background: linear-gradient(135deg, #90A4AE, #546E7A); }
 .marker-theme-rain .main-icon-wrapper { background: linear-gradient(135deg, #42A5F5, #1E88E5); }
 .marker-theme-storm .main-icon-wrapper { background: linear-gradient(135deg, #546E7A, #263238); }
 .marker-theme-night .main-icon-wrapper { background: linear-gradient(135deg, #2c3e50, #34495e); }
+.marker-theme-province .main-icon-wrapper { background: linear-gradient(135deg, #D4AF37, #A0522D); }
 
-/* [BARU] TEMA PROVINSI (Emas/Premium) */
-.marker-theme-province .main-icon-wrapper { 
-    background: linear-gradient(135deg, #D4AF37, #A0522D); 
+/* [BARU] Loading State untuk Marker */
+.marker-loading .marker-capsule {
+    opacity: 0.7;
 }
+.marker-loading .main-icon-wrapper i {
+    animation: spin-loading 1.5s linear infinite;
+}
+@keyframes spin-loading { 100% { transform: rotate(360deg); } }
