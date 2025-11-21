@@ -6,6 +6,14 @@
     /* MapLibre menambahkan margin 10px by default, itu oke */
 }
 
+/* HIERARKI Z-INDEX TINGGI (Level 2: Di atas Marker & Popup) */
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-top-left, 
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+    z-index: 30000 !important;
+}
+
 /* Tombol di dalam grup navigasi */
 .maplibregl-ctrl-group button {
     background-color: transparent;

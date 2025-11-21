@@ -89,8 +89,8 @@ export const mapManager = {
     getActiveLocationData: function() { return this._activeLocationData; },
     
     /**
-     * Debounce Fetch.
-     * FITUR UTAMA: Mengecek flag `_isInteracting` sebelum memanggil API.
+     * Debounce untuk fetch data API agar tidak spamming server.
+     * Delay 600ms setelah moveend.
      */
     triggerFetchData: function() {
         if (this._fetchDebounceTimer) clearTimeout(this._fetchDebounceTimer);
@@ -171,8 +171,8 @@ export const mapManager = {
         // 3. Algoritma Klasterisasi Grid Sederhana (Greedy)
         const clusters = []; // Array untuk menampung hasil (Single Marker atau Cluster)
         
-        // [MODIFIKASI] Agresivitas Klastering ditingkatkan 3x lipat (50 -> 150)
-        const CLUSTER_RADIUS = 90; // Jarak dalam pixel.
+        // [MODIFIKASI] Agresivitas Klastering (90px sesuai permintaan)
+        const CLUSTER_RADIUS = 90; // Keseimbangan visual & performa
 
         // Urutkan berdasarkan latitude agar rendering z-index alami (utara di belakang selatan)
         validPoints.sort((a, b) => b.lngLat[1] - a.lngLat[1]);
@@ -280,36 +280,46 @@ export const mapManager = {
     },
 
     /**
-     * Membuat elemen DOM untuk Cluster.
-     * @param {Array} members - Array objek point anggota klaster
+     * [VISUAL REVISI 2] Membuat elemen DOM untuk Cluster.
+     * Menggunakan Gradien + Menghapus Outline Kasar.
      */
     _createClusterElement: function(members) {
         const count = members.length;
         const container = document.createElement('div');
-        container.className = 'marker-container'; // Pakai base class sama agar hover effect jalan
+        container.className = 'marker-container'; 
         
-        // Style Cluster Sederhana (Lingkaran)
-        let bgColor = '#4FC3F7'; // Biru muda (kecil)
-        if (count > 10) bgColor = '#FFD54F'; // Kuning (sedang)
-        if (count > 50) bgColor = '#F06292'; // Merah muda (besar)
+        // Logic Kelas Gradien
+        let gradientClass = 'cluster-gradient-blue'; // Default (Biru)
+        if (count > 10) gradientClass = 'cluster-gradient-yellow'; // Ramai (Kuning)
+        if (count > 50) gradientClass = 'cluster-gradient-red'; // Padat (Merah)
 
+        // Struktur HTML
+        // Perhatikan: style inline background dihapus, diganti class. Box-shadow inset dihapus.
         container.innerHTML = `
-            <div class="marker-capsule" style="
-                background: ${bgColor}; 
-                width: 32px; height: 32px; 
-                border-radius: 50%; 
-                display: flex; justify-content: center; align-items: center;
-                border: 2px solid white;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            ">
-                <span style="font-weight:bold; color:#333; font-size:12px;">${count}</span>
+            <div class="marker-capsule" style="padding: 2px 8px 2px 2px; gap: 6px; align-items: center;">
+                
+                <!-- Lingkaran Angka dengan Gradien -->
+                <div class="cluster-count-circle ${gradientClass}" style="
+                    width: 32px; height: 32px; 
+                    border-radius: 50%; 
+                    color: white; font-weight: bold; font-size: 13px;
+                    display: flex; justify-content: center; align-items: center;">
+                    ${count}
+                </div>
+
+                <!-- Label Teks -->
+                <span style="font-size: 11px; text-transform: uppercase;">Lokasi</span>
+
             </div>
+
+            <!-- Animasi Pulsa -->
+            <div class="marker-anchor"></div>
+            <div class="marker-pulse"></div>
         `;
 
         // Event Klik Cluster
         container.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Panggil logika popup list
             const centerMember = members[0];
             const coordinates = centerMember.lngLat;
             
