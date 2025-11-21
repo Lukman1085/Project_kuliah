@@ -4,24 +4,42 @@ import { popupManager } from "./popup_manager.js";
 import { timeManager } from "./time_manager.js";
 import { sidebarManager } from "./sidebar_manager.js";
 
-// Set untuk melacak ID yang sedang dalam proses fetch agar tidak double-request
+/**
+ * Set untuk melacak ID lokasi yang sedang dalam proses pengambilan data (fetch).
+ * Mencegah permintaan ganda (duplicate requests) untuk lokasi yang sama.
+ * @type {Set<string>}
+ */
 export const inflightIds = new Set();
 
-/** 🗺️ MAP MANAGER (HYBRID VECTOR + CLIENT CLUSTERING)
+/**
+ * 🗺️ MAP MANAGER
+ * * Modul sentral yang menangani logika peta interaktif.
+ * Menggunakan pendekatan Hybrid: Vector Tile untuk geometri dasar & Client-side clustering untuk marker.
  * * FITUR UTAMA:
- * 1. Vector Tile Rendering: Geometri diambil instan dari tile MVT/PBF.
- * 2. Grid-Based Clustering: Pengelompokan marker sisi klien berdasarkan jarak piksel layar.
- * 3. Interaction Guard: Mencegah fetch API saat user masih berinteraksi (drag/pan).
- * 4. Handover Maneuver: Logika visual marker aktif yang cerdas (serah terima highlight).
+ * 1. **Vector Tile Rendering**: Mengambil geometri wilayah (Prov/Kab/Kec) dari server tiles.
+ * 2. **Client-Side Clustering**: Mengelompokkan marker berdasarkan jarak piksel layar (Euclidean distance).
+ * 3. **Interaction Guard**: Mencegah fetch API saat user masih berinteraksi (drag/pan) untuk performa.
+ * 4. **Smart Caching**: Mengintegrasikan cacheManager untuk mengurangi beban server.
  */
 export const mapManager = { 
     _map: null, 
-    _markers: {}, // Menyimpan instance Single Marker & Cluster Marker
+    
+    /** * Menyimpan instance Marker MapLibre.
+     * Key: ID Lokasi atau ID Cluster ('cl-{id}').
+     * Value: Instance maplibregl.Marker.
+     */
+    _markers: {}, 
+    
     _fetchDebounceTimer: null,
-    _isInteracting: false, // Guard: Apakah user sedang menekan mouse/layar?
+    _isInteracting: false, // Guard: Bernilai true jika mouse ditekan atau layar disentuh
+
+    // =========================================================================
+    // 1. INISIALISASI & LISTENER
+    // =========================================================================
 
     /**
-     * Menginisialisasi instance peta dan memasang event listener.
+     * Menginisialisasi instance peta dan memasang event listener global.
+     * @param {object} mapInstance - Instance dari maplibregl.Map
      */
     setMap: function(mapInstance) {
         this._map = mapInstance;
@@ -29,16 +47,16 @@ export const mapManager = {
         
         const container = mapInstance.getContainer();
 
-        // 1. INTERACTION GUARDS (Mencegah "Moveend Hantu")
-        // Deteksi saat user menahan klik/sentuh
+        // --- Interaction Guards ---
+        // Mendeteksi awal interaksi untuk menunda fetch data
         container.addEventListener('mousedown', () => { this._isInteracting = true; });
         container.addEventListener('touchstart', () => { this._isInteracting = true; }, { passive: true });
 
-        // Deteksi saat user melepas klik/sentuh (di mana saja di window)
+        // Mendeteksi akhir interaksi (di window, jaga-jaga jika lepas mouse di luar peta)
         window.addEventListener('mouseup', () => { 
             if (this._isInteracting) {
                 this._isInteracting = false;
-                // Trigger fetch manual saat lepas jari (jika peta sudah diam)
+                // Hanya trigger fetch jika peta sudah benar-benar diam
                 if (!mapInstance.isMoving()) this.triggerFetchData(); 
             }
         });
@@ -49,19 +67,21 @@ export const mapManager = {
             }
         });
 
-        // 2. VISUAL RENDER (Skeleton & Cluster)
-        // Render ulang marker/cluster setiap kali posisi piksel berubah
+        // --- Visual Render Triggers ---
+        // Render ulang marker (posisi/clustering) setiap kali peta berubah visualnya
         mapInstance.on('move', () => { this.renderMarkers(); });
         mapInstance.on('zoom', () => { this.renderMarkers(); });
-        mapInstance.on('pitch', () => { this.renderMarkers(); }); // Penting untuk mode 3D
+        mapInstance.on('pitch', () => { this.renderMarkers(); });
 
-        // 3. DATA FETCH (Via API)
+        // --- Data Fetch Triggers ---
+        // Fetch data hanya dilakukan setelah pergerakan selesai (moveend)
         mapInstance.on('moveend', () => { 
-            this._isInteracting = false; // Safety reset
-            this.renderMarkers(); // Finalize posisi
-            this.triggerFetchData(); // Fetch data (jika guard mengizinkan)
+            this._isInteracting = false; 
+            this.renderMarkers(); 
+            this.triggerFetchData(); 
         });
         
+        // Render ulang saat tile vector selesai dimuat (memastikan geometri tersedia)
         mapInstance.on('sourcedata', (e) => {
             if (e.sourceId === 'batas-wilayah-vector' && e.isSourceLoaded) {
                 this.renderMarkers();
@@ -71,7 +91,10 @@ export const mapManager = {
 
     getMap: function() { return this._map; },
 
-    // State Management
+    // =========================================================================
+    // 2. STATE MANAGEMENT
+    // =========================================================================
+
     _isLoading: false, 
     _isClickLoading: false, 
     _activeLocationId: null, 
@@ -80,7 +103,6 @@ export const mapManager = {
     _activeLocationData: null, 
     _previousActiveLocationId: null,
 
-    // Getters
     getIsLoading: function() { return this._isLoading; }, 
     getIsClickLoading: function() { return this._isClickLoading; }, 
     getActiveLocationId: function() { return this._activeLocationId; }, 
@@ -89,13 +111,14 @@ export const mapManager = {
     getActiveLocationData: function() { return this._activeLocationData; },
     
     /**
-     * Debounce untuk fetch data API agar tidak spamming server.
-     * Delay 600ms setelah moveend.
+     * Memicu pengambilan data API dengan mekanisme Debounce.
+     * Mencegah spam request saat user menggeser peta dengan cepat.
+     * @param {number} delay - Waktu tunggu dalam ms (default 600ms)
      */
     triggerFetchData: function() {
         if (this._fetchDebounceTimer) clearTimeout(this._fetchDebounceTimer);
         this._fetchDebounceTimer = setTimeout(() => {
-            // GUARD: Jangan fetch jika user masih menahan mouse/layar!
+            // Batalkan jika user kembali berinteraksi selama masa tunggu
             if (this._isInteracting) {
                 console.log("Fetch dibatalkan: User masih berinteraksi.");
                 return;
@@ -104,9 +127,18 @@ export const mapManager = {
         }, 600); 
     },
 
+    // =========================================================================
+    // 3. RENDERING ENGINE (CLUSTERING & MARKER)
+    // =========================================================================
+
     /**
-     * [ENGINE UTAMA] Client-Side Clustering & Rendering.
-     * Menggabungkan fitur vektor berdasarkan jarak piksel layar.
+     * [CORE LOGIC] Mengelola rendering marker dan clustering sisi klien.
+     * Algoritma:
+     * 1. Tentukan layer target berdasarkan Zoom Level (Provinsi -> Kab/Kota -> Kec).
+     * 2. Query fitur vector tile yang terlihat di layar.
+     * 3. Proyeksikan koordinat LatLon ke Piksel Layar (x, y).
+     * 4. Lakukan clustering sederhana berdasarkan jarak Euclidean antar piksel.
+     * 5. Buat atau perbarui elemen DOM marker.
      */
     renderMarkers: function() {
         const map = this.getMap();
@@ -118,7 +150,7 @@ export const mapManager = {
         let nameKey = '';
         let tipadmVal = 0;
 
-        // Konfigurasi Layer berdasarkan Zoom
+        // --- Logika Level Zoom ---
         if (zoom <= 7.99) {
             targetLayer = 'batas-provinsi-layer';
             idKey = 'KDPPUM'; nameKey = 'WADMPR'; tipadmVal = 1;
@@ -129,18 +161,18 @@ export const mapManager = {
             targetLayer = 'batas-kecamatan-layer';
             idKey = 'KDCPUM'; nameKey = 'WADMKC'; tipadmVal = 3;
         } else {
-            // Zoom > 14 (Desa) -> Bersihkan semua marker
+            // Zoom > 14 (Level Desa) -> Terlalu padat, bersihkan marker
             this._clearMarkers(new Set());
             return;
         }
         
         if (!map.getLayer(targetLayer)) return;
 
-        // 1. Ambil semua fitur di layar
+        // 1. Ambil fitur dari layer vector
         const features = map.queryRenderedFeatures({ layers: [targetLayer] });
         const bounds = map.getBounds();
         
-        // 2. Pra-proses: Validasi & Deduplikasi (Vector tiles sering punya duplikat di perbatasan tile)
+        // 2. Pra-proses & Validasi
         const validPoints = [];
         const processedIds = new Set();
 
@@ -150,8 +182,9 @@ export const mapManager = {
             const lat = parseFloat(props.latitude);
             const lon = parseFloat(props.longitude);
 
+            // Validasi data & Cegah duplikasi ID dalam satu frame render
             if (!id || isNaN(lat) || isNaN(lon) || processedIds.has(id)) return;
-            if (!bounds.contains([lon, lat])) return; // Hapus yang di luar layar
+            if (!bounds.contains([lon, lat])) return; 
 
             processedIds.add(id);
             
@@ -168,13 +201,11 @@ export const mapManager = {
             });
         });
 
-        // 3. Algoritma Klasterisasi Grid Sederhana (Greedy)
-        const clusters = []; // Array untuk menampung hasil (Single Marker atau Cluster)
-        
-        // [MODIFIKASI] Agresivitas Klastering (90px sesuai permintaan)
-        const CLUSTER_RADIUS = 90; // Keseimbangan visual & performa
+        // 3. Algoritma Klasterisasi Grid
+        const clusters = []; 
+        const CLUSTER_RADIUS = 90; // Jarak dalam piksel (makin besar = makin agresif mengelompokkan)
 
-        // Urutkan berdasarkan latitude agar rendering z-index alami (utara di belakang selatan)
+        // Sort berdasarkan Latitude (Y) agar tumpukan z-index natural (atas menutupi bawah)
         validPoints.sort((a, b) => b.lngLat[1] - a.lngLat[1]);
 
         const usedPoints = new Set();
@@ -182,16 +213,16 @@ export const mapManager = {
         validPoints.forEach((point, index) => {
             if (usedPoints.has(index)) return;
 
-            // Titik ini menjadi pusat klaster baru
+            // Titik ini menjadi kandidat pusat klaster
             const currentCluster = {
-                isCluster: false, // Default single
+                isCluster: false, 
                 centerPoint: point,
                 members: [point]
             };
 
             usedPoints.add(index);
 
-            // Cari tetangga yang belum dipakai
+            // Cari tetangga di sekitarnya yang belum terpakai
             for (let j = index + 1; j < validPoints.length; j++) {
                 if (usedPoints.has(j)) continue;
                 
@@ -210,27 +241,27 @@ export const mapManager = {
             clusters.push(currentCluster);
         });
 
-        // 4. Render ke DOM
+        // 4. Render ke DOM (Membuat atau Memperbarui Marker)
         const activeMarkerIds = new Set();
 
         clusters.forEach(cluster => {
-            // ID Unik untuk marker di peta (bisa ID lokasi atau ID gabungan klaster)
-            // Untuk klaster, kita pakai ID lokasi pusat + suffix
+            // ID Marker: Jika cluster, gunakan prefix 'cl-' + ID pusat
             const primaryId = cluster.centerPoint.id; 
             const markerId = cluster.isCluster ? `cl-${primaryId}` : primaryId;
             
             activeMarkerIds.add(markerId);
 
+            // Z-Index dinamis berdasarkan latitude (makin ke selatan/bawah makin tinggi)
             const zIndexBase = Math.round((90 - cluster.centerPoint.lngLat[1]) * 100);
 
             if (!this._markers[markerId]) {
-                // Buat elemen baru
+                // CASE: Marker Baru (Belum ada di peta)
                 let markerEl;
                 
                 if (cluster.isCluster) {
                     markerEl = this._createClusterElement(cluster.members);
                 } else {
-                    // Single Marker (Skeleton)
+                    // Marker Tunggal (Single Location)
                     const p = cluster.centerPoint;
                     markerEl = this._createMarkerElement(p.id, {
                         nama_simpel: p.name,
@@ -239,6 +270,8 @@ export const mapManager = {
                     });
                 }
                 
+                // Tambahkan kelas animasi "Pop-In"
+                markerEl.classList.add('marker-entrance');
                 markerEl.style.zIndex = zIndexBase;
 
                 const newMarker = new maplibregl.Marker({
@@ -250,26 +283,29 @@ export const mapManager = {
 
                 this._markers[markerId] = newMarker;
 
-                // Jika single marker, cek cache cuaca (mungkin user geser dan marker ini muncul lagi)
+                // Jika single marker, coba isi konten dari cache (jika ada)
                 if (!cluster.isCluster) {
                     this._updateMarkerContent(primaryId);
-                    // Restore highlight
+                    // Restore highlight jika marker ini adalah lokasi aktif
                     if (primaryId === String(this._activeLocationId)) {
                          this._applyHighlightStyle(primaryId, true);
                     }
                 }
 
             } else {
-                // Update posisi & z-index (penting saat zoom/pitch berubah)
+                // CASE: Marker Sudah Ada -> Update posisi & z-index saja
                 this._markers[markerId].setLngLat(cluster.centerPoint.lngLat);
                 this._markers[markerId].getElement().style.zIndex = zIndexBase;
             }
         });
 
+        // Bersihkan marker yang sudah tidak ada di viewport / hasil render terbaru
         this._clearMarkers(activeMarkerIds);
     },
 
-    /** Hapus marker yang tidak lagi ada di set activeMarkerIds */
+    /** * Menghapus marker yang ID-nya tidak ada dalam set `activeIds`.
+     * @param {Set<string>} activeIds - Daftar ID marker yang valid saat ini.
+     */
     _clearMarkers: function(activeIds) {
         for (const id in this._markers) {
             if (!activeIds.has(id)) {
@@ -280,25 +316,22 @@ export const mapManager = {
     },
 
     /**
-     * [VISUAL REVISI 2] Membuat elemen DOM untuk Cluster.
-     * Menggunakan Gradien + Menghapus Outline Kasar.
+     * Membuat elemen DOM untuk marker klaster.
+     * Menampilkan jumlah lokasi dengan warna gradien sesuai kepadatan.
+     * @param {Array} members - Array berisi data titik anggota klaster.
      */
     _createClusterElement: function(members) {
         const count = members.length;
         const container = document.createElement('div');
         container.className = 'marker-container'; 
         
-        // Logic Kelas Gradien
+        // Logika Warna Gradien berdasarkan kepadatan
         let gradientClass = 'cluster-gradient-blue'; // Default (Biru)
         if (count > 10) gradientClass = 'cluster-gradient-yellow'; // Ramai (Kuning)
         if (count > 50) gradientClass = 'cluster-gradient-red'; // Padat (Merah)
 
-        // Struktur HTML
-        // Perhatikan: style inline background dihapus, diganti class. Box-shadow inset dihapus.
         container.innerHTML = `
             <div class="marker-capsule" style="padding: 2px 8px 2px 2px; gap: 6px; align-items: center;">
-                
-                <!-- Lingkaran Angka dengan Gradien -->
                 <div class="cluster-count-circle ${gradientClass}" style="
                     width: 32px; height: 32px; 
                     border-radius: 50%; 
@@ -306,18 +339,13 @@ export const mapManager = {
                     display: flex; justify-content: center; align-items: center;">
                     ${count}
                 </div>
-
-                <!-- Label Teks -->
                 <span style="font-size: 11px; text-transform: uppercase;">Lokasi</span>
-
             </div>
-
-            <!-- Animasi Pulsa -->
             <div class="marker-anchor"></div>
             <div class="marker-pulse"></div>
         `;
 
-        // Event Klik Cluster
+        // Event Klik Cluster: Zoom in atau tampilkan daftar
         container.addEventListener('click', (e) => {
             e.stopPropagation();
             const centerMember = members[0];
@@ -334,12 +362,16 @@ export const mapManager = {
         return container;
     },
 
+    // =========================================================================
+    // 4. DATA FETCHING
+    // =========================================================================
+
     /**
-     * Fetch Data Cuaca API.
-     * HANYA untuk Single Marker yang terlihat. Cluster diabaikan (hemat API).
+     * Mengambil data cuaca API untuk marker tunggal yang terlihat di layar.
+     * Memiliki filter cerdas: Abaikan Cluster, Abaikan Provinsi, & Cek Cache.
      */
     fetchDataForVisibleMarkers: async function() {
-        if (this._isInteracting) return; // Double check guard
+        if (this._isInteracting) return; 
 
         const map = this.getMap();
         if (!map) return;
@@ -350,20 +382,38 @@ export const mapManager = {
         
         const renderedIds = Object.keys(this._markers);
         
-        // Filter: 
+        // --- FILTER FETCHING ---
         // 1. Abaikan ID yang diawali 'cl-' (Cluster)
-        // 2. Ambil yang belum ada cache & belum inflight
+        // 2. Abaikan jika marker adalah PROVINSI (Optimization: Tidak perlu API cuaca)
+        // 3. Ambil yang belum ada di Cache & tidak sedang dalam proses Fetch (Inflight)
         const idsToFetch = renderedIds.filter(id => {
-            if (id.startsWith('cl-')) return false; // Skip Cluster
+            if (id.startsWith('cl-')) return false; 
+            
+            // Cek penanda visual provinsi
+            const marker = this._markers[id];
+            if (marker) {
+                const el = marker.getElement();
+                if (el.querySelector('.marker-theme-province')) {
+                    return false; // SKIP PROVINSI
+                }
+            }
+
             return !cacheManager.get(id) && !inflightIds.has(id);
         });
         
+        // Logika Inisialisasi Awal: Jika belum ada data waktu global
         let isFirstLoad = (timeManager.getGlobalTimeLookup().length === 0); 
         
         if (isFirstLoad && !idsToFetch.length && renderedIds.length > 0) {
-             // Cari satu single marker valid untuk inisialisasi
-             const firstSingle = renderedIds.find(id => !id.startsWith('cl-'));
-             if (firstSingle && !inflightIds.has(firstSingle)) idsToFetch.push(firstSingle);
+             // Paksa ambil satu marker valid (Non-Provinsi) untuk mendapatkan data waktu
+             const firstValidSingle = renderedIds.find(id => {
+                 if (id.startsWith('cl-')) return false;
+                 const m = this._markers[id];
+                 if (m && m.getElement().querySelector('.marker-theme-province')) return false;
+                 return true;
+             });
+
+             if (firstValidSingle && !inflightIds.has(firstValidSingle)) idsToFetch.push(firstValidSingle);
         } 
         
         if (!idsToFetch.length) { 
@@ -371,10 +421,12 @@ export const mapManager = {
             return; 
         }
         
+        // Tandai ID sedang diproses
         idsToFetch.forEach(id => inflightIds.add(id));
         this._isLoading = true; 
         if (!isFirstLoad && loadingSpinner) { loadingSpinner.style.display = 'block'; }
         
+        // Tampilkan skeleton loading pada marker
         idsToFetch.forEach(id => this._updateMarkerContent(id));
 
         try {
@@ -387,6 +439,7 @@ export const mapManager = {
                 const didInitTime = this._processIncomingData(id, data);
                 if (isFirstLoad && didInitTime) { isFirstLoad = false; }
                 
+                // Jika data yang baru diambil adalah lokasi yang sedang aktif (diklik user)
                 const isActive = (String(id) === String(this._activeLocationId));
                 if (isActive && this._isClickLoading) {
                     this._isClickLoading = false; 
@@ -404,8 +457,14 @@ export const mapManager = {
         }
     },
 
-    // --- EVENT HANDLERS ---
+    // =========================================================================
+    // 5. EVENT HANDLERS
+    // =========================================================================
 
+    /**
+     * Menangani klik pada cluster klien.
+     * Menampilkan popup berisi daftar lokasi dalam cluster tersebut.
+     */
     handleClientClusterClick: async function(clusterData, coordinates) {
         const members = clusterData._directMembers; 
         if (!members) return;
@@ -431,6 +490,7 @@ export const mapManager = {
 
             if (popupManager.getInstance() !== loadingPopupRef) return;
 
+            // Generator fungsi untuk list item, agar bisa direfresh saat waktu berubah
             const generateItems = () => {
                 const idxDisplay = timeManager.getSelectedTimeIndex();
                 const items = [];
@@ -503,8 +563,14 @@ export const mapManager = {
         }
     },
 
-    // --- FUNGSI PENDUKUNG (MARKER ELEMENTS & STYLE) ---
+    // =========================================================================
+    // 6. HELPER & DOM MANIPULATION
+    // =========================================================================
     
+    /**
+     * Membuat elemen DOM marker tunggal (bukan cluster).
+     * Membedakan visual antara Provinsi (Badge Coklat) dan Cuaca (Kapsul Putih).
+     */
     _createMarkerElement: function(id, props) {
         const safeId = String(id).replace(/\./g, '-');
         const tipadm = parseInt(props.tipadm, 10);
@@ -544,6 +610,10 @@ export const mapManager = {
         return container;
     },
 
+    /**
+     * Memperbarui konten visual marker (Ikon, Warna) berdasarkan data cache & waktu.
+     * Menangani state Skeleton Loading jika data belum tersedia.
+     */
     _updateMarkerContent: function(id) {
         const markerInstance = this._markers[id];
         if (!markerInstance) return;
@@ -558,6 +628,7 @@ export const mapManager = {
         const cachedData = cacheManager.get(id);
         const idx = timeManager.getSelectedTimeIndex();
 
+        // State: Loading / Skeleton
         if (!cachedData) {
             el.classList.add('marker-skeleton'); 
             if (capsuleEl) capsuleEl.className = 'marker-capsule marker-theme-skeleton';
@@ -568,6 +639,7 @@ export const mapManager = {
         } 
         el.classList.remove('marker-skeleton');
 
+        // State: Data Available
         if (cachedData.hourly?.time && idx < cachedData.hourly.time.length) {
             const hourly = cachedData.hourly;
             const code = hourly.weather_code?.[idx];
@@ -586,12 +658,14 @@ export const mapManager = {
         } else { el.style.opacity = 0.7; }
     },
     
+    /** Loop update ke semua marker (dipanggil saat slider waktu berubah) */
     updateAllMarkersForTime: function() {
         for (const id in this._markers) { 
             if (!id.startsWith('cl-')) this._updateMarkerContent(id); 
         }
     },
 
+    /** Mengatur style visual saat marker aktif (diklik) */
     _applyHighlightStyle: function(id, isActive) {
         if (this._markers[id]) {
             const capsule = this._markers[id].getElement().querySelector(`.marker-capsule`); 
@@ -632,6 +706,7 @@ export const mapManager = {
         if (!idToRemove) { this._previousActiveLocationId = null; }
     },
     
+    /** Mereset state lokasi aktif (bersihkan variabel dan UI) */
     resetActiveLocationState: function() {
         const idToReset = this._activeLocationId;
         if (sidebarManager.isOpen()) { 
@@ -664,6 +739,10 @@ export const mapManager = {
     // Fallback Handle Cluster (deprecated)
     handleClusterClick: function(f, c) { console.warn("Deprecated handleClusterClick called"); },
 
+    /**
+     * Handler utama saat marker lokasi tunggal (unclustered) diklik.
+     * Mengatur logic: Switching highlight, Buka Popup/Sidebar, dan Fetching data jika perlu.
+     */
     handleUnclusteredClick: function(props) {
         const { id, nama_simpel, nama_label, lat, lon, tipadm } = props;
         let coordinates = [lon, lat];
@@ -675,17 +754,16 @@ export const mapManager = {
         console.log(`Handling Click: ${nama_simpel} (${id})`); 
         popupManager.close(true);
 
-        // [HANDOVER MANEUVER]
-        // Jika ada marker lain yang sedang aktif, matikan paksa highlight-nya
-        // meskipun sidebar sedang terbuka. Kita mau ganti fokus.
+        // Handover Highlight: Matikan highlight lama sebelum nyalakan yang baru
         if (this._activeLocationId && String(this._activeLocationId) !== String(id)) {
-             this.removeActiveMarkerHighlight(this._activeLocationId, true); // true = force remove
+             this.removeActiveMarkerHighlight(this._activeLocationId, true); 
         }
 
         this.resetActiveLocationState(); 
         this._activeLocationId = id; this._activeLocationSimpleName = nama_simpel; this._activeLocationLabel = nama_label;
         this.setActiveMarkerHighlight(id); 
         
+        // CASE: Provinsi (Tampilkan Popup Khusus, tanpa fetch cuaca)
         const tipadmInt = parseInt(tipadm, 10);
         if (tipadmInt === 1) {
             this._activeLocationData = { id: id, nama_simpel: nama_simpel, nama_label: nama_label, tipadm: 1, type: 'provinsi' };
@@ -695,6 +773,7 @@ export const mapManager = {
             popupManager.open(coordinates, popupContent); return; 
         }
 
+        // CASE: Cuaca (Cek Cache -> Fetch)
         const cachedData = cacheManager.get(id);
         if (inflightIds.has(id)) { 
             this._handleInflightState(props, coordinates); 
@@ -744,6 +823,10 @@ export const mapManager = {
             }
         } finally { inflightIds.delete(id); }
     },
+
+    /**
+     * Menampilkan popup detail cuaca lengkap.
+     */
     _renderRichPopup: function(data, coordinates) {
         const idxLocal = timeManager.getSelectedTimeIndex();
         const hasGlobalTimeDataNow = timeManager.getGlobalTimeLookup().length > 0;
