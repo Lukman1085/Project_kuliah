@@ -2,17 +2,45 @@ import { utils } from "./utilities.js";
 import { popupManager } from "./popup_manager.js";
 import { timeManager } from "./time_manager.js";
 import { mapManager } from "./map_manager.js";
+import { cacheManager } from "./cache_manager.js"; // [LAZY LOAD] Import cacheManager
 
 /** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
 export const sidebarManager = { 
     _isSidebarOpen: false,
     _subRegionData: null, 
+    _observer: null, // [LAZY LOAD] Menyimpan instance IntersectionObserver
 
     elements: {},
 
     initDOM: function(domElements) {
         this.elements = domElements;
         console.log("Elemen DOM Sidebar telah di-set di sidebarManager.");
+        
+        // [LAZY LOAD] Inisialisasi Observer
+        this._initIntersectionObserver();
+    },
+
+    // [LAZY LOAD] Setup Observer untuk mendeteksi scroll
+    _initIntersectionObserver: function() {
+        const options = {
+            root: this.elements.sidebarContentEl, // Mengamati viewport konten sidebar
+            rootMargin: '50px', // Pre-fetch sedikit sebelum item masuk layar
+            threshold: 0.1
+        };
+
+        this._observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const target = entry.target;
+                    const id = target.dataset.id;
+                    if (id && !target.dataset.loaded) {
+                        this._fetchSingleSubRegionWeather(id, target);
+                        // Stop mengamati setelah fetch dipicu
+                        observer.unobserve(target);
+                    }
+                }
+            });
+        }, options);
     },
 
     _timeEl: null, _iconEl: null, _tempEl: null, _descEl: null,
@@ -128,13 +156,6 @@ export const sidebarManager = {
         labelEl.id = 'sidebar-location-label-province'; 
         labelEl.textContent = mapManager.getActiveLocationLabel();
         container.appendChild(labelEl);
-        // const infoEl = document.createElement('p');
-        // infoEl.textContent = '(Menampilkan daftar wilayah administratif di bawah provinsi ini)';
-        // infoEl.style.textAlign = 'center';
-        // infoEl.style.marginTop = '10px';
-        // infoEl.style.fontSize = '0.9rem';
-        // infoEl.style.color = '#666';
-        // container.appendChild(infoEl);
         container.style.display = 'block';
         sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName();
 
@@ -242,10 +263,7 @@ export const sidebarManager = {
             return; 
         }
 
-        // Pastikan tipadm number
         const tipadm = Number(activeData.tipadm);
-
-        // TIPADM 4 (Desa) tidak punya sub-wilayah
         if (tipadm >= 4) {
             if (subRegionContainerEl) subRegionContainerEl.style.display = 'none';
             return; 
@@ -265,35 +283,36 @@ export const sidebarManager = {
             const port = '5000';
             const baseUrl = `${protocol}//${hostname}:${port}`;
             
-            const url = `${baseUrl}/api/sub-wilayah-cuaca?id=${encodeURIComponent(activeData.id)}&tipadm=${tipadm}`;
+            // [LAZY LOAD] Tambahkan parameter view=simple
+            const url = `${baseUrl}/api/sub-wilayah-cuaca?id=${encodeURIComponent(activeData.id)}&tipadm=${tipadm}&view=simple`;
 
             const resp = await fetch(url);
-            
             if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
             
-            const data = await resp.json();
-            this._subRegionData = data; 
+            const simpleData = await resp.json();
+            this._subRegionData = simpleData; // Simpan list basic
 
             if (subRegionLoadingEl) subRegionLoadingEl.style.display = 'none';
 
-            if (!data || data.length === 0) {
+            if (!simpleData || simpleData.length === 0) {
                 if (subRegionTitleEl) subRegionTitleEl.textContent = `Tidak ada data ${titles[titleKey] || 'sub-wilayah'}`;
                 if (subRegionListEl) subRegionListEl.innerHTML = '<div style="padding:10px; text-align:center; color:#777;">Data sub-wilayah tidak tersedia.</div>';
                 return;
             }
             
-            // [AUDIT FIX: Time Injection]
-            // Cek jika Time Manager belum punya data global, gunakan data sub-wilayah pertama untuk inisialisasi
-            const isTimeNotSynced = (timeManager.getGlobalTimeLookup().length === 0);
-            if (isTimeNotSynced && data[0] && data[0].hourly?.time) {
-                console.log("[Time Injection] Menginisialisasi waktu dari data sub-wilayah provinsi.");
-                timeManager.setGlobalTimeLookup(data[0].hourly.time);
-                const realStartDate = new Date(data[0].hourly.time[0]);
-                timeManager.initializeOrSync(realStartDate);
-            }
+            // [LAZY LOAD] Render Skeleton List, bukan data lengkap
+            this._renderSubRegionListSkeleton(simpleData);
 
-            const currentTimeIndex = timeManager.getSelectedTimeIndex();
-            this._renderSubRegionList(currentTimeIndex);
+            // [SAFEGUARD TIME SYNC] Jika waktu belum sync (misal klik provinsi duluan),
+            // fetch item pertama secara penuh untuk inisialisasi waktu.
+            if (timeManager.getGlobalTimeLookup().length === 0 && simpleData.length > 0) {
+                const firstId = simpleData[0].id;
+                const firstEl = document.getElementById(`sub-region-${firstId}`);
+                if (firstEl) {
+                    // Trigger fetch langsung untuk item pertama
+                    this._fetchSingleSubRegionWeather(firstId, firstEl);
+                }
+            }
 
         } catch (e) {
             console.error("Gagal fetch sub-wilayah:", e);
@@ -303,71 +322,143 @@ export const sidebarManager = {
         }
     },
 
-    _renderSubRegionList: function(timeIndex) {
+    // [LAZY LOAD] Render awal berupa Skeleton
+    _renderSubRegionListSkeleton: function(simpleData) {
         const { subRegionListEl } = this.elements;
+        if (!subRegionListEl) return;
         
-        if (!subRegionListEl) {
-            return;
-        }
-        if (!this._subRegionData || this._subRegionData.length === 0) {
-            return; 
-        }
-
-        if (timeIndex < 0) {
-             subRegionListEl.innerHTML = '<div style="padding:10px; text-align:center;">Menunggu sinkronisasi waktu...</div>';
-             return;
-        }
-
+        subRegionListEl.innerHTML = ''; 
         const fragment = document.createDocumentFragment();
         
-        for (const subRegion of this._subRegionData) {
-            const hourly = subRegion.hourly;
-            if (!hourly || !hourly.time) {
-                continue; 
+        simpleData.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'sub-region-item skeleton-mode'; // Tambah class khusus
+            div.id = `sub-region-${item.id}`;
+            div.dataset.id = item.id; // ID untuk observer
+            
+            // Cek Cache: Jika sudah ada di cache, render langsung (skip skeleton)
+            const cached = cacheManager.get(item.id);
+            if (cached) {
+                this._fillSubRegionItem(div, cached);
+                div.dataset.loaded = "true";
+            } else {
+                // Render Skeleton UI
+                div.innerHTML = `
+                    <div class="sub-region-info-col">
+                        <span class="sub-region-item-name">${item.nama_simpel}</span>
+                        <span class="sub-region-item-desc skeleton-loading"></span>
+                    </div>
+                    <i class="sub-region-item-icon skeleton-loading"></i>
+                    <span class="sub-region-item-temp skeleton-loading"></span>
+                `;
+                // Daftarkan ke observer
+                if (this._observer) {
+                    this._observer.observe(div);
+                }
             }
-            if (timeIndex >= hourly.time.length) {
-                continue;
-            }
-
-            const dataPoint = {
-                is_day: hourly.is_day?.[timeIndex],
-                weather_code: hourly.weather_code?.[timeIndex],
-                suhu: hourly.temperature_2m?.[timeIndex],
-            };
-            const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day);
-
-            const item = document.createElement('div');
-            item.className = 'sub-region-item';
             
-            const infoCol = document.createElement('div');
-            infoCol.className = 'sub-region-info-col'; 
+            fragment.appendChild(div);
+        });
+        
+        subRegionListEl.appendChild(fragment);
+    },
 
-            const nameEl = document.createElement('span');
-            nameEl.className = 'sub-region-item-name';
-            nameEl.textContent = subRegion.nama_simpel || 'N/A';
-            
-            const descEl = document.createElement('span'); 
-            descEl.className = 'sub-region-item-desc';
-            descEl.textContent = deskripsi;
-
-            infoCol.appendChild(nameEl);
-            infoCol.appendChild(descEl);
-
-            const iconEl = document.createElement('i');
-            iconEl.className = `sub-region-item-icon ${ikon}`;
-            
-            const tempEl = document.createElement('span');
-            tempEl.className = 'sub-region-item-temp';
-            tempEl.textContent = `${dataPoint.suhu?.toFixed(1) ?? '-'}°C`;
-
-            item.appendChild(infoCol);
-            item.appendChild(iconEl);
-            item.appendChild(tempEl);
-            fragment.appendChild(item);
+    // [LAZY LOAD] Fetch data per item saat scroll
+    _fetchSingleSubRegionWeather: async function(id, element) {
+        // Double check cache sebelum fetch network
+        const cached = cacheManager.get(id);
+        if (cached) {
+            this._fillSubRegionItem(element, cached);
+            element.dataset.loaded = "true";
+            return;
         }
 
-        subRegionListEl.innerHTML = ''; 
-        subRegionListEl.appendChild(fragment); 
+        try {
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const port = '5000';
+            const baseUrl = `${protocol}//${hostname}:${port}`;
+            
+            // Gunakan endpoint data-by-ids yang sudah ada (mengembalikan data lengkap + cache headers)
+            const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${id}`);
+            if (!resp.ok) throw new Error("Err");
+            
+            const dataMap = await resp.json();
+            const data = dataMap[id];
+            
+            if (data) {
+                // Simpan ke cache lewat mapManager (karena mapManager handle logic time sync juga)
+                // Tapi karena kita di sidebar, kita bisa panggil _processIncomingData mapManager jika mau konsisten,
+                // atau manual set cache. Agar aman waktu sync, kita manfaatkan cacheManager saja, 
+                // tapi untuk Time Sync pertama kali kita perlu bantuan mapManager/TimeManager.
+                
+                // Manual set cache
+                cacheManager.set(id, data);
+                
+                // Cek Time Sync
+                if (timeManager.getGlobalTimeLookup().length === 0 && data.hourly?.time) {
+                     timeManager.setGlobalTimeLookup(data.hourly.time);
+                     timeManager.initializeOrSync(new Date(data.hourly.time[0]));
+                }
+                
+                // Update UI
+                this._fillSubRegionItem(element, data);
+                element.dataset.loaded = "true";
+            }
+        } catch (e) {
+            console.warn(`Lazy load failed for ${id}`, e);
+            // Visual Error State kecil
+            const descEl = element.querySelector('.sub-region-item-desc');
+            if (descEl) {
+                descEl.classList.remove('skeleton-loading');
+                descEl.textContent = "Gagal";
+                descEl.style.color = "red";
+            }
+        }
+    },
+
+    // [LAZY LOAD] Helper untuk mengisi data real ke elemen skeleton
+    _fillSubRegionItem: function(element, data) {
+        const timeIndex = timeManager.getSelectedTimeIndex();
+        if (!data.hourly || timeIndex < 0) return;
+
+        element.classList.remove('skeleton-mode');
+        
+        const dataPoint = {
+            is_day: data.hourly.is_day?.[timeIndex],
+            weather_code: data.hourly.weather_code?.[timeIndex],
+            suhu: data.hourly.temperature_2m?.[timeIndex],
+        };
+        const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day);
+
+        // Re-construct isi elemen agar rapi
+        element.innerHTML = `
+            <div class="sub-region-info-col">
+                <span class="sub-region-item-name">${data.nama_simpel || 'N/A'}</span>
+                <span class="sub-region-item-desc">${deskripsi}</span>
+            </div>
+            <i class="sub-region-item-icon ${ikon}"></i>
+            <span class="sub-region-item-temp">${dataPoint.suhu?.toFixed(1) ?? '-'}°C</span>
+        `;
+    },
+
+    // [LAZY LOAD] Dipanggil ulang saat slider waktu digeser
+    _renderSubRegionList: function(timeIndex) {
+        // Fungsi ini sekarang hanya mengupdate item yang SUDAH TERLOAD (bukan skeleton)
+        // Skeleton biarkan tetap skeleton.
+        const { subRegionListEl } = this.elements;
+        if (!subRegionListEl) return;
+
+        const items = subRegionListEl.querySelectorAll('.sub-region-item');
+        items.forEach(item => {
+            if (item.dataset.loaded === "true") {
+                const id = item.dataset.id;
+                const data = cacheManager.get(id);
+                if (data) {
+                    this._fillSubRegionItem(item, data);
+                }
+            }
+        });
     },
 
     renderSidebarContent: function() {
@@ -432,8 +523,9 @@ export const sidebarManager = {
         if (activeData && activeData.hourly?.time) {
             try {
                 const hourly = activeData.hourly;
+                // [MODIFIKASI] Tidak perlu render ulang list sub-wilayah di sini jika index di luar batas,
+                // karena sub-wilayah punya logic update sendiri via _renderSubRegionList
                 if (idxGlobal >= hourly.time.length) {
-                    // Jika index di luar batas data aktif, TETAP render sub-wilayah jika ada
                     this._renderSubRegionList(idxGlobal);
                     return;
                 }
