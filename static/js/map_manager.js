@@ -7,29 +7,21 @@ import { sidebarManager } from "./sidebar_manager.js";
 // Set untuk melacak ID yang sedang dalam proses fetch agar tidak double-request
 export const inflightIds = new Set();
 
-/** 🗺️ MAP MANAGER (HYBRID VECTOR + CLIENT CLUSTERING)
- * * FITUR UTAMA:
- * 1. Vector Tile Rendering: Geometri diambil instan dari tile MVT/PBF.
- * 2. Grid-Based Clustering: Pengelompokan marker sisi klien berdasarkan jarak piksel layar.
- * 3. Interaction Guard: Mencegah fetch API saat user masih berinteraksi (drag/pan).
- * 4. Handover Maneuver: Logika visual marker aktif yang cerdas.
- * 5. Organic Motion: Animasi Pop-In & Transisi Warna Halus.
- * 6. [BARU] Sync Hover: Marker men-trigger highlight pada poligon wilayah.
- */
+/** 🗺️ MAP MANAGER (HYBRID VECTOR + CLIENT CLUSTERING + GEMPA) */
 export const mapManager = { 
     _map: null, 
-    _markers: {}, // Menyimpan instance Single Marker & Cluster Marker
+    _markers: {}, 
     _fetchDebounceTimer: null,
-    _isInteracting: false, // Guard: Apakah user sedang menekan mouse/layar?
+    _isInteracting: false,
     
-    // [RESTYLING] State untuk Hover Poligon
+    // State untuk Hover Poligon
     _hoveredStateId: null,
     _hoveredSourceLayer: null,
-    _isHoveringMarker: false, // Guard untuk mencegah konflik hover marker vs poligon
+    _isHoveringMarker: false,
 
-    /**
-     * Menginisialisasi instance peta dan memasang event listener.
-     */
+    _isGempaLayerActive: false, 
+    _gempaData: null,
+
     setMap: function(mapInstance) {
         this._map = mapInstance;
         console.log("Map instance telah di-set di mapManager.");
@@ -74,12 +66,11 @@ export const mapManager = {
             }
         });
 
-        // 4. [RESTYLING] HOVER EFFECT LOGIC (POLYGON HIGHLIGHT)
-        
+        // HOVER EFFECT LOGIC
         const fillLayers = ['batas-provinsi-fill', 'batas-kabupaten-fill', 'batas-kecamatan-fill'];
 
         mapInstance.on('mousemove', (e) => {
-            // [GUARD] Jangan override hover jika mouse sedang di atas marker (Marker punya otoritas)
+            // Jangan override hover jika mouse sedang di atas marker (Marker punya otoritas)
             if (this._isInteracting || this._isHoveringMarker) return;
 
             let features = mapInstance.queryRenderedFeatures(e.point, { layers: fillLayers });
@@ -109,9 +100,27 @@ export const mapManager = {
                 this._clearHoverState();
             }
         });
+
+        // CLICK LISTENER KHUSUS GEMPA
+        mapInstance.on('click', 'gempa-point-layer', (e) => {
+            if (!this._isGempaLayerActive) return;
+            
+            const feature = e.features[0];
+            if (feature) {
+                // Hentikan propagasi klik ke layer di bawahnya (misal: wilayah)
+                e.originalEvent.stopPropagation(); 
+                this._handleGempaClick(feature);
+            }
+        });
+        
+        mapInstance.on('mouseenter', 'gempa-point-layer', () => {
+            if(this._isGempaLayerActive) mapInstance.getCanvas().style.cursor = 'pointer';
+        });
+        mapInstance.on('mouseleave', 'gempa-point-layer', () => {
+            if(this._isGempaLayerActive) mapInstance.getCanvas().style.cursor = '';
+        });
     },
 
-    // [HELPER] Membersihkan state hover poligon
     _clearHoverState: function() {
         if (this._hoveredStateId !== null && this._hoveredSourceLayer !== null && this._map) {
             this._map.setFeatureState(
@@ -123,26 +132,21 @@ export const mapManager = {
         this._hoveredSourceLayer = null;
     },
 
-    // [HELPER BARU] Menyalakan poligon berdasarkan ID Marker
+    // Menyalakan poligon berdasarkan ID Marker
     _highlightPolygon: function(id, tipadm) {
         if (!this._map) return;
-
         // Mapping TIPADM ke Source Layer di Vector Tile
         let sourceLayer = '';
         const tip = parseInt(tipadm, 10);
-        
         if (tip === 1) sourceLayer = 'batas_provinsi';
         else if (tip === 2) sourceLayer = 'batas_kabupatenkota';
         else if (tip === 3) sourceLayer = 'batas_kecamatandistrik';
-        else return; // Level Desa biasanya tidak punya layer vektor sendiri di setup ini
+        else return; 
 
         // Bersihkan hover sebelumnya (misal dari poligon tetangga)
         this._clearHoverState();
-
-        // Set state baru
         this._hoveredStateId = id;
         this._hoveredSourceLayer = sourceLayer;
-
         this._map.setFeatureState(
             { source: 'batas-wilayah-vector', sourceLayer: sourceLayer, id: id },
             { hover: true }
@@ -184,10 +188,129 @@ export const mapManager = {
         }, 600); 
     },
 
-    /**
-     * [ENGINE UTAMA] Client-Side Clustering & Rendering.
-     * Menggabungkan fitur vektor berdasarkan jarak piksel layar.
-     */
+
+    // =========================================================================
+    // LOGIKA GEMPA (EARTHQUAKE LOGIC)
+    // =========================================================================
+
+    toggleGempaLayer: async function(isActive) {
+        this._isGempaLayerActive = isActive;
+        const map = this.getMap();
+        if (!map) return;
+
+        const visibility = isActive ? 'visible' : 'none';
+        
+        if (map.getLayer('gempa-point-layer')) map.setLayoutProperty('gempa-point-layer', 'visibility', visibility);
+        if (map.getLayer('gempa-heat-layer')) map.setLayoutProperty('gempa-heat-layer', 'visibility', visibility);
+        if (map.getLayer('gempa-label-layer')) map.setLayoutProperty('gempa-label-layer', 'visibility', visibility);
+
+        if (isActive) {
+            // Opsional: Jika data belum pernah diambil, fetch sekarang
+            if (!this._gempaData) {
+                await this._fetchAndRenderGempa();
+            }
+            // Redupkan marker cuaca
+            this._setWeatherMarkersOpacity(0.3);
+        } else {
+            // Kembalikan marker cuaca
+            this._setWeatherMarkersOpacity(1);
+            popupManager.close(true); // Tutup popup gempa jika ada
+        }
+    },
+
+    _setWeatherMarkersOpacity: function(opacity) {
+        for (const id in this._markers) {
+            const marker = this._markers[id];
+            const el = marker.getElement();
+            el.style.opacity = opacity;
+            // Non-aktifkan pointer events jika diredupkan agar tidak mengganggu klik gempa
+            el.style.pointerEvents = opacity < 1 ? 'none' : 'auto';
+        }
+    },
+
+    _fetchAndRenderGempa: async function() {
+        const protocol = window.location.protocol; const hostname = window.location.hostname; const port = '5000'; const baseUrl = `${protocol}//${hostname}:${port}`;
+        
+        try {
+            const [bmkgRes, usgsRes] = await Promise.allSettled([
+                fetch(`${baseUrl}/api/gempa/bmkg`),
+                fetch(`${baseUrl}/api/gempa/usgs`)
+            ]);
+
+            let bmkgFeatures = [];
+            let usgsFeatures = [];
+
+            if (bmkgRes.status === 'fulfilled' && bmkgRes.value.ok) {
+                const json = await bmkgRes.value.json();
+                bmkgFeatures = json.features || [];
+            }
+            if (usgsRes.status === 'fulfilled' && usgsRes.value.ok) {
+                const json = await usgsRes.value.json();
+                usgsFeatures = json.features || [];
+            }
+
+            // De-duplikasi Logic (Prioritas BMKG)
+            const finalFeatures = [...bmkgFeatures];
+            
+            usgsFeatures.forEach(usgs => {
+                let isDuplicate = false;
+                const uTime = new Date(usgs.properties.time).getTime();
+                const uCoord = usgs.geometry.coordinates; 
+
+                for (const bmkg of bmkgFeatures) {
+                    const bTime = new Date(bmkg.properties.time).getTime();
+                    const bCoord = bmkg.geometry.coordinates;
+
+                    const timeDiff = Math.abs(uTime - bTime) / 1000; 
+                    if (timeDiff > 120) continue; 
+
+                    const dist = Math.sqrt(Math.pow(uCoord[0] - bCoord[0], 2) + Math.pow(uCoord[1] - bCoord[1], 2));
+                    if (dist < 0.5) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+
+                if (!isDuplicate) {
+                    finalFeatures.push(usgs);
+                }
+            });
+
+            const map = this.getMap();
+            if (map && map.getSource('gempa-source')) {
+                map.getSource('gempa-source').setData({
+                    type: 'FeatureCollection',
+                    features: finalFeatures
+                });
+            }
+            
+            this._gempaData = finalFeatures;
+            console.log(`Gempa Loaded: ${bmkgFeatures.length} BMKG + ${usgsFeatures.length} USGS (Unique)`);
+
+        } catch (e) {
+            console.error("Gagal memuat data gempa:", e);
+        }
+    },
+
+    _handleGempaClick: function(feature) {
+        const props = feature.properties;
+        const coords = feature.geometry.coordinates;
+        
+        // Tutup semua popup/sidebar sebelumnya
+        popupManager.close(true);
+        sidebarManager.closeSidebar();
+        
+        // Data untuk popup
+        const popupContent = popupManager.generateGempaPopupContent(props);
+        popupManager.open(coords, popupContent);
+        
+        // Trigger Sidebar Gempa (Opsional: Langsung buka sidebar atau tunggu klik 'Detail')
+        // Saat ini kita set agar klik "Lihat Detail" di popup yang membuka sidebar
+    },
+
+    // =========================================================================
+    // END LOGIKA GEMPA
+    // =========================================================================
     renderMarkers: function() {
         const map = this.getMap();
         if (!map) return;
@@ -364,7 +487,7 @@ export const mapManager = {
     },
 
     /**
-     * [VISUAL REVISI 2] Membuat DOM Cluster.
+    /**
      * Desain: Kapsul + Angka Gradien + Label "LOKASI"
      */
     _createClusterElement: function(members) {

@@ -8,13 +8,13 @@ export const popupManager = {
     _currentInstance: null,
     _internalCloseFlag: false,
 
-    // [BARU] State untuk Lazy Loading Popup Klaster
+    // State untuk Lazy Loading Popup Klaster
     _activePopupType: null, 
     _activeClusterItemsGenerator: null, 
-    _clusterFetchCallback: null, // Fungsi fetcher dari mapManager
-    _clusterObserver: null,      // Instance IntersectionObserver
+    _clusterFetchCallback: null, 
+    _clusterObserver: null,      
 
-    // [BARU] Setter untuk Fetcher Callback
+    // Setter untuk Fetcher Callback
     setFetchCallback: function(fn) {
         this._clusterFetchCallback = fn;
     },
@@ -200,6 +200,85 @@ export const popupManager = {
 
         return container;
     },
+
+    /** * [BARU] GENERATOR 5: POPUP GEMPA (Interaktif & Aesthetic) */
+    generateGempaPopupContent: function(props) {
+        const container = document.createElement('div');
+        container.className = 'weather-popup-card';
+        // Gunakan class khusus gempa agar bisa di-style berbeda jika perlu
+        container.classList.add('gempa-popup-mode');
+
+        // Header: Warna Merah (Tsunami) atau Dark Grey (Standard)
+        const isTsunami = props.tsunami;
+        const headerColor = isTsunami ? '#d32f2f' : '#455A64';
+        
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        header.style.backgroundColor = headerColor;
+        header.style.color = 'white';
+        header.style.borderBottom = 'none';
+        
+        header.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="popup-title" style="color:white; margin:0; font-size:1.2rem;">M ${props.mag.toFixed(1)}</div>
+                ${isTsunami ? '<span style="background:white; color:#d32f2f; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">TSUNAMI</span>' : ''}
+            </div>
+            <div style="font-size:0.8rem; opacity:0.9; margin-top:4px;">
+                ${new Date(props.time).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}
+            </div>
+        `;
+        container.appendChild(header);
+
+        const body = document.createElement('div');
+        body.style.padding = '15px';
+        
+        body.innerHTML = `
+            <div style="font-weight:600; font-size:0.95rem; color:#333; margin-bottom:12px; line-height:1.4;">
+                ${props.place}
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <div style="background:#f5f5f5; padding:8px; border-radius:6px; display:flex; align-items:center; gap:8px;">
+                    <i class="wi wi-earthquake" style="color:#455A64; font-size:1.2rem;"></i>
+                    <div>
+                        <div style="font-size:0.7rem; color:#777;">Kedalaman</div>
+                        <div style="font-weight:700; color:#333;">${props.depth}</div>
+                    </div>
+                </div>
+                <div style="background:#f5f5f5; padding:8px; border-radius:6px; display:flex; align-items:center; gap:8px;">
+                    <i class="wi wi-time-3" style="color:#455A64; font-size:1.2rem;"></i>
+                    <div>
+                        <div style="font-size:0.7rem; color:#777;">Waktu</div>
+                        <div style="font-weight:700; color:#333;">${new Date(props.time).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:10px; font-size:0.75rem; color:#999; text-align:right;">
+                Sumber: ${props.source ? props.source.toUpperCase() : 'BMKG'}
+            </div>
+        `;
+        container.appendChild(body);
+
+        const footer = document.createElement('div');
+        footer.className = 'popup-footer';
+        const button = document.createElement('button');
+        button.className = 'popup-btn-detail';
+        // Style tombol agar sesuai tema gempa
+        button.style.backgroundColor = isTsunami ? '#ffebee' : '#eceff1';
+        button.style.color = isTsunami ? '#b71c1c' : '#37474f';
+        button.textContent = 'Lihat Analisis Lengkap';
+        
+        // Klik tombol akan dispatch event custom untuk Sidebar
+        button.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('requestSidebarGempa', { 
+                detail: { gempaData: props } 
+            }));
+        });
+        
+        footer.appendChild(button);
+        container.appendChild(footer);
+
+        return container;
+    },
     
     open: function(lngLat, content, options = { maxWidth: '300px', closeButton: true }) {
         const map = mapManager.getMap(); 
@@ -277,7 +356,7 @@ export const popupManager = {
         this._activeClusterItemsGenerator = generatorFn;
     },
 
-    // [BARU] Attach Observer setelah popup dibuka
+    // Attach Observer setelah popup dibuka
     attachClusterObserver: function() {
         const popupEl = this.getElement();
         if (!popupEl) return;
@@ -286,7 +365,7 @@ export const popupManager = {
         if (!listContainer) return;
 
         const options = {
-            root: listContainer, // Scrollable container
+            root: listContainer, 
             threshold: 0.1
         };
 
@@ -299,7 +378,7 @@ export const popupManager = {
                     const id = itemEl.dataset.id;
                     
                     if (id && !itemEl.dataset.loaded && this._clusterFetchCallback) {
-                        // Unobserve dulu biar gak double trigger
+                        // Unobserve dulu biar tidak double trigger
                         observer.unobserve(itemEl);
                         
                         // Trigger Fetch Single
@@ -357,7 +436,7 @@ export const popupManager = {
                 // (Observer akan otomatis dipasang ulang karena list baru)
                 const newContent = this.generateClusterPopupContent(newData.title, newData.items);
                 this.setDOMContent(newContent);
-                this.attachClusterObserver(); // Pasang lagi observernya
+                this.attachClusterObserver(); 
             }
             return;
         }
@@ -366,7 +445,7 @@ export const popupManager = {
         if (!popupEl) return;
         const card = popupEl.querySelector('.weather-popup-card');
         
-        if (card && !card.classList.contains('province-mode') && !card.querySelector('.cluster-popup-content')) {
+        if (card && !card.classList.contains('province-mode') && !card.querySelector('.cluster-popup-content') && !card.classList.contains('gempa-popup-mode')) {
             const activeData = mapManager.getActiveLocationData();
             if (activeData && activeData.tipadm !== 1 && activeData.hourly?.time) {
                 try {
@@ -374,7 +453,6 @@ export const popupManager = {
                     
                     const formattedTime = utils.formatLocalTimestampString(localTimeString); 
                     const dataPoint = utils.extractHourlyDataPoint(activeData.hourly, idxGlobal);
-                    // PERBAIKAN: Pastikan nama variabel konsisten (popupData vs dataPoint) - disini aman karena pakai dataPoint
                     const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
                     
                     const timeEl = card.querySelector('.popup-time'); 

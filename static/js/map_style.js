@@ -37,7 +37,6 @@ export const MAP_STYLE = {
             minzoom: 4, 
             maxzoom: 14, 
             attribution: 'Data Batas Wilayah BIG',
-            // [PENTING] Mapping properti ID agar Feature State (Hover) berfungsi
             promoteId: {
                 'batas_provinsi': 'KDPPUM',
                 'batas_kabupatenkota': 'KDPKAB',
@@ -60,15 +59,20 @@ export const MAP_STYLE = {
             type: 'geojson', 
             data: { type: 'FeatureCollection', features: [] }, 
             promoteId: 'id' 
-        } 
+        },
+
+        // 5. [BARU] GeoJSON Data Gempa (Combined BMKG & USGS)
+        'gempa-source': {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] },
+            promoteId: 'id'
+        }
     },
     layers: [ 
         // --- LAYER 1: BASEMAP ---
         { id: 'cartodb-positron-layer', type: 'raster', source: 'cartodb-positron-nolabels' },
 
         // --- LAYER 2: INTERACTION FILLS (Hover Effect) ---
-        // Layer ini transparan secara default (opacity 0), 
-        // hanya muncul (opacity 0.1) saat state 'hover' bernilai true.
         {
             id: 'batas-provinsi-fill',
             type: 'fill',
@@ -77,12 +81,7 @@ export const MAP_STYLE = {
             minzoom: 4, maxzoom: 7.99,
             paint: {
                 'fill-color': COLORS.hover_fill,
-                'fill-opacity': [
-                    'case',
-                    ['boolean', ['feature-state', 'hover'], false],
-                    0.1, // Opacity saat hover (tipis)
-                    0    // Opacity normal (invisible)
-                ]
+                'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.1, 0]
             }
         },
         {
@@ -93,12 +92,7 @@ export const MAP_STYLE = {
             minzoom: 8, maxzoom: 10.99,
             paint: {
                 'fill-color': COLORS.hover_fill,
-                'fill-opacity': [
-                    'case',
-                    ['boolean', ['feature-state', 'hover'], false],
-                    0.1,
-                    0
-                ]
+                'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.1, 0]
             }
         },
         {
@@ -109,12 +103,7 @@ export const MAP_STYLE = {
             minzoom: 11, maxzoom: 14,
             paint: {
                 'fill-color': COLORS.hover_fill,
-                'fill-opacity': [
-                    'case',
-                    ['boolean', ['feature-state', 'hover'], false],
-                    0.1,
-                    0
-                ]
+                'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.1, 0]
             }
         },
 
@@ -125,15 +114,8 @@ export const MAP_STYLE = {
             source: 'batas-wilayah-vector', 
             'source-layer': 'batas_provinsi', 
             minzoom: 4, maxzoom: 7.99, 
-            layout: {
-                'line-join': 'round', // Membuat sudut tumpul (organik)
-                'line-cap': 'round'
-            },
-            paint: { 
-                'line-color': COLORS.provinsi, 
-                'line-width': 1.5, 
-                'line-opacity': 0.8 
-            }
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': COLORS.provinsi, 'line-width': 1.5, 'line-opacity': 0.8 }
         },
         { 
             id: 'batas-kabupaten-layer', 
@@ -141,15 +123,8 @@ export const MAP_STYLE = {
             source: 'batas-wilayah-vector', 
             'source-layer': 'batas_kabupatenkota', 
             minzoom: 8, maxzoom: 10.99, 
-            layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            paint: { 
-                'line-color': COLORS.kabupaten, 
-                'line-width': 1, 
-                'line-opacity': 0.7 
-            }
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': COLORS.kabupaten, 'line-width': 1, 'line-opacity': 0.7 }
         },
         { 
             id: 'batas-kecamatan-layer', 
@@ -157,32 +132,93 @@ export const MAP_STYLE = {
             source: 'batas-wilayah-vector', 
             'source-layer': 'batas_kecamatandistrik', 
             minzoom: 11, maxzoom: 14, 
-            layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            paint: { 
-                'line-color': COLORS.kecamatan, 
-                'line-width': 0.8, 
-                'line-opacity': 0.9,
-                'line-dasharray': [2, 2] // Garis putus-putus halus
-            }
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': COLORS.kecamatan, 'line-width': 0.8, 'line-opacity': 0.9, 'line-dasharray': [2, 2] }
         },
         
-        // --- LAYER 4: HIT TARGETS (Invisible but functional) ---
+        // --- LAYER 4: HIT TARGETS ---
         { 
             id: 'provinsi-point-hit-target', 
             type: 'circle', 
             source: 'provinsi-source', 
-            paint: { 
-                'circle-radius': 12, 
-                'circle-color': '#000000', 
-                'circle-opacity': 0, 
-                'circle-stroke-width': 0 
+            paint: { 'circle-radius': 12, 'circle-color': '#000000', 'circle-opacity': 0, 'circle-stroke-width': 0 }
+        },
+
+        // --- [BARU] LAYER GEMPA (EARTHQUAKE) ---
+        // Layer ini akan di-toggle (visible/none) lewat map_manager
+        
+        // A. Heatmap Gempa (Zoom Rendah < 7)
+        {
+            id: 'gempa-heat-layer',
+            type: 'heatmap',
+            source: 'gempa-source',
+            maxzoom: 7,
+            layout: { 'visibility': 'none' }, // Default mati
+            paint: {
+                'heatmap-weight': ['interpolate', ['linear'], ['get', 'mag'], 0, 0, 6, 1],
+                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 7, 3],
+                'heatmap-color': [
+                    'interpolate', ['linear'], ['heatmap-density'],
+                    0, 'rgba(33,102,172,0)',
+                    0.2, 'rgb(103,169,207)',
+                    0.4, 'rgb(209,229,240)',
+                    0.6, 'rgb(253,219,199)',
+                    0.8, 'rgb(239,138,98)',
+                    1, 'rgb(178,24,43)'
+                ],
+                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 7, 20],
+                'heatmap-opacity': 0.7
             }
         },
 
-        // --- LAYER 5: CLUSTERS ---
+        // B. Lingkaran Gempa Utama (Zoom > 4)
+        {
+            id: 'gempa-point-layer',
+            type: 'circle',
+            source: 'gempa-source',
+            minzoom: 4,
+            layout: { 'visibility': 'none' }, // Default mati
+            paint: {
+                // Radius berdasarkan Magnitudo (M 5.0 = 10px, M 8.0 = 30px)
+                'circle-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    4, ['interpolate', ['linear'], ['get', 'mag'], 4, 3, 8, 10],
+                    10, ['interpolate', ['linear'], ['get', 'mag'], 4, 8, 8, 25]
+                ],
+                // Warna berdasarkan Kedalaman (Merah < 70km, Kuning < 300km, Biru > 300km)
+                'circle-color': [
+                    'step', ['get', 'depth_km'],
+                    '#d32f2f', // Merah (Dangkal)
+                    70, '#fbc02d', // Kuning (Menengah)
+                    300, '#1976d2' // Biru (Dalam)
+                ],
+                'circle-stroke-color': '#ffffff',
+                'circle-stroke-width': 1.5,
+                'circle-opacity': 0.85
+            }
+        },
+
+        // C. Label Magnitudo Gempa (Zoom > 6)
+        {
+            id: 'gempa-label-layer',
+            type: 'symbol',
+            source: 'gempa-source',
+            minzoom: 6,
+            layout: {
+                'visibility': 'none', // Default mati
+                'text-field': '{mag}',
+                'text-font': ['Noto Sans Regular'],
+                'text-size': 11,
+                'text-offset': [0, 0]
+            },
+            paint: {
+                'text-color': '#ffffff',
+                'text-halo-color': '#333333',
+                'text-halo-width': 1
+            }
+        },
+
+        // --- LAYER 6: CLUSTERS (Cuaca) ---
         { 
             id: 'cluster-background-layer', 
             type: 'circle', 
@@ -214,7 +250,7 @@ export const MAP_STYLE = {
             } 
         },
         
-        // --- LAYER 6: UNCLUSTERED (Fallback) ---
+        // --- LAYER 7: UNCLUSTERED (Cuaca) ---
         {
             id: 'unclustered-point-hit-target', 
             type: 'circle', 

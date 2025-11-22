@@ -3,6 +3,7 @@ import time
 import random
 import sqlite3
 import requests
+import json
 from datetime import datetime, timedelta
 from flask import Flask, Response, render_template, request, jsonify
 from flask_cors import CORS
@@ -29,8 +30,17 @@ Session = sessionmaker(bind=engine)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MBTILES_FILE = os.path.join(BASE_DIR, 'static', 'peta_indonesia.mbtiles')
 
+# ================== CACHE CONFIGURATION ==================
 WEATHER_CACHE = {}
 CACHE_TTL = 1800  # 30 menit
+
+# [BARU] Cache khusus untuk Gempa (TTL lebih pendek karena real-time)
+GEMPA_CACHE = {
+    'bmkg': {'data': None, 'timestamp': 0},
+    'usgs': {'data': None, 'timestamp': 0}
+}
+GEMPA_TTL_BMKG = 60   # 1 Menit (BMKG update tiap kejadian)
+GEMPA_TTL_USGS = 300  # 5 Menit (USGS data global)
 
 API_CALL_TIMESTAMPS = []
 LAST_API_CALL_COUNT = 0
@@ -276,34 +286,59 @@ def cari_lokasi():
 
     session = Session()
     try:
+        # [DATA INTEGRITY FIX]
+        # Menggunakan UNION ALL untuk menggabungkan hasil dari tabel batas (ID valid)
+        # dan tabel wilayah_administratif (fallback untuk Desa).
+        # Label dikonstruksi dinamis menggunakan JOIN pattern matching.
+        
         query = text("""
-            SELECT 
-                CASE "TIPADM"
-                    WHEN 1 THEN "KDPPUM"
-                    WHEN 2 THEN "KDPKAB"
-                    WHEN 3 THEN "KDCPUM"
-                    WHEN 4 THEN "KDEPUM"
-                    ELSE COALESCE("KDCPUM", "KDPKAB", "KDPPUM")
-                END as id, 
+            SELECT * FROM (
+                -- 1. PROVINSI (Valid dari batas_provinsi)
+                SELECT 
+                    "KDPPUM" as id,
+                    "WADMPR" as nama_simpel,
+                    "WADMPR" as nama_label,
+                    latitude as lat, longitude as lon, "TIPADM" as tipadm
+                FROM batas_provinsi
+                WHERE "WADMPR" ILIKE :search_term
                 
-                label as nama_label, 
+                UNION ALL
                 
-                CASE "TIPADM"
-                    WHEN 1 THEN "WADMPR"
-                    WHEN 2 THEN "WADMKK"
-                    WHEN 3 THEN "WADMKC"
-                    WHEN 4 THEN "WADMKD"
-                    ELSE COALESCE("WADMKC", "WADMKK", "WADMPR")
-                END as nama_simpel,
+                -- 2. KABUPATEN/KOTA (Valid dari batas_kabupatenkota + Join Provinsi utk Label)
+                SELECT 
+                    k."KDPKAB" as id,
+                    k."WADMKK" as nama_simpel,
+                    CONCAT(k."WADMKK", ', ', p."WADMPR") as nama_label,
+                    k.latitude as lat, k.longitude as lon, k."TIPADM" as tipadm
+                FROM batas_kabupatenkota k
+                LEFT JOIN batas_provinsi p ON p."KDPPUM" = LEFT(k."KDPKAB", 2)
+                WHERE k."WADMKK" ILIKE :search_term
                 
-                latitude as lat, 
-                longitude as lon,
-                "TIPADM" as tipadm
-            FROM wilayah_administratif
-            WHERE 
-                label ILIKE :search_term 
-                AND COALESCE("KDCPUM", "KDPKAB", "KDPPUM", "KDEPUM") IS NOT NULL
-            ORDER BY "TIPADM", label
+                UNION ALL
+                
+                -- 3. KECAMATAN (Valid dari batas_kecamatandistrik + Join Kab/Kota utk Label)
+                SELECT 
+                    c."KDCPUM" as id,
+                    c."WADMKC" as nama_simpel,
+                    CONCAT(c."WADMKC", ', ', k."WADMKK") as nama_label,
+                    c.latitude as lat, c.longitude as lon, c."TIPADM" as tipadm
+                FROM batas_kecamatandistrik c
+                LEFT JOIN batas_kabupatenkota k ON k."KDPKAB" = LEFT(c."KDCPUM", 5) -- Asumsi ID format 'XX.XX' (5 char)
+                WHERE c."WADMKC" ILIKE :search_term
+                
+                UNION ALL
+                
+                -- 4. DESA/KELURAHAN (Fallback ke wilayah_administratif, terima nasib ID mungkin rusak tapi user butuh ini)
+                SELECT
+                    "KDEPUM" as id,
+                    "WADMKD" as nama_simpel,
+                    label as nama_label,
+                    latitude as lat, longitude as lon, "TIPADM" as tipadm
+                FROM wilayah_administratif
+                WHERE "TIPADM" = 4 AND label ILIKE :search_term
+                
+            ) AS united_search
+            ORDER BY tipadm, nama_simpel
             LIMIT 10;
         """)
         
@@ -469,7 +504,6 @@ def get_sub_wilayah_cuaca():
         return jsonify({"error": "Internal server error"}), 500
     finally:
         session.close()
-# ===== AKHIR ENDPOINT BARU =====
 
 @app.route('/api/data-by-ids')
 def get_data_by_ids():
@@ -570,6 +604,193 @@ def get_monitoring_stats():
         "panggilan_eksternal_per_menit": calls_per_minute,
         "panggilan_eksternal_per_fungsi_terakhir": calls_per_function
     })
+
+# ================== MODUL GEMPA (EARTHQUAKE) ==================
+
+def parse_bmkg_coordinate(coord_str):
+    """
+    Mengubah format BMKG "5.2 LS" atau "104.5 BT" menjadi float.
+    """
+    try:
+        clean_str = coord_str.strip().upper()
+        val_str = re.split(r'[^\d\.]', clean_str)[0] # Ambil angkanya saja
+        val = float(val_str)
+        
+        if "LS" in clean_str or "S" in clean_str:
+            val = -val # Selatan jadi negatif
+        if "BB" in clean_str or "W" in clean_str:
+            val = -val # Barat (jarang di Indo) jadi negatif
+            
+        return val
+    except Exception as e:
+        print(f"Error parsing coordinate {coord_str}: {e}")
+        return 0.0
+
+def parse_bmkg_to_geojson(bmkg_data):
+    """
+    Mengonversi JSON Raw BMKG ke standar GeoJSON FeatureCollection.
+    """
+    features = []
+    gempa_list = bmkg_data.get('Infogempa', {}).get('gempa', [])
+    
+    # Normalisasi: Jika 'gempa' bukan list (karena cuma 1 data di autogempa), bungkus jadi list
+    if not isinstance(gempa_list, list):
+        gempa_list = [gempa_list]
+
+    for g in gempa_list:
+        try:
+            # 1. Parse Koordinat
+            # BMKG Coordinates field: "-3.56,101.23" (Lat, Lon) string
+            lat_raw, lon_raw = g['Coordinates'].split(',')
+            lat = float(lat_raw)
+            lon = float(lon_raw)
+            
+            # 2. Parse Waktu (DateTime biasanya tersedia di AutoGempa, tapi di gempaterkini kadang pisah)
+            # Format BMKG: 2024-11-22T13:46:12+00:00
+            time_str = g.get('DateTime')
+            if not time_str:
+                # Fallback manual jika DateTime kosong (format "22 Nov 2024", "12:00:00 WIB")
+                pass # Implementasi nanti jika perlu, biasanya DateTime sudah ada di API terbaru
+                
+            # 3. Deteksi Potensi Tsunami
+            # [PERBAIKAN] Logika deteksi Tsunami yang lebih aman
+            potensi_text = g.get('Potensi', '').lower()
+            is_tsunami = "berpotensi tsunami" in potensi_text and "tidak" not in potensi_text
+            
+            feature = {
+                "type": "Feature",
+                "properties": {
+                    "mag": float(g['Magnitude']),
+                    "place": g['Wilayah'],
+                    "time": time_str, # Keep ISO string
+                    "depth": g['Kedalaman'], # Biarkan string "10 km" atau parse int
+                    "tsunami": is_tsunami,
+                    "source": "bmkg"
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [lon, lat] # GeoJSON: Lon, Lat
+                },
+                "id": f"bmkg-{g['Tanggal']}-{g['Jam']}" # ID unik sederhana
+            }
+            features.append(feature)
+        except Exception as e:
+            print(f"Skip item gempa BMKG rusak: {e}")
+            continue
+            
+    return {
+        "type": "FeatureCollection",
+        "metadata": {"generated": time.time()},
+        "features": features
+    }
+
+@app.route('/api/gempa/bmkg')
+def get_gempa_bmkg():
+    """
+    Proxy untuk mengambil data Gempa Terkini dari BMKG.
+    Menggunakan caching internal agar tidak membebani server BMKG.
+    """
+    global GEMPA_CACHE
+    now = time.time()
+    
+    # 1. Cek Cache
+    if GEMPA_CACHE['bmkg']['data'] and (now - GEMPA_CACHE['bmkg']['timestamp'] < GEMPA_TTL_BMKG):
+        print("Serving BMKG Earthquake data from Cache")
+        return jsonify(GEMPA_CACHE['bmkg']['data'])
+
+    # 2. Fetch ke BMKG
+    try:
+        url = "https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json"
+        print(f"Fetching BMKG Earthquake data from {url}...")
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        
+        bmkg_json = resp.json()
+        
+        # 3. Transformasi ke GeoJSON
+        geojson_data = parse_bmkg_to_geojson(bmkg_json)
+        
+        # 4. Simpan Cache
+        GEMPA_CACHE['bmkg']['data'] = geojson_data
+        GEMPA_CACHE['bmkg']['timestamp'] = now
+        
+        return jsonify(geojson_data)
+        
+    except requests.exceptions.RequestException as e:
+        print(f"BMKG Fetch Error: {e}")
+        # Return cache lama jika ada (stale-while-revalidate style fallback)
+        if GEMPA_CACHE['bmkg']['data']:
+            return jsonify(GEMPA_CACHE['bmkg']['data'])
+        return jsonify({"error": "Gagal mengambil data BMKG", "details": str(e)}), 502
+
+@app.route('/api/gempa/usgs')
+def get_gempa_usgs():
+    """
+    Proxy untuk mengambil data Gempa Signifikan dari USGS.
+    BBOX: Indonesia Luas (Generous BBOX).
+    """
+    global GEMPA_CACHE
+    now = time.time()
+    
+    # 1. Cek Cache
+    if GEMPA_CACHE['usgs']['data'] and (now - GEMPA_CACHE['usgs']['timestamp'] < GEMPA_TTL_USGS):
+        print("Serving USGS Earthquake data from Cache")
+        return jsonify(GEMPA_CACHE['usgs']['data'])
+
+    # 2. Fetch ke USGS
+    try:
+        base_url = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+        params = {
+            "format": "geojson",
+            "minlatitude": "-15",
+            "maxlatitude": "10",
+            "minlongitude": "90",
+            "maxlongitude": "145",
+            "minmagnitude": "4.5", # Hanya gempa signifikan
+            "orderby": "time",
+            "limit": "50" # Jangan terlalu banyak
+        }
+        print(f"Fetching USGS Earthquake data...")
+        resp = requests.get(base_url, params=params, timeout=15)
+        resp.raise_for_status()
+        
+        usgs_data = resp.json()
+        
+        # Normalisasi Data USGS agar sesuai struktur aplikasi
+        for feature in usgs_data.get('features', []):
+            props = feature['properties']
+            geom = feature['geometry']
+            
+            # [PERBAIKAN] Pindahkan kedalaman (depth) dari geometry.coordinates[2] ke properties.depth
+            # Format GeoJSON point: [lon, lat, depth]
+            if len(geom['coordinates']) > 2:
+                depth_val = geom['coordinates'][2]
+                # Format jadi string "X km" agar konsisten dengan BMKG di frontend, atau biarkan float
+                # Kita gunakan string "X km" untuk konsistensi visual di popup
+                props['depth'] = f"{depth_val} km"
+                props['depth_km'] = depth_val # Simpan raw value untuk styling
+            
+            # Tandai sumber
+            props['source'] = 'usgs'
+            
+            # Pastikan properti 'place' ada
+            if 'place' not in props:
+                props['place'] = 'Unknown Location'
+
+        
+        # 3. Simpan Cache
+        GEMPA_CACHE['usgs']['data'] = usgs_data
+        GEMPA_CACHE['usgs']['timestamp'] = now
+        
+        return jsonify(usgs_data)
+        
+    except requests.exceptions.RequestException as e:
+        print(f"USGS Fetch Error: {e}")
+        if GEMPA_CACHE['usgs']['data']:
+            return jsonify(GEMPA_CACHE['usgs']['data'])
+        return jsonify({"error": "Gagal mengambil data USGS", "details": str(e)}), 502
+
+# ================== END MODUL GEMPA ==================
 
 @app.route('/')
 def index():

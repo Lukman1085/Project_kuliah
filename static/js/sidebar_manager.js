@@ -540,5 +540,72 @@ export const sidebarManager = {
 
         // PENTING: Render ulang daftar sub-wilayah saat waktu berubah
         this._renderSubRegionList(idxGlobal);
+    },
+
+    // [BARU] Render Sidebar Khusus Gempa
+    renderSidebarGempa: function(gempaData) {
+        if (!this.elements.sidebarContentEl) return;
+        
+        // Sembunyikan elemen cuaca
+        this._hideAllSidebarSections();
+        this.elements.sidebarLocationNameEl.textContent = 'Detail Gempa Bumi';
+        this.elements.sidebarEl.querySelector('#sidebar-location-label-weather').textContent = '';
+        
+        // Buat/Tampilkan Container Gempa
+        let gempaContainer = document.getElementById('sidebar-gempa-container');
+        if (!gempaContainer) {
+            gempaContainer = document.createElement('div');
+            gempaContainer.id = 'sidebar-gempa-container';
+            this.elements.sidebarContentEl.appendChild(gempaContainer);
+        }
+        gempaContainer.style.display = 'block';
+        
+        const isTsunami = gempaData.tsunami;
+        const dateObj = new Date(gempaData.time);
+        
+        gempaContainer.innerHTML = `
+            <div class="gempa-detail-card" style="border-left: 6px solid ${isTsunami ? '#d32f2f' : '#455A64'}; background:#fff; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); padding:20px; margin-bottom:20px;">
+                
+                ${isTsunami ? `
+                <div style="background:#ffebee; color:#c62828; padding:10px; border-radius:6px; font-weight:bold; text-align:center; margin-bottom:15px; border:1px solid #ffcdd2; display:flex; align-items:center; justify-content:center; gap:8px;">
+                    <i class="wi wi-tsunami" style="font-size:1.5rem;"></i> BERPOTENSI TSUNAMI
+                </div>` : ''}
+
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
+                    <div>
+                        <div style="font-size:0.9rem; color:#666; text-transform:uppercase; letter-spacing:1px;">Magnitudo</div>
+                        <div style="font-size:3.5rem; font-weight:800; line-height:1; color:#333;">${gempaData.mag.toFixed(1)}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:0.9rem; color:#666; text-transform:uppercase; letter-spacing:1px;">Kedalaman</div>
+                        <div style="font-size:2rem; font-weight:700; color:#455A64;">${gempaData.depth}</div>
+                    </div>
+                </div>
+                
+                <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+                
+                <div style="margin-bottom:15px;">
+                    <div style="display:flex; gap:10px; margin-bottom:8px;">
+                        <i class="wi wi-time-3" style="font-size:1.2rem; color:#555; width:20px; text-align:center;"></i>
+                        <div>
+                            <div style="font-weight:600; color:#333;">${dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                            <div style="color:#666;">Pukul ${dateObj.toLocaleTimeString('id-ID')}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <i class="wi wi-direction-up" style="font-size:1.2rem; color:#555; width:20px; text-align:center;"></i>
+                        <div>
+                            <div style="font-weight:600; color:#333;">Lokasi</div>
+                            <div style="color:#666; line-height:1.4;">${gempaData.place}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background:#f5f7fa; padding:12px; border-radius:6px; font-size:0.85rem; color:#555;">
+                    Data bersumber dari <strong>${gempaData.source ? gempaData.source.toUpperCase() : 'BMKG'}</strong>. 
+                    Selalu pantau informasi resmi dari otoritas setempat.
+                </div>
+            </div>
+        `;
     }
 };

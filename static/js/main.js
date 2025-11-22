@@ -156,8 +156,18 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInput.focus();
     });
 
+    // Listener Khusus
     document.addEventListener('requestSidebarDetail', () => { sidebarManager.openSidebarFromPopup(); });
     document.addEventListener('requestSidebarOpen', () => { if (!sidebarManager.isOpen()) { sidebarManager.openSidebar(); } });
+    
+    // [BARU] Listener untuk Membuka Sidebar Gempa dari Popup
+    document.addEventListener('requestSidebarGempa', (e) => {
+        if (!sidebarManager.isOpen()) sidebarManager.openSidebar();
+        // Pastikan sidebarManager punya data yang dikirim dari event
+        if (e.detail && e.detail.gempaData) {
+            sidebarManager.renderSidebarGempa(e.detail.gempaData);
+        }
+    });
 
     // ================================================================
     // 5. Inisialisasi Peta & Event Peta
@@ -176,13 +186,45 @@ document.addEventListener('DOMContentLoaded', function() {
         map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
         map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels', minzoom: 7 });
 
+        // [MODIFIKASI] Tambahkan Kontrol Kustom Gempa di sini
+        class GempaControl {
+            onAdd(map) {
+                this._map = map;
+                this._container = document.createElement('div');
+                this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+                this._btn = document.createElement('button');
+                this._btn.type = 'button';
+                this._btn.title = 'Mode Gempa Bumi';
+                this._btn.className = 'maplibregl-ctrl-gempa';
+                this._btn.innerHTML = `<i class="wi wi-earthquake" style="font-size:18px; margin-top:4px;"></i>`;
+                
+                this._isActive = false;
+                
+                this._btn.onclick = () => {
+                    this._isActive = !this._isActive;
+                    if (this._isActive) {
+                        this._btn.classList.add('active-mode');
+                        mapManager.toggleGempaLayer(true);
+                    } else {
+                        this._btn.classList.remove('active-mode');
+                        mapManager.toggleGempaLayer(false);
+                    }
+                };
+                
+                this._container.appendChild(this._btn);
+                return this._container;
+            }
+            onRemove() {
+                this._container.parentNode.removeChild(this._container);
+                this._map = undefined;
+            }
+        }
+
         map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
         map.addControl(new ResetPitchControl(), 'bottom-right');
+        // [BARU] Tambahkan Tombol Gempa
+        map.addControl(new GempaControl(), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl());
-        
-        // --- REVISI TAHAP VEKTOR TILE: PEMBERSIHAN ---
-        // Menghapus listener GeoJSON 'perbaruiPetaGeo' karena sekarang menggunakan Vector Tile
-        // yang dihandle otomatis di map_manager.setMap via event 'move'
         
         map.on('data', (e) => {
             if (e.sourceId === 'data-cuaca-source' && e.isSourceLoaded) {
@@ -216,7 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const pickerClicked = e.originalEvent.target.closest('#datetime-picker-container');
                 const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
                 const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
-                const markerClicked = e.originalEvent.target.closest('.marker-container'); // Cek marker HTML
+                const markerClicked = e.originalEvent.target.closest('.marker-container'); 
 
                 if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked && !markerClicked) {
                     sidebarManager.closeSidebar(); 
@@ -224,7 +266,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             if (!features.length) { 
-                popupManager.close();
+                // [CATATAN] Jangan tutup popup gempa di sini, biarkan ditangani map_manager
+                // popupManager.close(); 
                 return;
             }
 
@@ -272,5 +315,5 @@ document.addEventListener('DOMContentLoaded', function() {
                 infoKoordinat.innerHTML = 'Geser kursor di atas peta';
         });
 
-    }); // Akhir map.on('load')
-}); // Akhir DOMContentLoaded
+    }); 
+});

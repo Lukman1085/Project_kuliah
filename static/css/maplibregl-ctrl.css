@@ -95,3 +95,26 @@
 .maplibregl-ctrl-pitch-reset:hover svg {
     opacity: 1;
 }
+
+/* 4. [BARU] Styling TOMBOL GEMPA */
+.maplibregl-ctrl-gempa.active-mode {
+    background-color: #ffebee !important; /* Merah muda */
+    color: #d32f2f !important;
+    border-color: #ffcdd2 !important;
+}
+
+.maplibregl-ctrl-gempa i {
+    transition: transform 0.3s ease;
+}
+
+.maplibregl-ctrl-gempa.active-mode i {
+    animation: quake-shake 0.5s infinite;
+}
+
+@keyframes quake-shake {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(10deg); }
+    50% { transform: rotate(0deg); }
+    75% { transform: rotate(-10deg); }
+    100% { transform: rotate(0deg); }
+}
