@@ -147,7 +147,7 @@ export const MAP_STYLE = {
             },
             paint: { 
                 'line-color': COLORS.kabupaten, 
-                'line-width': 0.8, 
+                'line-width': 1, 
                 'line-opacity': 0.7 
             }
         },
@@ -163,8 +163,8 @@ export const MAP_STYLE = {
             },
             paint: { 
                 'line-color': COLORS.kecamatan, 
-                'line-width': 0.5, 
-                'line-opacity': 0.6,
+                'line-width': 0.8, 
+                'line-opacity': 0.9,
                 'line-dasharray': [2, 2] // Garis putus-putus halus
             }
         },
