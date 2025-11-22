@@ -1,15 +1,23 @@
 import { cacheManager } from "./cache_manager.js";
 import { utils } from "./utilities.js";
 import { mapManager } from "./map_manager.js";
+import { timeManager } from "./time_manager.js"; // Import timeManager untuk update parsial
 
 /** 🏙️ PENGELOLA POPUP TERPUSAT */
 export const popupManager = { 
     _currentInstance: null,
     _internalCloseFlag: false,
 
-    // [BARU] Menyimpan tipe popup aktif untuk update logika
-    _activePopupType: null, // 'weather', 'province', 'cluster', 'loading'
-    _activeClusterItemsGenerator: null, // Fungsi callback untuk re-generate item klaster
+    // [BARU] State untuk Lazy Loading Popup Klaster
+    _activePopupType: null, 
+    _activeClusterItemsGenerator: null, 
+    _clusterFetchCallback: null, // Fungsi fetcher dari mapManager
+    _clusterObserver: null,      // Instance IntersectionObserver
+
+    // [BARU] Setter untuk Fetcher Callback
+    setFetchCallback: function(fn) {
+        this._clusterFetchCallback = fn;
+    },
 
     /** * GENERATOR 1: POPUP LENGKAP (Mini Sidebar) untuk Non-Provinsi */
     generatePopupContent: function(nama, data, deskripsi, ikon, formattedTime) {
@@ -103,13 +111,11 @@ export const popupManager = {
         const container = document.createElement('div');
         container.className = 'weather-popup-card';
         
-        // Header Sederhana
         const header = document.createElement('div');
         header.className = 'popup-header';
         header.innerHTML = `<div class="popup-title">${nama}</div>`;
         container.appendChild(header);
 
-        // Body dengan Spinner
         const body = document.createElement('div');
         body.style.padding = '30px 20px';
         body.style.textAlign = 'center';
@@ -123,11 +129,11 @@ export const popupManager = {
         return container;
     },
 
-    /** * GENERATOR 4: POPUP CLUSTER LIST (DIPERBARUI DENGAN IKON) */
+    /** * GENERATOR 4: POPUP CLUSTER LIST (LAZY LOADING SUPPORTED) */
     generateClusterPopupContent: function(titleText, items) {
         const container = document.createElement('div');
         container.className = 'weather-popup-card'; 
-        container.style.width = '300px'; // Sedikit diperlebar agar ikon muat
+        container.style.width = '300px'; 
 
         const header = document.createElement('div');
         header.className = 'popup-header';
@@ -139,29 +145,49 @@ export const popupManager = {
         contentDiv.style.maxHeight = '220px'; 
         contentDiv.style.overflowY = 'auto';
         contentDiv.style.backgroundColor = '#fff';
-        contentDiv.id = 'cluster-popup-list'; // ID untuk referensi update
+        contentDiv.id = 'cluster-popup-list'; 
 
         items.forEach(itemData => {
             const itemEl = document.createElement('div');
             itemEl.className = 'cluster-item'; 
+            
+            // [LAZY LOAD] Tambahkan data-id untuk observer
+            if (itemData.id) itemEl.dataset.id = itemData.id;
+            
             itemEl.style.padding = '8px 12px';
             itemEl.style.borderBottom = '1px solid #f0f0f0';
             itemEl.style.display = 'flex';
             itemEl.style.justifyContent = 'space-between';
             itemEl.style.alignItems = 'center';
             
-            // [PERBAIKAN 3] Menambahkan Ikon Cuaca Dinamis
-            itemEl.innerHTML = `
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <i class="${itemData.icon || 'wi wi-na'}" style="font-size:1.4rem; color:#555; width:24px; text-align:center;"></i>
-                    <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${itemData.nama}</span>
-                </div>
-                <div style="text-align: right;">
-                    <span style="font-weight: 700; color: #0056b3; font-size: 0.9rem;">${itemData.suhu}</span>
-                    <br>
-                    <span style="font-size: 0.7rem; color: #888;">${itemData.desc}</span>
-                </div>
-            `;
+            // [LAZY LOAD] Render Skeleton jika data belum ada
+            if (itemData.isLoading) {
+                itemEl.classList.add('skeleton-mode');
+                itemEl.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div class="cluster-item-loading-block skeleton-icon"></div>
+                        <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${itemData.nama}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="cluster-item-loading-block skeleton-text-short"></div>
+                        <div class="cluster-item-loading-block skeleton-text-long"></div>
+                    </div>
+                `;
+            } else {
+                // Render Normal
+                itemEl.dataset.loaded = "true";
+                itemEl.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <i class="${itemData.icon || 'wi wi-na'}" style="font-size:1.4rem; color:#555; width:24px; text-align:center;"></i>
+                        <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${itemData.nama}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-weight: 700; color: #0056b3; font-size: 0.9rem;">${itemData.suhu}</span>
+                        <br>
+                        <span style="font-size: 0.7rem; color: #888;">${itemData.desc}</span>
+                    </div>
+                `;
+            }
             
             itemEl.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -191,18 +217,24 @@ export const popupManager = {
             
             this._currentInstance = newPopup;
             
-            // Deteksi tipe popup berdasarkan konten class
             if (content instanceof HTMLElement) {
                 if (content.querySelector('.cluster-popup-content')) this._activePopupType = 'cluster';
                 else if (content.classList.contains('province-mode')) this._activePopupType = 'province';
                 else this._activePopupType = 'weather';
             } else {
-                this._activePopupType = 'loading'; // Asumsi default string html
+                this._activePopupType = 'loading'; 
             }
             
             newPopup.once('close', () => {
                     const wasInternal = this._internalCloseFlag;
                     this._internalCloseFlag = false;
+                    
+                    // Cleanup Observer
+                    if (this._clusterObserver) {
+                        this._clusterObserver.disconnect();
+                        this._clusterObserver = null;
+                    }
+
                     if (this._currentInstance === newPopup) {
                         this._currentInstance = null;
                         this._activePopupType = null;
@@ -241,21 +273,91 @@ export const popupManager = {
     setHTML: function(htmlContent) { if (this.isOpen() && typeof htmlContent === 'string') this._currentInstance.setHTML(htmlContent); },
     setDOMContent: function(domElement) { if (this.isOpen() && domElement instanceof HTMLElement) this._currentInstance.setDOMContent(domElement); },
     
-    // [BARU] Setter untuk generator cluster agar bisa dipanggil ulang
     setClusterGenerator: function(generatorFn) {
         this._activeClusterItemsGenerator = generatorFn;
+    },
+
+    // [BARU] Attach Observer setelah popup dibuka
+    attachClusterObserver: function() {
+        const popupEl = this.getElement();
+        if (!popupEl) return;
+        
+        const listContainer = popupEl.querySelector('.cluster-popup-content');
+        if (!listContainer) return;
+
+        const options = {
+            root: listContainer, // Scrollable container
+            threshold: 0.1
+        };
+
+        if (this._clusterObserver) this._clusterObserver.disconnect();
+
+        this._clusterObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const itemEl = entry.target;
+                    const id = itemEl.dataset.id;
+                    
+                    if (id && !itemEl.dataset.loaded && this._clusterFetchCallback) {
+                        // Unobserve dulu biar gak double trigger
+                        observer.unobserve(itemEl);
+                        
+                        // Trigger Fetch Single
+                        this._clusterFetchCallback(id).then(data => {
+                            // Update Tampilan Baris Ini Saja
+                            if (data) this._updateSingleClusterItem(itemEl, data);
+                        });
+                    }
+                }
+            });
+        }, options);
+
+        // Observe semua item skeleton
+        const skeletons = listContainer.querySelectorAll('.cluster-item.skeleton-mode');
+        skeletons.forEach(el => this._clusterObserver.observe(el));
+    },
+
+    // [BARU] Update parsial satu baris item (dari Skeleton -> Real Data)
+    _updateSingleClusterItem: function(itemEl, data) {
+        const idxDisplay = timeManager.getSelectedTimeIndex();
+        if (!data.hourly || idxDisplay < 0) return;
+
+        const extractedData = utils.extractHourlyDataPoint(data.hourly, idxDisplay);
+        const info = utils.getWeatherInfo(extractedData.weather_code, extractedData.is_day);
+        
+        const suhuStr = `${extractedData.suhu?.toFixed(1) ?? '-'}°C`;
+        const descStr = info.deskripsi;
+        const iconStr = info.ikon;
+
+        itemEl.classList.remove('skeleton-mode');
+        itemEl.dataset.loaded = "true";
+        
+        // Re-render inner HTML
+        itemEl.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px;">
+                <i class="${iconStr}" style="font-size:1.4rem; color:#555; width:24px; text-align:center;"></i>
+                <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${data.nama_simpel}</span>
+            </div>
+            <div style="text-align: right;">
+                <span style="font-weight: 700; color: #0056b3; font-size: 0.9rem;">${suhuStr}</span>
+                <br>
+                <span style="font-size: 0.7rem; color: #888;">${descStr}</span>
+            </div>
+        `;
     },
 
     /** Memperbarui konten popup saat waktu berubah */
     updateUIForTime: function(idxGlobal, localTimeString) {
         if (!this.isOpen()) return;
         
-        // [PERBAIKAN 2] Logika Update Popup Klaster yang Konsisten
         if (this._activePopupType === 'cluster' && this._activeClusterItemsGenerator) {
             const newData = this._activeClusterItemsGenerator();
             if (newData && newData.items) {
+                // Render ulang seluruh list untuk update waktu
+                // (Observer akan otomatis dipasang ulang karena list baru)
                 const newContent = this.generateClusterPopupContent(newData.title, newData.items);
                 this.setDOMContent(newContent);
+                this.attachClusterObserver(); // Pasang lagi observernya
             }
             return;
         }
@@ -272,6 +374,7 @@ export const popupManager = {
                     
                     const formattedTime = utils.formatLocalTimestampString(localTimeString); 
                     const dataPoint = utils.extractHourlyDataPoint(activeData.hourly, idxGlobal);
+                    // PERBAIKAN: Pastikan nama variabel konsisten (popupData vs dataPoint) - disini aman karena pakai dataPoint
                     const { deskripsi, ikon } = utils.getWeatherInfo(dataPoint.weather_code, dataPoint.is_day); 
                     
                     const timeEl = card.querySelector('.popup-time'); 

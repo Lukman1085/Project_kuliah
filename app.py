@@ -392,10 +392,12 @@ def get_sub_wilayah_cuaca():
     try:
         parent_id = request.args.get('id')
         parent_tipadm_str = request.args.get('tipadm')
+        view_mode = request.args.get('view', 'full') # [MODIFIKASI LAZY LOAD] Default 'full' untuk kompatibilitas lama
         
         if not parent_id or not parent_tipadm_str:
             return jsonify({"error": "Parameter 'id' dan 'tipadm' diperlukan"}), 400
         
+        # Validasi regex ID sederhana
         if not ID_REGEX.match(parent_id):
              return jsonify({"error": "ID induk tidak valid"}), 400
 
@@ -403,23 +405,33 @@ def get_sub_wilayah_cuaca():
         target_tipadm = parent_tipadm + 1
 
         query_text = None
-        params = {"parent_id": parent_id} 
+        # Gunakan string parent_id sebagai prefix untuk pencarian LIKE
+        # Ini mengatasi masalah ID terpotong di tabel wilayah_administratif.
+        # Kita mencari ke tabel 'batas_' yang ID-nya valid.
+        params = {"parent_id_prefix": f"{parent_id}.%"} 
 
         if target_tipadm == 2: 
+            # [DATA INTEGRITY FIX] Gunakan tabel batas_kabupatenkota sebagai source of truth
+            # Cari Kabupaten yang ID-nya diawali dengan ID Provinsi parent
             query_text = """
                 SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
-                FROM wilayah_administratif
-                WHERE "TIPADM" = 2 AND "KDPPUM" = :parent_id
-                AND "KDPKAB" IS NOT NULL AND "WADMKK" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+                FROM batas_kabupatenkota
+                WHERE "KDPKAB" LIKE :parent_id_prefix
+                AND "KDPKAB" IS NOT NULL AND "WADMKK" IS NOT NULL;
             """
         elif target_tipadm == 3: 
+            # [DATA INTEGRITY FIX] Gunakan tabel batas_kecamatandistrik sebagai source of truth
+            # Cari Kecamatan yang ID-nya diawali dengan ID Kabupaten parent
             query_text = """
                 SELECT "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
-                FROM wilayah_administratif
-                WHERE "TIPADM" = 3 AND "KDPKAB" = :parent_id
-                AND "KDCPUM" IS NOT NULL AND "WADMKC" IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+                FROM batas_kecamatandistrik
+                WHERE "KDCPUM" LIKE :parent_id_prefix
+                AND "KDCPUM" IS NOT NULL AND "WADMKC" IS NOT NULL;
             """
         elif target_tipadm == 4: 
+            # [FALLBACK] Untuk Desa, tetap gunakan wilayah_administratif karena tidak ada tabel batas desa
+            # Logic: Cari Desa yang KDCPUM-nya sama dengan Parent ID
+            params = {"parent_id": parent_id} # Kembalikan ke exact match untuk level ini
             query_text = """
                 SELECT "KDEPUM" as id, "WADMKD" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm
                 FROM wilayah_administratif
@@ -434,8 +446,16 @@ def get_sub_wilayah_cuaca():
             
             if not sub_wilayah_info:
                 print(f"Tidak ditemukan sub-wilayah untuk {parent_id} (TIPADM {parent_tipadm})")
-                return jsonify([]) # Kembalikan list kosong jika tidak ada anak
+                return jsonify([])
 
+            # [MODIFIKASI LAZY LOAD] Jika view='simple', kembalikan list saja TANPA panggil API cuaca
+            if view_mode == 'simple':
+                print(f"Mode Simple: Mengembalikan {len(sub_wilayah_info)} sub-wilayah tanpa data cuaca.")
+                # Urutkan berdasarkan nama sebelum dikirim
+                sorted_data = sorted(sub_wilayah_info, key=lambda x: x.get('nama_simpel', ''))
+                return jsonify(sorted_data)
+
+            # Mode Default (Full) - Logic Lama
             print(f"Memproses data cuaca untuk {len(sub_wilayah_info)} sub-wilayah...")
             data_cuaca_lengkap = process_wilayah_data(sub_wilayah_info)
             

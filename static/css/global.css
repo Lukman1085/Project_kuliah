@@ -229,3 +229,32 @@ body { margin: 0; padding: 0; }
 .marker-loading .marker-capsule { opacity: 0.7; }
 .marker-loading .main-icon-wrapper i { animation: spin-loading 1.5s linear infinite; }
 @keyframes spin-loading { 100% { transform: rotate(360deg); } }
+
+/* --- [LAZY LOAD] SKELETON UNTUK ITEM POPUP KLASTER --- */
+.cluster-item.skeleton-mode {
+    pointer-events: none; /* Non-interactive saat loading */
+}
+
+.cluster-item.skeleton-mode .cluster-item-loading-block {
+    background-color: #f0f0f0;
+    color: transparent !important;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Animasi Shimmer */
+.cluster-item.skeleton-mode .cluster-item-loading-block::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+    transform: translateX(-100%);
+    animation: skeleton-shimmer 1.5s infinite;
+}
+
+/* Ukuran spesifik skeleton di dalam popup */
+.skeleton-icon { width: 24px; height: 24px; border-radius: 50%; }
+.skeleton-text-short { width: 60px; height: 12px; margin-bottom: 2px; }
+.skeleton-text-long { width: 90px; height: 10px; }
