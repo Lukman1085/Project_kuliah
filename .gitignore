@@ -1,10 +1,6 @@
 venv/
 
 /legacy_file
-/templates/example.html
-/templates/examplecopy.html
-/templates/examplebeautiful.html
-/templates/beautiful.html
 /static/images/icons/
 
 *.pyc
