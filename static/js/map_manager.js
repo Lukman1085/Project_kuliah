@@ -790,7 +790,7 @@ export const mapManager = {
         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
     },
     _handleCacheHit: function(props, data, coordinates) {
-        this._activeLocationData = data; this._activeLocationData.tipadm = props.tipadm; this._isClickLoading = false;
+        this._activeLocationData = data; if (data.nama_label) this._activeLocationLabel = data.nama_label; this._activeLocationData.tipadm = props.tipadm; this._isClickLoading = false;
         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
         this._renderRichPopup(data, coordinates);
     },
@@ -808,7 +808,7 @@ export const mapManager = {
             const data = dataMap[id];
             this._processIncomingData(id, data);
             if (this._activeLocationId === id) {
-                this._activeLocationData = data; this._activeLocationData.tipadm = tipadm; this._isClickLoading = false;
+                this._activeLocationData = data; if (data.nama_label) this._activeLocationLabel = data.nama_label; this._activeLocationData.tipadm = tipadm; this._isClickLoading = false;
                 this._updateMarkerContent(id);
                 this._renderRichPopup(data, coordinates);
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
