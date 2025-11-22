@@ -14,12 +14,18 @@ export const inflightIds = new Set();
  * 3. Interaction Guard: Mencegah fetch API saat user masih berinteraksi (drag/pan).
  * 4. Handover Maneuver: Logika visual marker aktif yang cerdas.
  * 5. Organic Motion: Animasi Pop-In & Transisi Warna Halus.
+ * 6. [BARU] Sync Hover: Marker men-trigger highlight pada poligon wilayah.
  */
 export const mapManager = { 
     _map: null, 
     _markers: {}, // Menyimpan instance Single Marker & Cluster Marker
     _fetchDebounceTimer: null,
     _isInteracting: false, // Guard: Apakah user sedang menekan mouse/layar?
+    
+    // [RESTYLING] State untuk Hover Poligon
+    _hoveredStateId: null,
+    _hoveredSourceLayer: null,
+    _isHoveringMarker: false, // Guard untuk mencegah konflik hover marker vs poligon
 
     /**
      * Menginisialisasi instance peta dan memasang event listener.
@@ -67,6 +73,80 @@ export const mapManager = {
                 this.renderMarkers();
             }
         });
+
+        // 4. [RESTYLING] HOVER EFFECT LOGIC (POLYGON HIGHLIGHT)
+        
+        const fillLayers = ['batas-provinsi-fill', 'batas-kabupaten-fill', 'batas-kecamatan-fill'];
+
+        mapInstance.on('mousemove', (e) => {
+            // [GUARD] Jangan override hover jika mouse sedang di atas marker (Marker punya otoritas)
+            if (this._isInteracting || this._isHoveringMarker) return;
+
+            let features = mapInstance.queryRenderedFeatures(e.point, { layers: fillLayers });
+            
+            if (features.length > 0) {
+                const feature = features[0];
+                if (feature.id !== undefined) {
+                    if (this._hoveredStateId !== feature.id) {
+                        this._clearHoverState(); 
+                        
+                        this._hoveredStateId = feature.id;
+                        this._hoveredSourceLayer = feature.sourceLayer;
+                        
+                        mapInstance.setFeatureState(
+                            { source: 'batas-wilayah-vector', sourceLayer: this._hoveredSourceLayer, id: this._hoveredStateId },
+                            { hover: true }
+                        );
+                    }
+                }
+            } else {
+                this._clearHoverState();
+            }
+        });
+
+        mapInstance.on('mouseleave', () => {
+            if (!this._isHoveringMarker) {
+                this._clearHoverState();
+            }
+        });
+    },
+
+    // [HELPER] Membersihkan state hover poligon
+    _clearHoverState: function() {
+        if (this._hoveredStateId !== null && this._hoveredSourceLayer !== null && this._map) {
+            this._map.setFeatureState(
+                { source: 'batas-wilayah-vector', sourceLayer: this._hoveredSourceLayer, id: this._hoveredStateId },
+                { hover: false }
+            );
+        }
+        this._hoveredStateId = null;
+        this._hoveredSourceLayer = null;
+    },
+
+    // [HELPER BARU] Menyalakan poligon berdasarkan ID Marker
+    _highlightPolygon: function(id, tipadm) {
+        if (!this._map) return;
+
+        // Mapping TIPADM ke Source Layer di Vector Tile
+        let sourceLayer = '';
+        const tip = parseInt(tipadm, 10);
+        
+        if (tip === 1) sourceLayer = 'batas_provinsi';
+        else if (tip === 2) sourceLayer = 'batas_kabupatenkota';
+        else if (tip === 3) sourceLayer = 'batas_kecamatandistrik';
+        else return; // Level Desa biasanya tidak punya layer vektor sendiri di setup ini
+
+        // Bersihkan hover sebelumnya (misal dari poligon tetangga)
+        this._clearHoverState();
+
+        // Set state baru
+        this._hoveredStateId = id;
+        this._hoveredSourceLayer = sourceLayer;
+
+        this._map.setFeatureState(
+            { source: 'batas-wilayah-vector', sourceLayer: sourceLayer, id: id },
+            { hover: true }
+        );
     },
 
     getMap: function() { return this._map; },
@@ -241,7 +321,6 @@ export const mapManager = {
                 
                 // [ANIMASI] Tambahkan class Entrance agar "Pop-In"
                 markerEl.classList.add('marker-entrance');
-                
                 markerEl.style.zIndex = zIndexBase;
 
                 const newMarker = new maplibregl.Marker({
@@ -293,12 +372,19 @@ export const mapManager = {
         const container = document.createElement('div');
         container.className = 'marker-container'; 
         
-        // Logic Gradien
-        let gradientClass = 'cluster-gradient-blue'; // Default (Biru)
-        if (count > 10) gradientClass = 'cluster-gradient-yellow'; // Ramai (Kuning)
-        if (count > 50) gradientClass = 'cluster-gradient-red'; // Padat (Merah)
+        // Focus Mode Cluster: Bersihkan hover state peta saat masuk cluster
+        container.addEventListener('mouseenter', () => {
+            this._isHoveringMarker = true;
+            this._clearHoverState();
+        });
+        container.addEventListener('mouseleave', () => {
+            this._isHoveringMarker = false;
+        });
 
-        // Struktur HTML
+        let gradientClass = 'cluster-gradient-blue'; 
+        if (count > 10) gradientClass = 'cluster-gradient-yellow'; 
+        if (count > 50) gradientClass = 'cluster-gradient-red'; 
+
         container.innerHTML = `
             <div class="marker-capsule" style="padding: 2px 8px 2px 2px; gap: 6px; align-items: center;">
                 <!-- Lingkaran Angka dengan Gradien -->
@@ -347,9 +433,9 @@ export const mapManager = {
         
         const renderedIds = Object.keys(this._markers);
         
-        // [PERBAIKAN LOGIKA] Filter:
+        // Filter:
         // 1. Abaikan ID yang diawali 'cl-' (Cluster)
-        // 2. [BARU] Abaikan jika marker adalah PROVINSI (tidak perlu fetch API cuaca)
+        // 2. Abaikan jika marker adalah PROVINSI (tidak perlu fetch API cuaca)
         // 3. Ambil yang belum ada cache & belum inflight
         const idsToFetch = renderedIds.filter(id => {
             if (id.startsWith('cl-')) return false; 
@@ -360,7 +446,7 @@ export const mapManager = {
                 const el = marker.getElement();
                 // Marker provinsi memiliki class 'marker-theme-province' di kapsulnya atau badge khusus
                 if (el.querySelector('.marker-theme-province')) {
-                    return false; // SKIP PROVINSI dari fetch queue
+                    return false; 
                 }
             }
 
@@ -424,24 +510,13 @@ export const mapManager = {
         }
     },
 
-    // =========================================================================
-    // 5. EVENT HANDLERS
-    // =========================================================================
-
-    /**
-     * Menangani klik pada cluster klien.
-     * [LAZY LOADING] Sekarang menampilkan popup instan dengan skeleton, data di-fetch saat scroll.
-     */
-    handleClientClusterClick: function(clusterData, coordinates) {
+    handleClientClusterClick: async function(clusterData, coordinates) {
         const members = clusterData._directMembers; 
         if (!members) return;
 
         popupManager.close(true);
         const pointCount = members.length;
         
-        // [LAZY LOAD] Hapus pre-fetch loop (await fetch...)
-        // Kita langsung siapkan generator konten
-
         const generateItems = () => {
             const idxDisplay = timeManager.getSelectedTimeIndex();
             const items = [];
@@ -453,10 +528,9 @@ export const mapManager = {
                 // Jika data belum ada di cache, buat item skeleton (isLoading: true)
                 if (!data) {
                      items.push({
-                         id: id, // Penting untuk fetcher
-                         nama: member.name, // Tampilkan nama yang sudah ada
-                         isLoading: true, // Flag skeleton
-                         // Logic klik tetap bisa jalan (akan trigger fetch single nanti)
+                         id: id, 
+                         nama: member.name, 
+                         isLoading: true, 
                          onClick: () => this._triggerSingleClickFromCluster(id, member)
                      });
                 } else {
@@ -498,8 +572,7 @@ export const mapManager = {
             const dataMap = await resp.json();
             const data = dataMap[id];
             if (data) {
-                this._processIncomingData(id, data); // Simpan cache & sync waktu
-                // Update visual marker di peta juga jika perlu
+                this._processIncomingData(id, data); 
                 this._updateMarkerContent(id);
             }
             return data;
@@ -507,7 +580,7 @@ export const mapManager = {
 
         // Setup Popup Manager
         popupManager.setClusterGenerator(generateItems);
-        popupManager.setFetchCallback(singleFetcher); // Daftarkan fetcher
+        popupManager.setFetchCallback(singleFetcher); 
         popupManager._activePopupType = 'cluster'; 
         
         // Render Awal (Mungkin berisi skeleton)
@@ -516,13 +589,13 @@ export const mapManager = {
         
         // Buka Popup & Pasang Observer
         popupManager.open(coordinates, popupContent);
-        popupManager.attachClusterObserver(); // Mulai pantau scroll
+        popupManager.attachClusterObserver(); 
     },
 
     // Helper untuk klik item klaster
     _triggerSingleClickFromCluster: function(id, memberFallback) {
         popupManager.close(true);
-        // Cek data terbaru di cache (siapa tahu baru kelar fetch)
+        // Cek data terbaru di cache
         let data = cacheManager.get(id); 
         const clickProps = { 
             id: id, 
@@ -544,6 +617,17 @@ export const mapManager = {
         const container = document.createElement('div');
         container.className = 'marker-container'; 
         container.id = `marker-${safeId}`;
+        
+        // [BARU] Sync Hover: Mouse di marker -> Nyalakan Poligon
+        container.addEventListener('mouseenter', () => {
+            this._isHoveringMarker = true;
+            this._highlightPolygon(id, tipadm); // Nyalakan wilayah terkait
+        });
+        // [BARU] Sync Hover: Mouse keluar marker -> Matikan Poligon
+        container.addEventListener('mouseleave', () => {
+            this._isHoveringMarker = false;
+            this._clearHoverState(); // Matikan
+        });
         
         if (isProvince) {
             container.innerHTML = `
@@ -660,7 +744,6 @@ export const mapManager = {
         const targetId = idToRemove || this._previousActiveLocationId;
         if (!targetId) return;
         
-        // [LOGIKA PENGAMAN SIDEBAR]
         // Jika forceRemove = false, kita cek apakah sidebar terbuka.
         // Jika ya, jangan hapus highlight (karena sidebar menampilkan data marker ini).
         if (!forceRemove) {
@@ -757,7 +840,7 @@ export const mapManager = {
     },
     _handleCacheHit: function(props, data, coordinates) {
         this._activeLocationData = data; 
-        // [SOLUSI] Update label jika data cache punya label lebih lengkap
+        // Update label jika data cache punya label lebih lengkap
         if (data.nama_label) this._activeLocationLabel = data.nama_label; 
         
         this._activeLocationData.tipadm = props.tipadm; this._isClickLoading = false;
@@ -779,7 +862,7 @@ export const mapManager = {
             this._processIncomingData(id, data);
             if (this._activeLocationId === id) {
                 this._activeLocationData = data; 
-                // [SOLUSI] Update label setelah fetch API berhasil
+                // Update label setelah fetch API berhasil
                 if (data.nama_label) this._activeLocationLabel = data.nama_label;
                 
                 this._activeLocationData.tipadm = tipadm; this._isClickLoading = false;
@@ -807,6 +890,7 @@ export const mapManager = {
         const localTimeStringNow = hasGlobalTimeDataNow ? timeManager.getGlobalTimeLookup()[idxLocal] : null;
         if (hasGlobalTimeDataNow && localTimeStringNow && data.hourly?.time && idxLocal < data.hourly.time.length) {
             const popupData = utils.extractHourlyDataPoint(data.hourly, idxLocal);
+            // [PERBAIKAN] Typo dataPoint vs popupData sudah diperbaiki
             const { deskripsi, ikon } = utils.getWeatherInfo(popupData.weather_code, popupData.is_day);
             const formattedTime = utils.formatLocalTimestampString(localTimeStringNow); 
             const popupContentElement = popupManager.generatePopupContent(data.nama_simpel, popupData, deskripsi, ikon, formattedTime);
