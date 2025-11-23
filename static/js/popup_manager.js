@@ -1,7 +1,7 @@
 import { cacheManager } from "./cache_manager.js";
 import { utils } from "./utilities.js";
 import { mapManager } from "./map_manager.js";
-import { timeManager } from "./time_manager.js"; // Import timeManager untuk update parsial
+import { timeManager } from "./time_manager.js"; 
 
 /** 🏙️ PENGELOLA POPUP TERPUSAT */
 export const popupManager = { 
@@ -201,81 +201,94 @@ export const popupManager = {
         return container;
     },
 
-    /** * [BARU] GENERATOR 5: POPUP GEMPA (Interaktif & Aesthetic) */
+    /** * [MODIFIKASI FINAL] GENERATOR 5: POPUP GEMPA REDESIGN */
     generateGempaPopupContent: function(props) {
         const container = document.createElement('div');
-        container.className = 'weather-popup-card';
-        // Gunakan class khusus gempa agar bisa di-style berbeda jika perlu
-        container.classList.add('gempa-popup-mode');
+        container.className = 'gempa-popup-card'; 
 
-        // Header: Warna Merah (Tsunami) atau Dark Grey (Standard)
-        const isTsunami = props.tsunami;
-        const headerColor = isTsunami ? '#d32f2f' : '#455A64';
+        // 1. Tentukan Tema Warna
+        const color = props.status_color || '#2196F3';
+        let themeClass = 'gempa-theme-blue'; 
+        if (color.toLowerCase().includes('d32f2f') || color.toLowerCase().includes('e53935')) {
+            themeClass = 'gempa-theme-red';
+        } else if (color.toLowerCase().includes('ffc107') || color.toLowerCase().includes('orange')) {
+            themeClass = 'gempa-theme-yellow';
+        }
+        container.classList.add(themeClass);
+
+        // 2. Format Waktu
+        let formattedTime = "Waktu tidak tersedia";
+        try {
+            const dateObj = new Date(props.time);
+            if (!isNaN(dateObj.getTime())) {
+                formattedTime = new Intl.DateTimeFormat('id-ID', { 
+                    weekday: 'short', day: 'numeric', month: 'short',
+                    hour: '2-digit', minute: '2-digit', hour12: false
+                }).format(dateObj).replace('.', ':');
+            }
+        } catch(e) {}
         
-        const header = document.createElement('div');
-        header.className = 'popup-header';
-        header.style.backgroundColor = headerColor;
-        header.style.color = 'white';
-        header.style.borderBottom = 'none';
-        
-        header.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div class="popup-title" style="color:white; margin:0; font-size:1.2rem;">M ${props.mag.toFixed(1)}</div>
-                ${isTsunami ? '<span style="background:white; color:#d32f2f; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">TSUNAMI</span>' : ''}
+        const statusLabel = props.status_label || (props.tsunami ? "BERPOTENSI TSUNAMI" : "INFO GEMPA");
+        const sourceName = props.source ? props.source.toUpperCase() : 'BMKG';
+
+        // === STRUKTUR HTML BARU ===
+        container.innerHTML = `
+            <!-- 1. Header Bar Solid -->
+            <div class="gempa-header-bar">
+                <i class="wi wi-earthquake"></i> ${statusLabel}
             </div>
-            <div style="font-size:0.8rem; opacity:0.9; margin-top:4px;">
-                ${new Date(props.time).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}
+
+            <!-- 2. Hero Section (Centered Magnitude) -->
+            <div class="gempa-hero-section">
+                <div class="gempa-mag-value-wrapper">
+                    <span class="gempa-mag-value">${props.mag.toFixed(1)}</span>
+                    <span class="gempa-mag-unit">M</span>
+                </div>
+                <div style="font-size:0.75rem; color:#888;">Magnitudo</div>
+            </div>
+
+            <!-- 3. Grid Info -->
+            <div class="gempa-info-grid">
+                <!-- Waktu -->
+                <div class="gempa-info-cell">
+                    <div class="gempa-icon-circle"><i class="wi wi-time-3"></i></div>
+                    <span class="gempa-cell-label">Waktu Kejadian</span>
+                    <span class="gempa-cell-value">${formattedTime}</span>
+                </div>
+                <!-- Kedalaman -->
+                <div class="gempa-info-cell">
+                    <div class="gempa-icon-circle"><i class="wi wi-direction-down"></i></div>
+                    <span class="gempa-cell-label">Kedalaman</span>
+                    <span class="gempa-cell-value">${props.depth}</span>
+                </div>
+            </div>
+
+            <!-- 4. Lokasi (Simple) -->
+            <div class="gempa-location-section">
+                <svg class="suggestion-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                 <div class="gempa-location-text">${props.place}</div>
+            </div>
+
+            <!-- 5. Footer (Sumber & Tombol) -->
+            <div class="gempa-footer-section">
+                <!-- Sumber di atas Tombol -->
+                <div class="gempa-source-text">
+                    Sumber Data: <span class="gempa-source-provider">${sourceName}</span>
+                </div>
+                <button class="popup-btn-detail" id="btn-detail-gempa">
+                    Lihat Analisis Lengkap
+                </button>
             </div>
         `;
-        container.appendChild(header);
-
-        const body = document.createElement('div');
-        body.style.padding = '15px';
         
-        body.innerHTML = `
-            <div style="font-weight:600; font-size:0.95rem; color:#333; margin-bottom:12px; line-height:1.4;">
-                ${props.place}
-            </div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                <div style="background:#f5f5f5; padding:8px; border-radius:6px; display:flex; align-items:center; gap:8px;">
-                    <i class="wi wi-earthquake" style="color:#455A64; font-size:1.2rem;"></i>
-                    <div>
-                        <div style="font-size:0.7rem; color:#777;">Kedalaman</div>
-                        <div style="font-weight:700; color:#333;">${props.depth}</div>
-                    </div>
-                </div>
-                <div style="background:#f5f5f5; padding:8px; border-radius:6px; display:flex; align-items:center; gap:8px;">
-                    <i class="wi wi-time-3" style="color:#455A64; font-size:1.2rem;"></i>
-                    <div>
-                        <div style="font-size:0.7rem; color:#777;">Waktu</div>
-                        <div style="font-weight:700; color:#333;">${new Date(props.time).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</div>
-                    </div>
-                </div>
-            </div>
-            <div style="margin-top:10px; font-size:0.75rem; color:#999; text-align:right;">
-                Sumber: ${props.source ? props.source.toUpperCase() : 'BMKG'}
-            </div>
-        `;
-        container.appendChild(body);
-
-        const footer = document.createElement('div');
-        footer.className = 'popup-footer';
-        const button = document.createElement('button');
-        button.className = 'popup-btn-detail';
-        // Style tombol agar sesuai tema gempa
-        button.style.backgroundColor = isTsunami ? '#ffebee' : '#eceff1';
-        button.style.color = isTsunami ? '#b71c1c' : '#37474f';
-        button.textContent = 'Lihat Analisis Lengkap';
-        
-        // Klik tombol akan dispatch event custom untuk Sidebar
-        button.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('requestSidebarGempa', { 
-                detail: { gempaData: props } 
-            }));
-        });
-        
-        footer.appendChild(button);
-        container.appendChild(footer);
+        const btn = container.querySelector('#btn-detail-gempa');
+        if (btn) {
+            btn.addEventListener('click', () => {
+                document.dispatchEvent(new CustomEvent('requestSidebarGempa', { detail: { gempaData: props } }));
+            });
+        }
 
         return container;
     },

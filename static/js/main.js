@@ -10,6 +10,7 @@ import { MAP_STYLE } from './map_style.js';
 import { ResetPitchControl } from './reset_pitch_ctrl.js';
 import { calendarManager } from './calender_manager.js';
 import { searchBarManager } from './searchbar.js';
+import { legendManager } from './legend_manager.js'; 
 
 // ================================================================
 // 2. KONFIGURASI & STATE GLOBAL
@@ -160,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('requestSidebarDetail', () => { sidebarManager.openSidebarFromPopup(); });
     document.addEventListener('requestSidebarOpen', () => { if (!sidebarManager.isOpen()) { sidebarManager.openSidebar(); } });
     
-    // [BARU] Listener untuk Membuka Sidebar Gempa dari Popup
+    // Listener untuk Membuka Sidebar Gempa dari Popup
     document.addEventListener('requestSidebarGempa', (e) => {
         if (!sidebarManager.isOpen()) sidebarManager.openSidebar();
         // Pastikan sidebarManager punya data yang dikirim dari event
@@ -186,9 +187,8 @@ document.addEventListener('DOMContentLoaded', function() {
         map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
         map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels', minzoom: 7 });
 
-        // --- [REVISI] FACTORY ANIMASI PULSA MULTI-WAVE ---
-        // Fungsi ini membuat objek gambar animasi dengan parameter warna & durasi
-        function createPulsingDot(size, r, g, b, duration) {
+        // --- FACTORY ANIMASI CANGGIH (SONAR & PULSE) ---
+        function createPulsingDot(type, size, r, g, b, duration) {
             return {
                 width: size,
                 height: size,
@@ -208,32 +208,53 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     const centerX = this.width / 2;
                     const centerY = this.height / 2;
-                    const maxRadius = (this.width / 2) * 0.9;
-                    const waveCount = 3;
-
-                    for (let i = 0; i < waveCount; i++) {
-                        const offset = (duration / waveCount) * i;
-                        let t = ((now + offset) % duration) / duration;
+                    const maxRadius = (this.width / 2) * 0.95;
+                    
+                    if (type === 'sonar') {
+                        const waveCount = 3; 
                         
-                        const radius = maxRadius * t;
-                        const alpha = Math.max(0, (1 - t) * 0.6);
+                        // 1. Gambar Inti Merah Solid
+                        context.beginPath();
+                        context.arc(centerX, centerY, 8, 0, Math.PI * 2);
+                        context.fillStyle = `rgba(${r}, ${g}, ${b}, 1)`;
+                        context.fill();
+                        context.strokeStyle = '#ffffff';
+                        context.lineWidth = 2;
+                        context.stroke();
 
+                        // 2. Gambar Gelombang Cincin
+                        for (let i = 0; i < waveCount; i++) {
+                            const offset = (duration / waveCount) * i;
+                            let t = ((now + offset) % duration) / duration;
+                            t = 1 - Math.pow(1 - t, 3);
+                            
+                            const radius = maxRadius * t;
+                            const alpha = Math.max(0, (1 - t) * 0.8);
+
+                            context.beginPath();
+                            context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                            context.lineWidth = 4 * (1 - t); 
+                            context.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                            context.stroke();
+                        }
+                    } else {
+                        const t = (now % duration) / duration;
+                        const radius = maxRadius * t;
+                        const outerAlpha = (1 - t) * 0.6;
+                        
                         context.beginPath();
                         context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-                        context.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                        context.fillStyle = `rgba(${r}, ${g}, ${b}, ${outerAlpha})`;
                         context.fill();
-                    }
 
-                    // Inti Putih
-                    context.beginPath();
-                    context.arc(centerX, centerY, 6, 0, Math.PI * 2);
-                    context.fillStyle = 'rgba(255, 255, 255, 0.9)';
-                    context.fill();
-                    
-                    // Stroke Warna
-                    context.lineWidth = 2;
-                    context.strokeStyle = `rgba(${r}, ${g}, ${b}, 1)`;
-                    context.stroke();
+                        context.beginPath();
+                        context.arc(centerX, centerY, 6, 0, Math.PI * 2);
+                        context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                        context.fill();
+                        context.lineWidth = 2;
+                        context.strokeStyle = `rgba(${r}, ${g}, ${b}, 1)`;
+                        context.stroke();
+                    }
 
                     this.data = context.getImageData(0, 0, this.width, this.height).data;
                     map.triggerRepaint();
@@ -242,15 +263,20 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         }
 
-        // 1. DANGER PULSE (Merah, Cepat: 1.5 detik)
-        map.addImage('pulsing-dot-danger', createPulsingDot(100, 231, 76, 60, 1500), { pixelRatio: 2 });
+        // 1. SONAR (Tsunami): Merah, Ripple, 2 detik
+        map.addImage('pulsing-dot-sonar', createPulsingDot('sonar', 150, 211, 47, 47, 2000), { pixelRatio: 2 });
         
-        // 2. WARNING PULSE (Kuning, Lambat: 2.5 detik)
-        map.addImage('pulsing-dot-warning', createPulsingDot(100, 241, 196, 15, 2500), { pixelRatio: 2 });
+        // 2. FAST (Severe): Merah, Dot Cepat, 1 detik
+        map.addImage('pulsing-dot-fast', createPulsingDot('dot', 100, 229, 57, 53, 1000), { pixelRatio: 2 });
         
-        // -------------------------------------------------------
+        // 3. SLOW (Moderate): Kuning/Oranye, Dot Lambat, 2.5 detik
+        map.addImage('pulsing-dot-slow', createPulsingDot('dot', 100, 255, 193, 7, 2500), { pixelRatio: 2 });
+        
 
-        // [MODIFIKASI] Tambahkan Kontrol Kustom Gempa di sini
+        // --- INISIALISASI LEGENDA ---
+        legendManager.init(map);
+
+        // Kontrol Kustom Gempa
         class GempaControl {
             onAdd(map) {
                 this._map = map;
@@ -269,9 +295,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (this._isActive) {
                         this._btn.classList.add('active-mode');
                         mapManager.toggleGempaLayer(true);
+                        // [FIX ISSUE 1] Tampilkan Legenda
+                        legendManager.toggle(true); 
                     } else {
                         this._btn.classList.remove('active-mode');
                         mapManager.toggleGempaLayer(false);
+                        // [FIX ISSUE 1] SEMBUNYIKAN Legenda
+                        legendManager.toggle(false); 
                     }
                 };
                 
@@ -286,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
         map.addControl(new ResetPitchControl(), 'bottom-right');
-        // [BARU] Tambahkan Tombol Gempa
+        // Tambahkan Tombol Gempa
         map.addControl(new GempaControl(), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl());
         
@@ -323,6 +353,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
                 const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
                 const markerClicked = e.originalEvent.target.closest('.marker-container'); 
+
+                // Tambahkan pengecekan klik di marker gempa agar sidebar tidak tertutup instan
+                const gempaLayerClicked = map.queryRenderedFeatures(e.point, { layers: ['gempa-point-layer', 'gempa-pulse-layer'] }).length > 0;
 
                 if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked && !markerClicked) {
                     sidebarManager.closeSidebar(); 

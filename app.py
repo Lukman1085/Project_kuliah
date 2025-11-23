@@ -4,6 +4,7 @@ import random
 import sqlite3
 import requests
 import json
+import math
 from datetime import datetime, timedelta
 from flask import Flask, Response, render_template, request, jsonify
 from flask_cors import CORS
@@ -605,89 +606,127 @@ def get_monitoring_stats():
         "panggilan_eksternal_per_fungsi_terakhir": calls_per_function
     })
 
-# ================== MODUL GEMPA (EARTHQUAKE) ==================
+# ================== MODUL GEMPA PINTAR ==================
 
-def parse_bmkg_coordinate(coord_str):
+def calculate_esteva_intensity(magnitude, depth_km):
     """
-    Mengubah format BMKG "5.2 LS" atau "104.5 BT" menjadi float.
+    Estimasi MMI Menggunakan Aproksimasi Esteva (1970) yang disederhanakan.
+    I = C1 + C2 * M - C3 * ln(R + C4)
+    Kita asumsikan R (jarak hiposentral ke episenter) = depth_km.
+    
+    Koefisien disesuaikan agar M6.0 di 100km tidak menghasilkan MMI besar.
     """
+    if not magnitude or not depth_km:
+        return 0
+    
     try:
-        clean_str = coord_str.strip().upper()
-        val_str = re.split(r'[^\d\.]', clean_str)[0] # Ambil angkanya saja
-        val = float(val_str)
+        # Konstanta Aproksimasi (Dikalibrasi agar M6.0 Depth 120km ~ MMI 3-4)
+        c1 = 1.5 
+        c2 = 1.2 # Pengaruh Magnitudo
+        c3 = 1.1 # Peluruhan Jarak
+        c4 = 25  # Saturasi Jarak dekat
         
-        if "LS" in clean_str or "S" in clean_str:
-            val = -val # Selatan jadi negatif
-        if "BB" in clean_str or "W" in clean_str:
-            val = -val # Barat (jarang di Indo) jadi negatif
-            
-        return val
-    except Exception as e:
-        print(f"Error parsing coordinate {coord_str}: {e}")
-        return 0.0
+        # Jarak Hiposentral di Episenter = Kedalaman
+        r = depth_km 
+        
+        # Rumus Dasar Esteva untuk PGA (Log scale) lalu konversi linear ke MMI
+        # Kita pakai simplified direct MMI relation:
+        intensity = c1 + (c2 * magnitude) - (c3 * math.log(r + c4))
+        
+        # Clamping hasil agar masuk akal (I - XII)
+        return max(1.0, min(12.0, intensity))
+    except:
+        return 0
+
+def get_impact_level(mmi, is_tsunami):
+    """
+    Menentukan Status UI & Warna berdasarkan MMI & Tsunami Flag.
+    """
+    # 1. CRITICAL OVERRIDE: TSUNAMI
+    if is_tsunami:
+        return {
+            "status": "tsunami",
+            "label": "BERPOTENSI TSUNAMI",
+            "color": "#d32f2f", # Merah
+            "pulse": "sonar",   # [NEW] Animasi Gelombang Sonar
+            "description": "Jauhi pantai segera!"
+        }
+    
+    # 2. STANDARD SHAKE CLASSIFICATION
+    if mmi < 3.0:
+        return {
+            "status": "weak",
+            "label": "Guncangan Lemah",
+            "color": "#2196F3", # Biru
+            "pulse": "none",    # Tidak ada animasi
+            "description": "Dirasakan sebagian orang."
+        }
+    elif mmi < 6.0:
+        return {
+            "status": "moderate",
+            "label": "Guncangan Terasa",
+            "color": "#FFC107", # Kuning/Jingga
+            "pulse": "slow",    # Detak lambat
+            "description": "Benda ringan bergoyang."
+        }
+    else:
+        return {
+            "status": "severe",
+            "label": "Guncangan Kuat",
+            "color": "#E53935", # Merah
+            "pulse": "fast",    # Detak cepat
+            "description": "Potensi kerusakan bangunan."
+        }
 
 def parse_bmkg_to_geojson(bmkg_data):
-    """
-    Mengonversi JSON Raw BMKG ke standar GeoJSON FeatureCollection.
-    """
     features = []
     gempa_list = bmkg_data.get('Infogempa', {}).get('gempa', [])
-    
-    # Normalisasi: Jika 'gempa' bukan list (karena cuma 1 data di autogempa), bungkus jadi list
-    if not isinstance(gempa_list, list):
-        gempa_list = [gempa_list]
+    if not isinstance(gempa_list, list): gempa_list = [gempa_list]
 
     for g in gempa_list:
         try:
-            # 1. Parse Koordinat
             # BMKG Coordinates field: "-3.56,101.23" (Lat, Lon) string
             lat_raw, lon_raw = g['Coordinates'].split(',')
-            lat = float(lat_raw)
-            lon = float(lon_raw)
+            lat, lon = float(lat_raw), float(lon_raw)
+            mag = float(g['Magnitude'])
             
-            # 2. Parse Waktu
-            time_str = g.get('DateTime')
+            # Parsing Kedalaman "119 km" -> 119.0
+            depth_str = g['Kedalaman']
+            depth_val = float(re.split(r'[^\d\.]', depth_str)[0])
             
-            # 3. Deteksi Potensi Tsunami
+            # Deteksi Tsunami dari String
             potensi_text = g.get('Potensi', '').lower()
             is_tsunami = "berpotensi tsunami" in potensi_text and "tidak" not in potensi_text
             
-            # 4. [REVISI] Parse Kedalaman menjadi Float (untuk coloring)
-            depth_str = g['Kedalaman'] # "10 km"
-            depth_val = 0.0
-            try:
-                # Ambil angka pertama sebelum spasi
-                depth_val = float(depth_str.split(' ')[0])
-            except:
-                depth_val = 10.0 # Default shallow jika parsing gagal
+            # [LOGIKA PINTAR] Hitung MMI & Status
+            estimated_mmi = calculate_esteva_intensity(mag, depth_val)
+            impact = get_impact_level(estimated_mmi, is_tsunami)
             
             feature = {
                 "type": "Feature",
                 "properties": {
-                    "mag": float(g['Magnitude']),
+                    "mag": mag,
                     "place": g['Wilayah'],
-                    "time": time_str, 
-                    "depth": depth_str, # Display string "10 km"
-                    "depth_km": depth_val, # [BARU] Numeric float untuk style
+                    "time": g.get('DateTime'), 
+                    "depth": depth_str,
+                    "depth_km": depth_val,
                     "tsunami": is_tsunami,
-                    "source": "bmkg"
+                    "source": "bmkg",
+                    # [PROPERTI BARU UNTUK UI]
+                    "mmi": round(estimated_mmi, 1),
+                    "status_label": impact['label'],
+                    "status_color": impact['color'],
+                    "pulse_mode": impact['pulse'],
+                    "status_desc": impact['description']
                 },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [lon, lat] 
-                },
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
                 "id": f"bmkg-{g['Tanggal']}-{g['Jam']}" 
             }
             features.append(feature)
         except Exception as e:
-            print(f"Skip item gempa BMKG rusak: {e}")
+            print(f"Skip BMKG Item: {e}")
             continue
-            
-    return {
-        "type": "FeatureCollection",
-        "metadata": {"generated": time.time()},
-        "features": features
-    }
+    return {"type": "FeatureCollection", "features": features}
 
 @app.route('/api/gempa/bmkg')
 def get_gempa_bmkg():
@@ -697,106 +736,65 @@ def get_gempa_bmkg():
     """
     global GEMPA_CACHE
     now = time.time()
-    
-    # 1. Cek Cache
-    if GEMPA_CACHE['bmkg']['data'] and (now - GEMPA_CACHE['bmkg']['timestamp'] < GEMPA_TTL_BMKG):
-        print("Serving BMKG Earthquake data from Cache")
-        return jsonify(GEMPA_CACHE['bmkg']['data'])
-
-    # 2. Fetch ke BMKG
+    if GEMPA_CACHE['bmkg']['data'] and (now - GEMPA_CACHE['bmkg']['timestamp'] < GEMPA_TTL_BMKG): return jsonify(GEMPA_CACHE['bmkg']['data'])
     try:
         url = "https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json"
         print(f"Fetching BMKG Earthquake data from {url}...")
-        resp = requests.get(url, timeout=10)
+        resp = requests.get("https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json", timeout=10)
         resp.raise_for_status()
-        
-        bmkg_json = resp.json()
-        
-        # 3. Transformasi ke GeoJSON
-        geojson_data = parse_bmkg_to_geojson(bmkg_json)
-        
-        # 4. Simpan Cache
-        GEMPA_CACHE['bmkg']['data'] = geojson_data
-        GEMPA_CACHE['bmkg']['timestamp'] = now
-        
-        return jsonify(geojson_data)
-        
-    except requests.exceptions.RequestException as e:
-        print(f"BMKG Fetch Error: {e}")
-        # Return cache lama jika ada (stale-while-revalidate style fallback)
-        if GEMPA_CACHE['bmkg']['data']:
-            return jsonify(GEMPA_CACHE['bmkg']['data'])
-        return jsonify({"error": "Gagal mengambil data BMKG", "details": str(e)}), 502
+        geojson = parse_bmkg_to_geojson(resp.json())
+        GEMPA_CACHE['bmkg'] = {'data': geojson, 'timestamp': now}
+        return jsonify(geojson)
+    except Exception as e:
+        return jsonify(GEMPA_CACHE['bmkg']['data']) if GEMPA_CACHE['bmkg']['data'] else jsonify({"error": str(e)}), 502
 
 @app.route('/api/gempa/usgs')
 def get_gempa_usgs():
     """
     Proxy untuk mengambil data Gempa Signifikan dari USGS.
-    [REVISI] Menggunakan Generous BBOX [-15, 10, 90, 145].
     """
     global GEMPA_CACHE
     now = time.time()
-    
-    # 1. Cek Cache
-    if GEMPA_CACHE['usgs']['data'] and (now - GEMPA_CACHE['usgs']['timestamp'] < GEMPA_TTL_USGS):
-        print("Serving USGS Earthquake data from Cache")
-        return jsonify(GEMPA_CACHE['usgs']['data'])
-
-    # 2. Fetch ke USGS
+    if GEMPA_CACHE['usgs']['data'] and (now - GEMPA_CACHE['usgs']['timestamp'] < GEMPA_TTL_USGS): return jsonify(GEMPA_CACHE['usgs']['data'])
     try:
-        base_url = "https://earthquake.usgs.gov/fdsnws/event/1/query"
-        # [REVISI] Parameter BBOX disesuaikan dengan Laporan Teknis
-        params = {
-            "format": "geojson",
-            "minlatitude": "-15",
-            "maxlatitude": "10",
-            "minlongitude": "90",
-            "maxlongitude": "145",
-            "minmagnitude": "4.5", 
-            "orderby": "time",
-            "limit": "50" 
-        }
+        url = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+        params = {"format": "geojson", "minlatitude": "-15", "maxlatitude": "10", "minlongitude": "90", "maxlongitude": "145", "minmagnitude": "4.5", "orderby": "time", "limit": "50"}
         print(f"Fetching USGS Earthquake data...")
-        resp = requests.get(base_url, params=params, timeout=15)
+        resp = requests.get(url, params=params, timeout=15)
         resp.raise_for_status()
         
         usgs_data = resp.json()
         
-        # Normalisasi Data USGS agar sesuai struktur aplikasi
+        # Post-Processing USGS Data
         for feature in usgs_data.get('features', []):
             props = feature['properties']
             geom = feature['geometry']
             
-            # Pindahkan kedalaman (depth) dari geometry.coordinates[2] ke properties.depth
-            # Format GeoJSON point: [lon, lat, depth]
-            if len(geom['coordinates']) > 2:
-                depth_val = geom['coordinates'][2]
-                # Format jadi string "X km" agar konsisten dengan BMKG di frontend, atau biarkan float
-                # Kita gunakan string "X km" untuk konsistensi visual di popup
-                props['depth'] = f"{depth_val} km"
-                props['depth_km'] = depth_val # Numeric untuk style
-            
-            # Tandai sumber
+            # Extract Kedalaman (Index 2 coordinates)
+            depth_val = geom['coordinates'][2] if len(geom['coordinates']) > 2 else 10.0
+            props['depth'] = f"{depth_val} km"
+            props['depth_km'] = depth_val
             props['source'] = 'usgs'
+            if 'place' not in props: props['place'] = 'Unknown Location'
             
-            # Pastikan properti 'place' ada
-            if 'place' not in props:
-                props['place'] = 'Unknown Location'
-
-        
-        # 3. Simpan Cache
-        GEMPA_CACHE['usgs']['data'] = usgs_data
-        GEMPA_CACHE['usgs']['timestamp'] = now
-        
+            # Deteksi Tsunami (USGS pakai integer 0/1)
+            is_tsunami = bool(props.get('tsunami', 0))
+            
+            # [LOGIKA PINTAR]
+            estimated_mmi = calculate_esteva_intensity(props['mag'], depth_val)
+            impact = get_impact_level(estimated_mmi, is_tsunami)
+            
+            # Inject Properti UI
+            props['mmi'] = round(estimated_mmi, 1)
+            props['status_label'] = impact['label']
+            props['status_color'] = impact['color']
+            props['pulse_mode'] = impact['pulse']
+            props['status_desc'] = impact['description']
+            
+        GEMPA_CACHE['usgs'] = {'data': usgs_data, 'timestamp': now}
         return jsonify(usgs_data)
-        
-    except requests.exceptions.RequestException as e:
-        print(f"USGS Fetch Error: {e}")
-        if GEMPA_CACHE['usgs']['data']:
-            return jsonify(GEMPA_CACHE['usgs']['data'])
-        return jsonify({"error": "Gagal mengambil data USGS", "details": str(e)}), 502
-
-# ================== END MODUL GEMPA ==================
+    except Exception as e:
+        return jsonify(GEMPA_CACHE['usgs']['data']) if GEMPA_CACHE['usgs']['data'] else jsonify({"error": str(e)}), 502
 
 @app.route('/')
 def index():
