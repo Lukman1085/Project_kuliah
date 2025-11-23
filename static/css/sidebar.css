@@ -181,27 +181,47 @@
    KARTU CUACA UTAMA (MODERN UI - REVISI IKON BESAR)
    ========================================================================== */
 
-#sidebar-current-conditions { 
+/* CLASS DASAR (Untuk Cuaca & Gempa) */
+.weather-card-main { 
     text-align: left;
     margin-bottom: 24px;
     
-    /* RESTORASI: Menggunakan gradien biru yang lebih gelap dan dalam */
-    /* Sebelumnya: linear-gradient(135deg, #0984e3 0%, #00cec9 100%); (Terlalu terang/cyan) */
-    background: linear-gradient(135deg, #0056b3 0%, #004494 100%); /* Biru gelap elegan */
+    /* Default (Cuaca): Gradien Biru Gelap */
+    background: linear-gradient(135deg, #0056b3 0%, #004494 100%); 
     
     color: white;
     border-radius: 20px;
     padding: 24px;
     
-    /* RESTORASI: Bayangan disesuaikan dengan warna dasar baru */
-    box-shadow: 0 8px 20px rgba(0, 86, 179, 0.3); 
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); 
     
     position: relative;
     overflow: hidden;
 }
 
+/* --- TEMA KHUSUS GEMPA (Override Background) --- */
+
+/* 1. SAFE (Biru/Hijau Laut) - Guncangan Lemah */
+.weather-card-main.gempa-card-safe {
+    background: linear-gradient(135deg, #0288d1 0%, #00695c 100%);
+    box-shadow: 0 8px 20px rgba(0, 105, 92, 0.3);
+}
+
+/* 2. WARNING (Oranye/Emas) - Guncangan Terasa */
+.weather-card-main.gempa-card-warning {
+    background: linear-gradient(135deg, #f57c00 0%, #e65100 100%);
+    box-shadow: 0 8px 20px rgba(230, 81, 0, 0.3);
+}
+
+/* 3. DANGER (Merah/Maroon) - Guncangan Kuat / Tsunami */
+.weather-card-main.gempa-card-danger {
+    background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+    box-shadow: 0 8px 20px rgba(183, 28, 28, 0.4);
+}
+
+
 /* Hiasan latar belakang (tetap ada tapi disesuaikan opasitasnya agar halus) */
-#sidebar-current-conditions::before {
+.weather-card-main::before {
     content: "";
     position: absolute;
     top: -40px;
@@ -245,6 +265,15 @@
     align-items: center;
     width: 100px;
     height: 80px;
+}
+
+/* Selector ini sekarang berlaku untuk ikon cuaca MAUPUN gempa di dalam kartu */
+/* [FIX #1] Mengembalikan font-size ke 4rem dan menghapus scale agar tajam */
+.weather-icon-big {
+    font-size: 3.5rem; 
+    color: rgba(255, 255, 255, 0.95);
+    filter: drop-shadow(0 3px 5px rgba(0,0,0,0.3)); /* Shadow ikon sedikit lebih kuat */
+    transform: translateY(10px); /* Hapus scale(1.2), gunakan ukuran font asli */
 }
 
 #sidebar-current-icon {
@@ -532,3 +561,5 @@
     color: #7f8c8d;
     font-style: italic;
 }
+
+/* [PERBAIKAN POIN 1] Legacy CSS dihapus sepenuhnya dari sini */

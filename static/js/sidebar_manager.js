@@ -68,13 +68,16 @@ export const sidebarManager = {
         const { sidebarEl, toggleBtnEl } = this.elements;
         if (!sidebarEl || !toggleBtnEl || this._isSidebarOpen) return;
         
-        mapManager.removeActiveMarkerHighlight(null, true); 
+        // [PERBAIKAN POIN 3] Menghapus logika reset marker highlight agresif.
+        // Sebelumnya: mapManager.removeActiveMarkerHighlight(null, true);
+        
         sidebarEl.classList.add('sidebar-open');
         this._isSidebarOpen = true;
         toggleBtnEl.innerHTML = '&lt;';
         toggleBtnEl.setAttribute('aria-label', 'Tutup detail lokasi');
         this.renderSidebarContent(); 
         
+        // Jika sudah ada marker aktif, pastikan tetap menyala
         const activeId = mapManager.getActiveLocationId();
         if(activeId) mapManager.setActiveMarkerHighlight(activeId); 
     },
@@ -91,6 +94,7 @@ export const sidebarManager = {
         const activeId = mapManager.getActiveLocationId();
         if (!activeId) { return } 
         
+        // Hanya hapus jika sidebar ditutup manual, tapi flag false (tidak dipaksa jika user melakukan interaksi lain)
         mapManager.removeActiveMarkerHighlight(activeId, false); 
     },
 
@@ -548,7 +552,7 @@ export const sidebarManager = {
         this._renderSubRegionList(idxGlobal);
     },
 
-    // [BARU] Render Sidebar Khusus Gempa
+    // [BARU] Render Sidebar Khusus Gempa (Estetika Kartu Cuaca)
     renderSidebarGempa: function(gempaData) {
         if (!this.elements.sidebarContentEl) return;
         
@@ -566,49 +570,81 @@ export const sidebarManager = {
         }
         gempaContainer.style.display = 'block';
         
-        const isTsunami = gempaData.tsunami;
+        // Format Waktu
         const dateObj = new Date(gempaData.time);
+        const formattedTime = dateObj.toLocaleDateString('id-ID', { 
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', 
+            hour: '2-digit', minute: '2-digit' 
+        }) + ' WIB';
+
+        // Tentukan Tema berdasarkan warna status
+        let themeClass = 'gempa-card-safe'; // Default Blue
+        const color = gempaData.status_color || '';
         
+        if (color.toLowerCase().includes('d32f2f') || color.toLowerCase().includes('e53935') || gempaData.tsunami) {
+            themeClass = 'gempa-card-danger'; // Merah
+        } else if (color.toLowerCase().includes('ffc107') || color.toLowerCase().includes('orange')) {
+            themeClass = 'gempa-card-warning'; // Kuning/Oranye
+        }
+
+        const isTsunami = gempaData.tsunami;
+        const statusLabel = gempaData.status_label || (isTsunami ? "POTENSI TSUNAMI" : "INFO GEMPA");
+        const sourceName = gempaData.source ? gempaData.source.toUpperCase() : 'BMKG';
+
+        // [PERBAIKAN POIN 2] Layout Sidebar Gempa Baru
         gempaContainer.innerHTML = `
-            <div class="gempa-detail-card" style="border-left: 6px solid ${isTsunami ? '#d32f2f' : '#455A64'}; background:#fff; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); padding:20px; margin-bottom:20px;">
+            <!-- [LAYOUT] Kartu Informasi Gempa Utama -->
+            <div class="weather-card-main ${themeClass}" style="margin-bottom: 24px;">
                 
+                <!-- 1. Header Waktu (Kecil di Atas) -->
+                <div class="weather-header-time">${formattedTime}</div>
+                
+                <!-- 2. Lokasi (Judul Besar - Pindah ke sini) -->
+                <div style="font-size: 1.2rem; font-weight: 700; line-height: 1.3; margin-bottom: 15px; opacity: 0.95;">
+                    ${gempaData.place}
+                </div>
+
+                <!-- 3. Peringatan Tsunami (Jika Ada) -->
                 ${isTsunami ? `
-                <div style="background:#ffebee; color:#c62828; padding:10px; border-radius:6px; font-weight:bold; text-align:center; margin-bottom:15px; border:1px solid #ffcdd2; display:flex; align-items:center; justify-content:center; gap:8px;">
-                    <i class="wi wi-tsunami" style="font-size:1.5rem;"></i> BERPOTENSI TSUNAMI
+                <div style="background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.5); padding:8px; border-radius:8px; margin-bottom:15px; text-align:center; font-weight:800; color:#fff; display:flex; align-items:center; justify-content:center; gap:8px;">
+                    <i class="wi wi-tsunami" style="font-size:1.4rem;"></i> BERPOTENSI TSUNAMI
                 </div>` : ''}
-
-                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
-                    <div>
-                        <div style="font-size:0.9rem; color:#666; text-transform:uppercase; letter-spacing:1px;">Magnitudo</div>
-                        <div style="font-size:3.5rem; font-weight:800; line-height:1; color:#333;">${gempaData.mag.toFixed(1)}</div>
+                
+                <!-- 4. Magnitudo & Ikon -->
+                <div class="weather-main-row">
+                    <div class="weather-temp-big">
+                        ${gempaData.mag.toFixed(1)}<span style="font-size:0.5em; opacity:0.8; font-weight:600; margin-left:5px;">M</span>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:0.9rem; color:#666; text-transform:uppercase; letter-spacing:1px;">Kedalaman</div>
-                        <div style="font-size:2rem; font-weight:700; color:#455A64;">${gempaData.depth}</div>
+                    <div class="weather-icon-container">
+                        <i class="wi wi-earthquake weather-icon-big"></i>
                     </div>
                 </div>
                 
-                <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
-                
-                <div style="margin-bottom:15px;">
-                    <div style="display:flex; gap:10px; margin-bottom:8px;">
-                        <i class="wi wi-time-3" style="font-size:1.2rem; color:#555; width:20px; text-align:center;"></i>
-                        <div>
-                            <div style="font-weight:600; color:#333;">${dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
-                            <div style="color:#666;">Pukul ${dateObj.toLocaleTimeString('id-ID')}</div>
-                        </div>
+                <!-- 5. Label Status -->
+                <div class="weather-desc-main" style="margin-bottom:20px; font-size:1.2rem;">
+                    ${statusLabel}
+                </div>
+
+                <!-- 6. Grid Detail (Termasuk Dampak) -->
+                <div class="weather-details-grid">
+                    <div class="detail-item">
+                        <i class="wi wi-direction-down detail-icon"></i>
+                        <span>${gempaData.depth}</span>
                     </div>
-                    <div style="display:flex; gap:10px;">
-                        <i class="wi wi-direction-up" style="font-size:1.2rem; color:#555; width:20px; text-align:center;"></i>
-                        <div>
-                            <div style="font-weight:600; color:#333;">Lokasi</div>
-                            <div style="color:#666; line-height:1.4;">${gempaData.place}</div>
-                        </div>
+                    <div class="detail-item">
+                        <i class="wi wi-alien detail-icon"></i> 
+                        <span>MMI ${gempaData.mmi || '-'}</span>
+                    </div>
+                    <!-- Dampak Pindah ke Sini (Span 2 Kolom) -->
+                    <div class="detail-item" style="grid-column: span 2; display: flex; align-items: flex-start;">
+                        <i class="wi wi-info detail-icon" style="margin-top:2px;"></i>
+                        <span style="font-size:0.9rem; line-height:1.4;">${gempaData.status_desc || 'Tidak ada data dampak.'}</span>
                     </div>
                 </div>
 
-                <div style="background:#f5f7fa; padding:12px; border-radius:6px; font-size:0.85rem; color:#555;">
-                    Data bersumber dari <strong>${gempaData.source ? gempaData.source.toUpperCase() : 'BMKG'}</strong>. 
+                <!-- 7. Footer Sumber Data (Centered) -->
+                <div style="margin-top: 20px; text-align: center; font-size: 0.8rem; opacity: 0.8; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                    Data bersumber dari <strong>${sourceName}</strong>.<br>
                     Selalu pantau informasi resmi dari otoritas setempat.
                 </div>
             </div>
