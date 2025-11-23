@@ -129,6 +129,31 @@ export const popupManager = {
         return container;
     },
 
+    /** * [IMPLEMENTASI BARU] GENERATOR: POPUP ERROR (Styled) */
+    generateErrorPopupContent: function(title, message) {
+        const container = document.createElement('div');
+        container.className = 'weather-popup-card'; 
+
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        // Warna header merah muda untuk error
+        header.style.backgroundColor = '#fff5f5';
+        header.style.borderBottom = '1px solid #feb2b2';
+        header.innerHTML = `<div class="popup-title" style="color: #c53030;">${title}</div>`;
+        container.appendChild(header);
+
+        const body = document.createElement('div');
+        body.style.padding = '25px 20px';
+        body.style.textAlign = 'center';
+        body.innerHTML = `
+            <i class="wi wi-cloud-refresh" style="font-size: 2.5rem; color: #fc8181; margin-bottom: 10px; display:block;"></i>
+            <div style="color: #c53030; font-weight:500; font-size:0.9rem;">${message}</div>
+        `;
+        container.appendChild(body);
+
+        return container;
+    },
+
     /** * GENERATOR 4: POPUP CLUSTER LIST (LAZY LOADING SUPPORTED) */
     generateClusterPopupContent: function(titleText, items) {
         const container = document.createElement('div');

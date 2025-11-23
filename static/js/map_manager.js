@@ -806,10 +806,18 @@ export const mapManager = {
         });
         
         if (isProvince) {
+            // [IMPLEMENTASI BARU] Ganti wi-stars dengan SVG Pin Lokasi
+            // Agar seragam dengan sidebar dan search bar
+            const svgPin = `
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+            `;
+            
             container.innerHTML = `
                 <div class="location-badge province-badge">${props.nama_simpel}</div>
                 <div class="marker-capsule marker-theme-province" id="capsule-${safeId}">
-                    <div class="main-icon-wrapper"><i class="wi wi-stars" style="font-size: 16px;"></i></div>
+                    <div class="main-icon-wrapper">${svgPin}</div>
                     <div class="status-stack-province"><span style="font-size:10px; font-weight:bold; color:#555;">PROV</span></div>
                 </div>
                 <div class="marker-anchor"></div><div class="marker-pulse"></div>`;
@@ -1077,7 +1085,13 @@ export const mapManager = {
             if (this._activeLocationId === id) { 
                 this._isClickLoading = false; this._activeLocationData = null;
                 this.removeActiveMarkerHighlight(id, true); 
-                if (popupManager.getInstance() === loadingPopupRef) { popupManager.setHTML(`<b>${nama_simpel}</b><br>Gagal: ${e.message}`); }
+                
+                // [IMPLEMENTASI BARU] Gunakan Styled Error Popup
+                const errorContent = popupManager.generateErrorPopupContent(nama_simpel, `Gagal memuat: ${e.message}`);
+                if (popupManager.getInstance() === loadingPopupRef) { 
+                    popupManager.setDOMContent(errorContent); 
+                }
+                
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent(); 
             }
         } finally { inflightIds.delete(id); }

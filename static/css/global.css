@@ -83,8 +83,8 @@ body { margin: 0; padding: 0; }
 .weather-popup-card.province-mode .popup-body-text { padding: 20px 15px; text-align: center; font-size: 0.9rem; color: #7f8c8d; background-color: #fff; font-style: italic; }
 
 /* ==========================================================================
-   [REVISI JILID 2] DESAIN POPUP GEMPA: HEADER SOLID & SUMBER JELAS
-   ========================================================================== */
+    [REVISI JILID 2] DESAIN POPUP GEMPA: HEADER SOLID & SUMBER JELAS
+    ========================================================================== */
 .gempa-popup-card {
     width: 280px; 
     font-family: 'Manrope', sans-serif;
@@ -252,7 +252,7 @@ body { margin: 0; padding: 0; }
 .gempa-theme-blue .gempa-mag-value { color: #1565c0; }
 
 
-/* --- MARKER STYLING (Tetap) --- */
+/* --- MARKER STYLING --- */
 .marker-container {
     display: flex; flex-direction: column; align-items: center;
     cursor: pointer; 
@@ -281,8 +281,9 @@ body { margin: 0; padding: 0; }
     content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
     border-width: 4px 4px 0; border-style: solid; border-color: rgba(26, 26, 26, 0.9) transparent transparent transparent;
 }
-.province-badge { background: rgba(139, 69, 19, 0.95); }
-.province-badge::after { border-color: rgba(139, 69, 19, 0.95) transparent transparent transparent; }
+.province-badge { background: rgba(38, 50, 56, 0.95); } /* Update warna badge provinsi agar serasi */
+.province-badge::after { border-color: rgba(38, 50, 56, 0.95) transparent transparent transparent; }
+
 .marker-capsule {
     background: #fff; border-radius: 50px; padding: 4px 8px 4px 4px; display: flex; align-items: center; gap: 8px;
     box-shadow: 0 6px 16px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.05);
@@ -295,14 +296,79 @@ body { margin: 0; padding: 0; }
     font-size: 18px; color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
 }
 .main-icon-wrapper i { filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1)); }
-.status-stack { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; padding-right: 2px; }
+
+/* [PERBAIKAN] Tata Letak Horizontal untuk Ikon Cuaca */
+.status-stack { 
+    display: flex; 
+    flex-direction: row; /* Horizontal */
+    justify-content: center; 
+    align-items: center; 
+    gap: 8px; /* Jarak antar ikon diperbesar sedikit untuk kerapihan */
+    padding-right: 4px; /* Padding dikurangi untuk menyeimbangkan padding kiri di .marker-capsule */
+}
+
 .status-stack-province { display: flex; align-items: center; justify-content: center; padding-right: 4px; }
-.thermo-stack { position: relative; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
-.thermo-stack i { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 14px; line-height: 1; }
-.thermo-frame { color: #333; z-index: 2; }
-.thermo-liquid { z-index: 1; transform: translate(-50%, -50%) scale(0.9); }
-.rain-icon-box { width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
-.rain-icon-box i { font-size: 12px; }
+
+/* ==========================================================================
+    [REVISI] Ikon Termometer & Raindrop (Diperbesar dan Disesuaikan)
+    ========================================================================== */
+
+/* 1. Ikon Termometer */
+.thermo-stack { 
+    position: relative; 
+    width: 18px; /* Menentukan lebar container untuk menumpuk */
+    height: 22px; /* Menentukan tinggi container yang lebih besar */
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+}
+
+/* Bingkai Luar (Exterior) */
+.thermo-frame { 
+    font-size: 22px !important; /* Ukuran Frame Diperbesar (Tidak lebih tinggi dari 36px/marker) */
+    color: #333; 
+    z-index: 2; 
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    line-height: 1; 
+}
+
+/* Cairan Internal */
+.thermo-liquid { 
+    display: block !important; /* Tampilkan kembali */
+    font-size: 24px !important; /* DITINGKATKAN: Dari 12px ke 16px agar lebih proporsional */
+    color: #dc3545; /* Warna default merah untuk cairan */
+    z-index: 3; /* Pastikan di atas frame */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* Disesuaikan vertikal agar lebih sentris di dalam bingkai 22px */
+    transform: translate(-50%, -50%); 
+    line-height: 1; 
+}
+
+/* 2. Ikon Hujan */
+.rain-icon-box { 
+    width: auto; 
+    height: auto; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+}
+.rain-icon-box i { 
+    font-size: 28px; /* Ukuran diperbesar, sebanding dengan tinggi termometer */
+    color: #007bff; /* Warna default biru untuk air/hujan */
+    line-height: 1; 
+    transform: translateY(2px); /* Penyesuaian vertikal agar lebih sentris */
+}
+
+/* ==========================================================================
+    [AKHIR REVISI]
+    ========================================================================== */
+
+
 .marker-anchor {
     width: 6px; height: 6px; background: #fff; border-radius: 50%; margin-top: 2px; 
     box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: -1; position: relative;
@@ -320,7 +386,10 @@ body { margin: 0; padding: 0; }
 .marker-theme-rain .main-icon-wrapper { background: linear-gradient(135deg, #42A5F5, #1E88E5); }
 .marker-theme-storm .main-icon-wrapper { background: linear-gradient(135deg, #546E7A, #263238); }
 .marker-theme-night .main-icon-wrapper { background: linear-gradient(135deg, #2c3e50, #34495e); }
-.marker-theme-province .main-icon-wrapper { background: linear-gradient(135deg, #D4AF37, #A0522D); }
+
+/* [PERBAIKAN] Warna Marker Provinsi Dark Slate */
+.marker-theme-province .main-icon-wrapper { background: linear-gradient(135deg, #455A64 0%, #263238 100%); }
+
 .marker-skeleton .marker-capsule { background: #f0f0f0; border: 1px solid #e0e0e0; }
 .marker-theme-skeleton .main-icon-wrapper { background: #444 !important; }
 .marker-theme-skeleton i { color: #fff !important; }
@@ -351,8 +420,8 @@ body { margin: 0; padding: 0; }
 .skeleton-text-long { width: 90px; height: 10px; }
 
 /* ==========================================================================
-   [REVISI] LEGENDA: POSISI & ANIMASI KANAN ATAS
-   ========================================================================== */
+    [REVISI] LEGENDA: POSISI & ANIMASI KANAN ATAS
+    ========================================================================== */
 .map-legend-container {
     position: absolute;
     /* Default Desktop: Kanan Atas, di bawah area kontrol map (Zoom dll biasanya 10px dari atas) */

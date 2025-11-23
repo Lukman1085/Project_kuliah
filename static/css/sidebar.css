@@ -177,6 +177,24 @@
     padding-left: 2px;
 }
 
+/* [BARU] STYLE ERROR CARD (Agar error tidak terlihat polos) */
+.error-state-card {
+    padding: 20px;
+    text-align: center;
+    background-color: #fff5f5; /* Merah sangat muda */
+    border: 1px solid #feb2b2; /* Merah muda */
+    border-radius: 12px;
+    color: #c53030; /* Merah tua */
+    margin: 15px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.error-state-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    display: block;
+    color: #fc8181;
+}
+
 /* ==========================================================================
    KARTU CUACA UTAMA (MODERN UI - REVISI IKON BESAR)
    ========================================================================== */
@@ -269,7 +287,7 @@
 
 /* Selector ini sekarang berlaku untuk ikon cuaca MAUPUN gempa di dalam kartu */
 .weather-icon-big {
-    font-size: 3.5rem; 
+    font-size: 4rem; 
     color: rgba(255, 255, 255, 0.95);
     filter: drop-shadow(0 3px 5px rgba(0,0,0,0.3)); /* Shadow ikon sedikit lebih kuat */
     transform: translateY(10px); /* Hapus scale(1.2), gunakan ukuran font asli */
@@ -413,7 +431,7 @@
    ========================================================================== */
 
 #sidebar-sub-region-container {
-    margin-top: 10px;
+    margin-top: 30px;
     border-top: none; /* Hapus garis pemisah kasar */
     padding-top: 0;
 }
@@ -553,7 +571,6 @@
    MODAL DETAIL PROVINSI (JIKA MUNCUL)
    ========================================================================== */
 #sidebar-province-details {
-    /* [PERBAIKAN ESTETIKA] Mengurangi padding agar tidak terlalu boros tempat */
     padding: 0 20px 20px 20px;
     text-align: center;
 }

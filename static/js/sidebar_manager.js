@@ -186,6 +186,13 @@ export const sidebarManager = {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
 
+        // [IMPLEMENTASI BARU] Ikon SVG Pin (sama dengan searchbar)
+        const svgPin = `
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+        `;
+
         const cardHTML = `
             <div class="location-label-subtitle">
                 ${mapManager.getActiveLocationLabel()}
@@ -195,16 +202,17 @@ export const sidebarManager = {
                 <div class="weather-header-time">${formattedDate}</div>
                 
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 0;">
-                    <div style="width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-                        <i class="wi wi-stars" style="font-size: 2.5rem; color: white;"></i>
+                    <div style="width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; margin-bottom: 10px; color: white;">
+                        ${svgPin}
                     </div>
                     <div style="font-size: 1.3rem; font-weight: 700;">PROVINSI</div>
                     <div style="font-size: 0.85rem; opacity: 0.8; margin-top: 5px;">Wilayah Administratif Tingkat I</div>
                 </div>
 
                 <div style="margin-top: 15px; text-align: center; font-size: 0.75rem; opacity: 0.8; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2);">
-                    Data Batas Wilayah: <strong>BIG</strong><br>
-                    Data Cuaca Sub-Wilayah: <strong>OPENMETEO</strong>
+                    Data Batas Wilayah: <strong>Badan Informasi Geospasial</strong><br>
+                    Data Cuaca Sub-Wilayah: <strong>Open-Meteo</strong><br>
+                    Selalu pantau informasi resmi dari otoritas setempat.
                 </div>
             </div>
         `;
@@ -369,7 +377,19 @@ export const sidebarManager = {
             console.error("Gagal fetch sub-wilayah:", e);
             if (subRegionLoadingEl) subRegionLoadingEl.style.display = 'none';
             if (subRegionTitleEl) subRegionTitleEl.textContent = "Gagal memuat data";
-            if (subRegionListEl) subRegionListEl.innerHTML = `<div style="padding:10px; text-align:center; color:red;">Error: ${e.message}</div>`;
+            
+            // [IMPLEMENTASI BARU] Error Card State
+            if (subRegionListEl) {
+                subRegionListEl.innerHTML = `
+                    <div class="error-state-card">
+                        <i class="wi wi-cloud-refresh error-state-icon"></i>
+                        <div>
+                            <strong>Gagal Memuat Data</strong><br>
+                            <span style="font-size:0.8rem; opacity:0.8;">${e.message}</span>
+                        </div>
+                    </div>
+                `;
+            }
         }
     },
 
@@ -670,7 +690,8 @@ export const sidebarManager = {
                 </div>
 
                 <div style="margin-top: 20px; text-align: center; font-size: 0.8rem; opacity: 0.8; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
-                    Data bersumber dari <strong>${sourceName}</strong>.<br>
+                    Data Batas Wilayah: <strong>Badan Informasi Geospasial</strong><br>
+                    Data cuaca bersumber dari <strong>${sourceName}</strong>.<br>
                     Selalu pantau informasi resmi dari otoritas setempat.
                 </div>
             </div>
