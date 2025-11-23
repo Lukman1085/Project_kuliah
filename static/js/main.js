@@ -186,56 +186,68 @@ document.addEventListener('DOMContentLoaded', function() {
         map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
         map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels', minzoom: 7 });
 
-        // --- [IMPLEMENTASI MASALAH 4: PULSING DOT ANIMATION] ---
-        // Logika Canvas API untuk animasi ringan
-        const pulsingDot = {
-            width: 100,
-            height: 100,
-            data: new Uint8Array(100 * 100 * 4),
+        // --- [REVISI] FACTORY ANIMASI PULSA MULTI-WAVE ---
+        // Fungsi ini membuat objek gambar animasi dengan parameter warna & durasi
+        function createPulsingDot(size, r, g, b, duration) {
+            return {
+                width: size,
+                height: size,
+                data: new Uint8Array(size * size * 4),
 
-            onAdd: function () {
-                const canvas = document.createElement('canvas');
-                canvas.width = this.width;
-                canvas.height = this.height;
-                this.context = canvas.getContext('2d');
-            },
+                onAdd: function () {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = this.width;
+                    canvas.height = this.height;
+                    this.context = canvas.getContext('2d');
+                },
 
-            render: function () {
-                const duration = 1500;
-                const t = (performance.now() % duration) / duration;
+                render: function () {
+                    const now = performance.now();
+                    const context = this.context;
+                    context.clearRect(0, 0, this.width, this.height);
 
-                // Lingkaran luar (mengembang & memudar)
-                const radius = (this.width / 2) * 0.3;
-                const outerRadius = (this.width / 2) * 0.7 * t + radius;
-                const context = this.context;
+                    const centerX = this.width / 2;
+                    const centerY = this.height / 2;
+                    const maxRadius = (this.width / 2) * 0.9;
+                    const waveCount = 3;
 
-                context.clearRect(0, 0, this.width, this.height);
-                context.beginPath();
-                context.arc(this.width / 2, this.height / 2, outerRadius, 0, Math.PI * 2);
-                context.fillStyle = `rgba(255, 100, 100, ${1 - t})`; // Merah muda
-                context.fill();
+                    for (let i = 0; i < waveCount; i++) {
+                        const offset = (duration / waveCount) * i;
+                        let t = ((now + offset) % duration) / duration;
+                        
+                        const radius = maxRadius * t;
+                        const alpha = Math.max(0, (1 - t) * 0.6);
 
-                // Lingkaran dalam (tetap) - sebagai inti
-                context.beginPath();
-                context.arc(this.width / 2, this.height / 2, radius, 0, Math.PI * 2);
-                context.fillStyle = 'rgba(255, 50, 50, 0.8)';
-                context.strokeStyle = 'white';
-                context.lineWidth = 2 + 4 * (1 - t);
-                context.fill();
-                context.stroke();
+                        context.beginPath();
+                        context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                        context.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                        context.fill();
+                    }
 
-                // Update buffer gambar MapLibre
-                this.data = context.getImageData(0, 0, this.width, this.height).data;
+                    // Inti Putih
+                    context.beginPath();
+                    context.arc(centerX, centerY, 6, 0, Math.PI * 2);
+                    context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    context.fill();
+                    
+                    // Stroke Warna
+                    context.lineWidth = 2;
+                    context.strokeStyle = `rgba(${r}, ${g}, ${b}, 1)`;
+                    context.stroke();
 
-                // Minta frame berikutnya
-                map.triggerRepaint();
+                    this.data = context.getImageData(0, 0, this.width, this.height).data;
+                    map.triggerRepaint();
+                    return true;
+                }
+            };
+        }
 
-                return true;
-            }
-        };
-
-        // Daftarkan gambar animasi ke peta
-        map.addImage('pulsing-dot', pulsingDot, { pixelRatio: 2 });
+        // 1. DANGER PULSE (Merah, Cepat: 1.5 detik)
+        map.addImage('pulsing-dot-danger', createPulsingDot(100, 231, 76, 60, 1500), { pixelRatio: 2 });
+        
+        // 2. WARNING PULSE (Kuning, Lambat: 2.5 detik)
+        map.addImage('pulsing-dot-warning', createPulsingDot(100, 241, 196, 15, 2500), { pixelRatio: 2 });
+        
         // -------------------------------------------------------
 
         // [MODIFIKASI] Tambahkan Kontrol Kustom Gempa di sini

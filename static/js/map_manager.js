@@ -202,7 +202,7 @@ export const mapManager = {
         
         if (map.getLayer('gempa-point-layer')) map.setLayoutProperty('gempa-point-layer', 'visibility', visibility);
         if (map.getLayer('gempa-pulse-layer')) map.setLayoutProperty('gempa-pulse-layer', 'visibility', visibility);
-        // if (map.getLayer('gempa-heat-layer')) map.setLayoutProperty('gempa-heat-layer', 'visibility', visibility);
+        // [REVISI] Hapus referensi Heatmap
         if (map.getLayer('gempa-label-layer')) map.setLayoutProperty('gempa-label-layer', 'visibility', visibility);
 
         if (isActive) {

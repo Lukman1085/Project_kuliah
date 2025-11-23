@@ -645,33 +645,38 @@ def parse_bmkg_to_geojson(bmkg_data):
             lat = float(lat_raw)
             lon = float(lon_raw)
             
-            # 2. Parse Waktu (DateTime biasanya tersedia di AutoGempa, tapi di gempaterkini kadang pisah)
-            # Format BMKG: 2024-11-22T13:46:12+00:00
+            # 2. Parse Waktu
             time_str = g.get('DateTime')
-            if not time_str:
-                # Fallback manual jika DateTime kosong (format "22 Nov 2024", "12:00:00 WIB")
-                pass # Implementasi nanti jika perlu, biasanya DateTime sudah ada di API terbaru
-                
+            
             # 3. Deteksi Potensi Tsunami
-            # [PERBAIKAN] Logika deteksi Tsunami yang lebih aman
             potensi_text = g.get('Potensi', '').lower()
             is_tsunami = "berpotensi tsunami" in potensi_text and "tidak" not in potensi_text
+            
+            # 4. [REVISI] Parse Kedalaman menjadi Float (untuk coloring)
+            depth_str = g['Kedalaman'] # "10 km"
+            depth_val = 0.0
+            try:
+                # Ambil angka pertama sebelum spasi
+                depth_val = float(depth_str.split(' ')[0])
+            except:
+                depth_val = 10.0 # Default shallow jika parsing gagal
             
             feature = {
                 "type": "Feature",
                 "properties": {
                     "mag": float(g['Magnitude']),
                     "place": g['Wilayah'],
-                    "time": time_str, # Keep ISO string
-                    "depth": g['Kedalaman'], # Biarkan string "10 km" atau parse int
+                    "time": time_str, 
+                    "depth": depth_str, # Display string "10 km"
+                    "depth_km": depth_val, # [BARU] Numeric float untuk style
                     "tsunami": is_tsunami,
                     "source": "bmkg"
                 },
                 "geometry": {
                     "type": "Point",
-                    "coordinates": [lon, lat] # GeoJSON: Lon, Lat
+                    "coordinates": [lon, lat] 
                 },
-                "id": f"bmkg-{g['Tanggal']}-{g['Jam']}" # ID unik sederhana
+                "id": f"bmkg-{g['Tanggal']}-{g['Jam']}" 
             }
             features.append(feature)
         except Exception as e:
@@ -727,7 +732,7 @@ def get_gempa_bmkg():
 def get_gempa_usgs():
     """
     Proxy untuk mengambil data Gempa Signifikan dari USGS.
-    BBOX: Indonesia Luas (Generous BBOX).
+    [REVISI] Menggunakan Generous BBOX [-15, 10, 90, 145].
     """
     global GEMPA_CACHE
     now = time.time()
@@ -740,15 +745,16 @@ def get_gempa_usgs():
     # 2. Fetch ke USGS
     try:
         base_url = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+        # [REVISI] Parameter BBOX disesuaikan dengan Laporan Teknis
         params = {
             "format": "geojson",
             "minlatitude": "-15",
             "maxlatitude": "10",
             "minlongitude": "90",
             "maxlongitude": "145",
-            "minmagnitude": "4.5", # Hanya gempa signifikan
+            "minmagnitude": "4.5", 
             "orderby": "time",
-            "limit": "50" # Jangan terlalu banyak
+            "limit": "50" 
         }
         print(f"Fetching USGS Earthquake data...")
         resp = requests.get(base_url, params=params, timeout=15)
@@ -761,14 +767,14 @@ def get_gempa_usgs():
             props = feature['properties']
             geom = feature['geometry']
             
-            # [PERBAIKAN] Pindahkan kedalaman (depth) dari geometry.coordinates[2] ke properties.depth
+            # Pindahkan kedalaman (depth) dari geometry.coordinates[2] ke properties.depth
             # Format GeoJSON point: [lon, lat, depth]
             if len(geom['coordinates']) > 2:
                 depth_val = geom['coordinates'][2]
                 # Format jadi string "X km" agar konsisten dengan BMKG di frontend, atau biarkan float
                 # Kita gunakan string "X km" untuk konsistensi visual di popup
                 props['depth'] = f"{depth_val} km"
-                props['depth_km'] = depth_val # Simpan raw value untuk styling
+                props['depth_km'] = depth_val # Numeric untuk style
             
             # Tandai sumber
             props['source'] = 'usgs'

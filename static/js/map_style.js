@@ -147,32 +147,9 @@ export const MAP_STYLE = {
         // --- [BARU] LAYER GEMPA (EARTHQUAKE) ---
         // Layer ini akan di-toggle (visible/none) lewat map_manager
         
-        // A. Heatmap Gempa (Zoom Rendah < 7)
-        {
-            id: 'gempa-heat-layer',
-            type: 'heatmap',
-            source: 'gempa-source',
-            maxzoom: 7,
-            layout: { 'visibility': 'none' }, // Default mati
-            paint: {
-                'heatmap-weight': ['interpolate', ['linear'], ['get', 'mag'], 0, 0, 6, 1],
-                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 7, 3],
-                'heatmap-color': [
-                    'interpolate', ['linear'], ['heatmap-density'],
-                    0, 'rgba(33,102,172,0)',
-                    0.2, 'rgb(103,169,207)',
-                    0.4, 'rgb(209,229,240)',
-                    0.6, 'rgb(253,219,199)',
-                    0.8, 'rgb(239,138,98)',
-                    1, 'rgb(178,24,43)'
-                ],
-                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 7, 20],
-                'heatmap-opacity': 0.7
-            }
-        },
+        // [REVISI] Layer Heatmap DIHAPUS demi kejelasan data.
 
-        // [BARU] B. Layer Pulsa Gempa (Menggunakan Animated Image)
-        // Layer ini ditaruh DI BAWAH 'gempa-point-layer' agar pulsa muncul di belakang titik.
+        // B. Layer Pulsa Gempa (Menggunakan Animated Image Selektif)
         {
             id: 'gempa-pulse-layer',
             type: 'symbol',
@@ -180,9 +157,15 @@ export const MAP_STYLE = {
             minzoom: 4,
             layout: {
                 'visibility': 'none', // Default mati
-                'icon-image': 'pulsing-dot', // Nama image yang didaftarkan di main.js
-                'icon-allow-overlap': true, // Biarkan bertumpuk
-                'icon-ignore-placement': true
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                // [REVISI] Seleksi Ikon Berdasarkan Bahaya
+                'icon-image': [
+                    'case',
+                    ['any', ['>=', ['get', 'mag'], 6], ['==', ['get', 'tsunami'], true]], 'pulsing-dot-danger', // Bahaya Tinggi -> Merah
+                    ['>=', ['get', 'mag'], 4], 'pulsing-dot-warning', // Menengah -> Kuning
+                    '' // Kecil -> Tidak ada pulsa (mengurangi noise)
+                ]
             }
         },
 
@@ -194,22 +177,22 @@ export const MAP_STYLE = {
             minzoom: 4,
             layout: { 'visibility': 'none' }, // Default mati
             paint: {
-                // Radius berdasarkan Magnitudo (M 5.0 = 10px, M 8.0 = 30px)
+                // Radius berdasarkan Magnitudo
                 'circle-radius': [
                     'interpolate', ['linear'], ['zoom'],
                     4, ['interpolate', ['linear'], ['get', 'mag'], 4, 3, 8, 10],
                     10, ['interpolate', ['linear'], ['get', 'mag'], 4, 8, 8, 25]
                 ],
-                // Warna berdasarkan Kedalaman (Merah < 70km, Kuning < 300km, Biru > 300km)
+                // [REVISI] Warna berdasarkan Kedalaman (Depth) - Sesuai Laporan Teknis
                 'circle-color': [
                     'step', ['get', 'depth_km'],
-                    '#d32f2f', // Merah (Dangkal)
-                    70, '#fbc02d', // Kuning (Menengah)
-                    300, '#1976d2' // Biru (Dalam)
+                    '#d32f2f', // Merah (Dangkal < 70km) -> Bahaya
+                    70, '#fbc02d', // Kuning (Menengah 70-300km) -> Waspada
+                    300, '#1976d2' // Biru (Dalam > 300km) -> Relatif Aman
                 ],
                 'circle-stroke-color': '#ffffff',
                 'circle-stroke-width': 1.5,
-                'circle-opacity': 0.85
+                'circle-opacity': 0.9
             }
         },
 
