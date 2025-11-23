@@ -22,6 +22,9 @@ export const mapManager = {
     _isGempaLayerActive: false, 
     _gempaData: null,
 
+    // [BARU] State loading khusus gempa untuk mencegah konflik UI
+    _isGempaLoading: false,
+
     setMap: function(mapInstance) {
         this._map = mapInstance;
         console.log("Map instance telah di-set di mapManager.");
@@ -238,6 +241,11 @@ export const mapManager = {
     _fetchAndRenderGempa: async function() {
         const protocol = window.location.protocol; const hostname = window.location.hostname; const port = '5000'; const baseUrl = `${protocol}//${hostname}:${port}`;
         
+        // [FIX ISSUE 1] Tampilkan Loading Spinner saat fetch gempa
+        const loadingSpinner = document.getElementById('global-loading-spinner');
+        this._isGempaLoading = true;
+        if (loadingSpinner) loadingSpinner.style.display = 'block';
+
         try {
             const [bmkgRes, usgsRes] = await Promise.allSettled([
                 fetch(`${baseUrl}/api/gempa/bmkg`),
@@ -296,6 +304,12 @@ export const mapManager = {
 
         } catch (e) {
             console.error("Gagal memuat data gempa:", e);
+        } finally {
+            // [FIX ISSUE 1] Matikan spinner HANYA JIKA fetch cuaca tidak sedang berjalan
+            this._isGempaLoading = false;
+            if (loadingSpinner && !this._isLoading) {
+                 loadingSpinner.style.display = 'none';
+            }
         }
     },
 
@@ -303,16 +317,24 @@ export const mapManager = {
         const props = feature.properties;
         const coords = feature.geometry.coordinates;
         
-        // Tutup semua popup/sidebar sebelumnya
+        // Tutup semua popup sebelumnya
         popupManager.close(true);
-        sidebarManager.closeSidebar();
+        
+        // [FIX ISSUE 2] JANGAN paksa tutup sidebar.
+        // Cek dulu apakah sidebar sedang terbuka.
         
         // Data untuk popup
         const popupContent = popupManager.generateGempaPopupContent(props);
         popupManager.open(coords, popupContent);
         
-        // Trigger Sidebar Gempa (Opsional: Langsung buka sidebar atau tunggu klik 'Detail')
-        // Saat ini kita set agar klik "Lihat Detail" di popup yang membuka sidebar
+        // [FIX ISSUE 2] Fitur Hot-Swap Sidebar
+        // Jika sidebar sudah terbuka (misal sedang lihat cuaca atau gempa lain),
+        // langsung update kontennya dengan data gempa yang baru diklik.
+        if (sidebarManager.isOpen()) {
+            sidebarManager.renderSidebarGempa(props);
+        }
+        
+        // Jika sidebar tertutup, biarkan tertutup sampai user klik "Lihat Analisis" di popup.
     },
 
     // =========================================================================
@@ -644,7 +666,11 @@ export const mapManager = {
         } finally {
             idsToFetch.forEach(id => inflightIds.delete(id));
             this._isLoading = false; 
-            if (loadingSpinner) loadingSpinner.style.display = 'none';
+            
+            // [FIX ISSUE 1 CONFLICT] Matikan spinner HANYA JIKA gempa tidak sedang loading
+            if (loadingSpinner && !this._isGempaLoading) {
+                loadingSpinner.style.display = 'none';
+            }
             this.updateAllMarkersForTime(); 
         }
     },

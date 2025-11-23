@@ -163,6 +163,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Listener untuk Membuka Sidebar Gempa dari Popup
     document.addEventListener('requestSidebarGempa', (e) => {
+        // [FIX ISSUE 3] Tutup Popup Gempa
+        popupManager.close(true);
+
         if (!sidebarManager.isOpen()) sidebarManager.openSidebar();
         // Pastikan sidebarManager punya data yang dikirim dari event
         if (e.detail && e.detail.gempaData) {
@@ -357,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Tambahkan pengecekan klik di marker gempa agar sidebar tidak tertutup instan
                 const gempaLayerClicked = map.queryRenderedFeatures(e.point, { layers: ['gempa-point-layer', 'gempa-pulse-layer'] }).length > 0;
 
-                if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked && !markerClicked) {
+                if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked && !markerClicked && !gempaLayerClicked) {
                     sidebarManager.closeSidebar(); 
                 }
             }
