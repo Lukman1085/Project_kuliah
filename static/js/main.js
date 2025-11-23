@@ -186,6 +186,58 @@ document.addEventListener('DOMContentLoaded', function() {
         map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
         map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels', minzoom: 7 });
 
+        // --- [IMPLEMENTASI MASALAH 4: PULSING DOT ANIMATION] ---
+        // Logika Canvas API untuk animasi ringan
+        const pulsingDot = {
+            width: 100,
+            height: 100,
+            data: new Uint8Array(100 * 100 * 4),
+
+            onAdd: function () {
+                const canvas = document.createElement('canvas');
+                canvas.width = this.width;
+                canvas.height = this.height;
+                this.context = canvas.getContext('2d');
+            },
+
+            render: function () {
+                const duration = 1500;
+                const t = (performance.now() % duration) / duration;
+
+                // Lingkaran luar (mengembang & memudar)
+                const radius = (this.width / 2) * 0.3;
+                const outerRadius = (this.width / 2) * 0.7 * t + radius;
+                const context = this.context;
+
+                context.clearRect(0, 0, this.width, this.height);
+                context.beginPath();
+                context.arc(this.width / 2, this.height / 2, outerRadius, 0, Math.PI * 2);
+                context.fillStyle = `rgba(255, 100, 100, ${1 - t})`; // Merah muda
+                context.fill();
+
+                // Lingkaran dalam (tetap) - sebagai inti
+                context.beginPath();
+                context.arc(this.width / 2, this.height / 2, radius, 0, Math.PI * 2);
+                context.fillStyle = 'rgba(255, 50, 50, 0.8)';
+                context.strokeStyle = 'white';
+                context.lineWidth = 2 + 4 * (1 - t);
+                context.fill();
+                context.stroke();
+
+                // Update buffer gambar MapLibre
+                this.data = context.getImageData(0, 0, this.width, this.height).data;
+
+                // Minta frame berikutnya
+                map.triggerRepaint();
+
+                return true;
+            }
+        };
+
+        // Daftarkan gambar animasi ke peta
+        map.addImage('pulsing-dot', pulsingDot, { pixelRatio: 2 });
+        // -------------------------------------------------------
+
         // [MODIFIKASI] Tambahkan Kontrol Kustom Gempa di sini
         class GempaControl {
             onAdd(map) {

@@ -113,6 +113,12 @@ export const sidebarManager = {
         if (sidebarProvinceDetailsEl) sidebarProvinceDetailsEl.style.display = 'none';
         if (subRegionContainerEl) subRegionContainerEl.style.display = 'none';
         if (subRegionListEl) subRegionListEl.innerHTML = '';
+        
+        // [FIX MASALAH 3] Pastikan container gempa (yang dibuat dinamis) juga disembunyikan
+        const gempaContainer = document.getElementById('sidebar-gempa-container');
+        if (gempaContainer) {
+            gempaContainer.style.display = 'none';
+        }
     },
 
     _renderSidebarLoadingState: function() {

@@ -201,7 +201,8 @@ export const mapManager = {
         const visibility = isActive ? 'visible' : 'none';
         
         if (map.getLayer('gempa-point-layer')) map.setLayoutProperty('gempa-point-layer', 'visibility', visibility);
-        if (map.getLayer('gempa-heat-layer')) map.setLayoutProperty('gempa-heat-layer', 'visibility', visibility);
+        if (map.getLayer('gempa-pulse-layer')) map.setLayoutProperty('gempa-pulse-layer', 'visibility', visibility);
+        // if (map.getLayer('gempa-heat-layer')) map.setLayoutProperty('gempa-heat-layer', 'visibility', visibility);
         if (map.getLayer('gempa-label-layer')) map.setLayoutProperty('gempa-label-layer', 'visibility', visibility);
 
         if (isActive) {
@@ -209,22 +210,28 @@ export const mapManager = {
             if (!this._gempaData) {
                 await this._fetchAndRenderGempa();
             }
-            // Redupkan marker cuaca
-            this._setWeatherMarkersOpacity(0.3);
+            // Redupkan marker cuaca dengan toggle class CSS
+            this._toggleWeatherMarkersDimming(true);
         } else {
             // Kembalikan marker cuaca
-            this._setWeatherMarkersOpacity(1);
+            this._toggleWeatherMarkersDimming(false);
             popupManager.close(true); // Tutup popup gempa jika ada
         }
     },
 
-    _setWeatherMarkersOpacity: function(opacity) {
+    /**
+     * [FIXED] Helper untuk mengatur opacity semua marker cuaca secara massal via Class CSS.
+     * Menggunakan class 'marker-dimmed' yang punya !important di CSS.
+     */
+    _toggleWeatherMarkersDimming: function(shouldDim) {
         for (const id in this._markers) {
             const marker = this._markers[id];
             const el = marker.getElement();
-            el.style.opacity = opacity;
-            // Non-aktifkan pointer events jika diredupkan agar tidak mengganggu klik gempa
-            el.style.pointerEvents = opacity < 1 ? 'none' : 'auto';
+            if (shouldDim) {
+                el.classList.add('marker-dimmed');
+            } else {
+                el.classList.remove('marker-dimmed');
+            }
         }
     },
 
@@ -470,6 +477,16 @@ export const mapManager = {
                 this._markers[markerId].setLngLat(cluster.centerPoint.lngLat);
                 this._markers[markerId].getElement().style.zIndex = zIndexBase;
             }
+
+            // --- [MODIFIKASI FIX STATE MARKER GEMPA: CLASS BASED] ---
+            // Menggunakan toggle class lebih robust daripada inline style
+            const el = this._markers[markerId].getElement();
+            if (this._isGempaLayerActive) {
+                el.classList.add('marker-dimmed');
+            } else {
+                el.classList.remove('marker-dimmed');
+            }
+            // -------------------------------------------
         });
 
         // Bersihkan marker yang sudah tidak ada di viewport / hasil render terbaru
@@ -486,7 +503,6 @@ export const mapManager = {
         }
     },
 
-    /**
     /**
      * Desain: Kapsul + Angka Gradien + Label "LOKASI"
      */
@@ -801,6 +817,16 @@ export const mapManager = {
         const cachedData = cacheManager.get(id);
         const idx = timeManager.getSelectedTimeIndex();
 
+        // --- [MODIFIKASI FIX STATE MARKER GEMPA: CLASS BASED] ---
+        // Kita cek apakah harus dim atau tidak. 
+        // Ini akan menjaga konsistensi jika update terjadi saat mode gempa aktif.
+        if (this._isGempaLayerActive) {
+             el.classList.add('marker-dimmed');
+        } else {
+             el.classList.remove('marker-dimmed');
+        }
+        // -------------------------------------------
+
         // State: Loading / Skeleton
         if (!cachedData) {
             el.classList.add('marker-skeleton'); 
@@ -827,8 +853,21 @@ export const mapManager = {
             if (weatherIconEl) weatherIconEl.className = `wi ${weatherInfo.raw_icon_name}`;
             if (thermoIconEl) thermoIconEl.style.color = utils.getTempColor(temp);
             if (rainIconEl) rainIconEl.style.color = utils.getRainColor(precip);
-            el.style.opacity = 1;
-        } else { el.style.opacity = 0.7; }
+            
+            // [HAPUS] Jangan atur opacity inline di sini, biarkan class marker-dimmed yang menang
+            // jika mode gempa aktif.
+             if (!this._isGempaLayerActive) {
+                // Reset inline style jika ada sisa
+                el.style.opacity = ''; 
+                el.style.pointerEvents = '';
+             }
+             
+        } else { 
+             // Default opacity untuk data tidak lengkap (tapi bukan dimmed)
+             if (!this._isGempaLayerActive) {
+                 el.style.opacity = 0.7; 
+             }
+        }
     },
     
     /** Loop update ke semua marker (dipanggil saat slider waktu berubah) */

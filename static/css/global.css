@@ -84,13 +84,8 @@ body { margin: 0; padding: 0; }
     cursor: pointer; 
     z-index: 10;
     
-    /* [PENTING UNTUK STABILISASI] 
-       Hapus 'transform' dari transition. Biarkan MapLibre mengontrol posisi secara instan.
-       Hanya animasikan z-index.
-    */
-    transition: z-index 0.2s; 
-    
-    /* Optimasi performa rendering browser */
+    /* [FIXED] Hapus transisi 'z-index' dan pastikan tidak ada transisi 'all' atau 'transform' di sini */
+    /* Transisi posisi ditangani oleh MapLibre secara internal setiap frame */
     will-change: transform; 
 }
 
@@ -107,6 +102,25 @@ body { margin: 0; padding: 0; }
 
 .marker-container:hover .marker-capsule { 
     box-shadow: 0 12px 24px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.1); 
+}
+
+/* === [FIXED] CLASS MODE GEMPA (MEMAKSA TRANSPARANSI TANPA JITTER) === */
+.marker-dimmed {
+    opacity: 0.25 !important; 
+    pointer-events: none !important; /* Matikan klik total */
+    filter: grayscale(100%); /* Hitam putih agar kontras */
+    
+    /* PENTING: Hanya transisikan opacity dan filter. 
+       JANGAN transisikan 'all' atau 'transform'. */
+    transition: opacity 0.4s ease, filter 0.4s ease !important;
+}
+
+/* Efek mengecil saat dimmed dipindahkan ke anak elemen (kapsul)
+   agar tidak mengganggu posisi container utama */
+.marker-dimmed .marker-capsule,
+.marker-dimmed .location-badge {
+    transform: scale(0.85);
+    transition: transform 0.4s ease;
 }
 
 .location-badge {

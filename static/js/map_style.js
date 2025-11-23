@@ -171,7 +171,22 @@ export const MAP_STYLE = {
             }
         },
 
-        // B. Lingkaran Gempa Utama (Zoom > 4)
+        // [BARU] B. Layer Pulsa Gempa (Menggunakan Animated Image)
+        // Layer ini ditaruh DI BAWAH 'gempa-point-layer' agar pulsa muncul di belakang titik.
+        {
+            id: 'gempa-pulse-layer',
+            type: 'symbol',
+            source: 'gempa-source',
+            minzoom: 4,
+            layout: {
+                'visibility': 'none', // Default mati
+                'icon-image': 'pulsing-dot', // Nama image yang didaftarkan di main.js
+                'icon-allow-overlap': true, // Biarkan bertumpuk
+                'icon-ignore-placement': true
+            }
+        },
+
+        // C. Lingkaran Gempa Utama (Zoom > 4)
         {
             id: 'gempa-point-layer',
             type: 'circle',
@@ -198,7 +213,7 @@ export const MAP_STYLE = {
             }
         },
 
-        // C. Label Magnitudo Gempa (Zoom > 6)
+        // D. Label Magnitudo Gempa (Zoom > 6)
         {
             id: 'gempa-label-layer',
             type: 'symbol',
