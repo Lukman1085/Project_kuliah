@@ -991,6 +991,9 @@ export const mapManager = {
         console.log(`Handling Click: ${nama_simpel} (${id})`); 
         popupManager.close(true);
 
+        // [IMPLEMENTASI BARU] Reset mode sidebar ke weather jika user klik marker wilayah
+        sidebarManager.resetContentMode();
+
         // Handover Highlight: Matikan highlight lama sebelum nyalakan yang baru
         if (this._activeLocationId && String(this._activeLocationId) !== String(id)) {
              this.removeActiveMarkerHighlight(this._activeLocationId, true); 

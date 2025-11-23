@@ -268,7 +268,6 @@
 }
 
 /* Selector ini sekarang berlaku untuk ikon cuaca MAUPUN gempa di dalam kartu */
-/* [FIX #1] Mengembalikan font-size ke 4rem dan menghapus scale agar tajam */
 .weather-icon-big {
     font-size: 3.5rem; 
     color: rgba(255, 255, 255, 0.95);
@@ -414,7 +413,7 @@
    ========================================================================== */
 
 #sidebar-sub-region-container {
-    margin-top: 30px;
+    margin-top: 10px;
     border-top: none; /* Hapus garis pemisah kasar */
     padding-top: 0;
 }
@@ -554,12 +553,11 @@
    MODAL DETAIL PROVINSI (JIKA MUNCUL)
    ========================================================================== */
 #sidebar-province-details {
-    padding: 20px;
+    /* [PERBAIKAN ESTETIKA] Mengurangi padding agar tidak terlalu boros tempat */
+    padding: 0 20px 20px 20px;
     text-align: center;
 }
 #sidebar-province-details p {
     color: #7f8c8d;
     font-style: italic;
 }
-
-/* [PERBAIKAN POIN 1] Legacy CSS dihapus sepenuhnya dari sini */

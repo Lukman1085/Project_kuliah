@@ -4,7 +4,7 @@
 import { mapManager } from './map_manager.js';
 import { sidebarManager } from './sidebar_manager.js';
 import { timeManager } from './time_manager.js';
-import { popupManager } from './popup_manager.js';
+import { popupManager } from "./popup_manager.js";
 import { utils, WMO_CODE_MAP } from './utilities.js';
 import { MAP_STYLE } from './map_style.js';
 import { ResetPitchControl } from './reset_pitch_ctrl.js';
@@ -163,7 +163,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Listener untuk Membuka Sidebar Gempa dari Popup
     document.addEventListener('requestSidebarGempa', (e) => {
-        // [FIX ISSUE 3] Tutup Popup Gempa
         popupManager.close(true);
 
         if (!sidebarManager.isOpen()) sidebarManager.openSidebar();
@@ -298,13 +297,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (this._isActive) {
                         this._btn.classList.add('active-mode');
                         mapManager.toggleGempaLayer(true);
-                        // [FIX ISSUE 1] Tampilkan Legenda
                         legendManager.toggle(true); 
+                        
+                        // [FITUR BARU] Switch Sidebar Mode
+                        sidebarManager.switchToMode('gempa');
                     } else {
                         this._btn.classList.remove('active-mode');
                         mapManager.toggleGempaLayer(false);
-                        // [FIX ISSUE 1] SEMBUNYIKAN Legenda
                         legendManager.toggle(false); 
+                        
+                        // [FITUR BARU] Switch Sidebar Mode
+                        sidebarManager.switchToMode('weather');
                     }
                 };
                 
