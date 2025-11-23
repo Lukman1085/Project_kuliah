@@ -219,6 +219,11 @@ export const mapManager = {
             // Kembalikan marker cuaca
             this._toggleWeatherMarkersDimming(false);
             popupManager.close(true); // Tutup popup gempa jika ada
+
+            // [FITUR BARU] Paksa fetch ulang untuk 'membangunkan' marker skeleton
+            // saat kembali ke mode normal (cuaca)
+            console.log("Mode Gempa OFF: Memicu refresh data cuaca...");
+            this.triggerFetchData();
         }
     },
 
@@ -583,6 +588,12 @@ export const mapManager = {
 
     /** Fetch Data untuk Single Marker */
     fetchDataForVisibleMarkers: async function() {
+        // [FITUR BARU] Cegah fetch saat mode gempa aktif (Hemat API & Jaga Skeleton)
+        if (this._isGempaLayerActive) {
+            console.log("Fetch ditahan: Mode Gempa Aktif");
+            return;
+        }
+
         if (this._isInteracting) return; 
 
         const map = this.getMap();

@@ -301,6 +301,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // [FITUR BARU] Switch Sidebar Mode
                         sidebarManager.switchToMode('gempa');
+                        
+                        // [BARU] Matikan akses searchbar saat mode gempa
+                        searchBarManager.setDisabledState(true);
+                        
                     } else {
                         this._btn.classList.remove('active-mode');
                         mapManager.toggleGempaLayer(false);
@@ -308,6 +312,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // [FITUR BARU] Switch Sidebar Mode
                         sidebarManager.switchToMode('weather');
+                        
+                        // [BARU] Nyalakan kembali searchbar
+                        searchBarManager.setDisabledState(false);
                     }
                 };
                 

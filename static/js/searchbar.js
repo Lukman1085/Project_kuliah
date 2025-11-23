@@ -5,7 +5,8 @@ import { mapManager } from "./map_manager.js";
 export const searchBarManager = {
     elements: {}, 
     results: [], 
-    selectedIndex: -1, 
+    selectedIndex: -1,
+    _originalPlaceholder: "Cari lokasi...", // [BARU] Simpan placeholder asli
 
     init: function(elements) {
         this.elements = elements;
@@ -29,6 +30,36 @@ export const searchBarManager = {
                     this.closeDropdown();
                 }, 200);
             });
+        }
+    },
+
+    /**
+     * [FITUR BARU] Mengatur status aktif/non-aktif search bar (Lockdown Mode).
+     * @param {boolean} isDisabled - True untuk mengunci, False untuk membuka.
+     */
+    setDisabledState: function(isDisabled) {
+        const { searchInput } = this.elements;
+        // Kita ambil wrapper langsung dari DOM karena statis
+        const wrapper = document.getElementById('search-wrapper'); 
+
+        if (!searchInput || !wrapper) return;
+
+        if (isDisabled) {
+            // LOCKDOWN: Matikan input, ganti visual, tutup dropdown
+            searchInput.disabled = true;
+            // Simpan placeholder lama jika belum tersimpan default
+            const currentPh = searchInput.getAttribute('placeholder');
+            if (currentPh && currentPh !== "Mode Gempa Aktif") {
+                this._originalPlaceholder = currentPh;
+            }
+            searchInput.setAttribute('placeholder', "Mode Gempa Aktif");
+            wrapper.classList.add('search-disabled');
+            this.closeDropdown(); 
+        } else {
+            // RESTORE: Hidupkan input, kembalikan visual
+            searchInput.disabled = false;
+            searchInput.setAttribute('placeholder', this._originalPlaceholder);
+            wrapper.classList.remove('search-disabled');
         }
     },
 
