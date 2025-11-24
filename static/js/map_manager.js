@@ -65,7 +65,6 @@ export const mapManager = {
             // [FIX ANIMASI] Jika moveend dipicu oleh easeTo (flying), jangan fetch dulu.
             // Biarkan callback easeTo yang menangani penyelesaiannya.
             if (this._isFlying) {
-                console.log("Moveend diabaikan: Sedang dalam mode Flying.");
                 return;
             }
 
@@ -198,7 +197,6 @@ export const mapManager = {
         
         // [FIX ANIMASI] Jangan fetch jika sedang terbang (Flying)
         if (this._isFlying) {
-            console.log("Fetch dibatalkan: Map sedang animasi (Flying).");
             return;
         }
 
@@ -431,7 +429,6 @@ export const mapManager = {
         }
         
         // [CRITICAL FIX] Cek validitas koordinat SEBELUM memulai animasi.
-        // Jangan set _isFlying jika koordinat tidak ada!
         if (!coords[0] || !coords[1]) {
             console.warn("Koordinat tidak ditemukan untuk FlyTo.");
             return; // Keluar segera, jangan kunci peta!
@@ -448,7 +445,7 @@ export const mapManager = {
 
         console.log(`FlyTo Weather: ${data.nama_simpel} (TIPADM: ${tipadm}) -> Zoom ${targetZoom}`);
 
-        // [FIX ANIMASI] Kunci fetch data selama animasi (Hanya jika koordinat valid)
+        // [FIX ANIMASI] Kunci fetch data selama animasi
         this._isFlying = true;
         this.triggerFetchData(); // Batalkan debounce yang pending
 
@@ -469,9 +466,10 @@ export const mapManager = {
             this.triggerFetchData();
 
             // Pastikan tidak pindah mode saat animasi berjalan
-            if (!this._isGempaLayerActive && this._activeLocationId === String(data.id)) {
+            // [FIX] Strict String Comparison for ID & Check Data
+            if (!this._isGempaLayerActive && data && String(this._activeLocationId) === String(data.id)) {
                 // Panggil renderRichPopup langsung jika data ada di cache
-                const cached = cacheManager.get(data.id);
+                const cached = cacheManager.get(String(data.id)); // Fix String ID
                 if (cached) {
                      this._renderRichPopup(cached, coords);
                 } else if (data.type === 'provinsi') {
@@ -487,10 +485,10 @@ export const mapManager = {
     },
     
     /**
-     * Helper publik untuk dipanggil dari SearchBar
-     * agar logika zoom tersentralisasi di sini (DRY).
+     * Helper publik untuk dipanggil dari SearchBar.
+     * [FIX] Hapus referensi 'data' yang tidak ada di sini.
      */
-    flyToLocation: function(lat, lon, tipadm, idForSetup = null) {
+    flyToLocation: function(lat, lon, tipadm) {
          if (!this._map) return;
          
          const tip = parseInt(tipadm, 10);
@@ -513,6 +511,8 @@ export const mapManager = {
              this._isFlying = false;
              this.renderMarkers();
              this.triggerFetchData();
+             // JANGAN ada logika popup atau 'data' di sini.
+             // Biarkan searchbar.js yang memanggil handleUnclusteredClick via timeout.
          });
     },
 
@@ -799,7 +799,8 @@ export const mapManager = {
                 }
             }
 
-            return !cacheManager.get(id) && !inflightIds.has(id);
+            // [FIX] Pastikan cek cache menggunakan String ID
+            return !cacheManager.get(String(id)) && !inflightIds.has(String(id));
         });
         
         // Logika Inisialisasi Awal: Jika belum ada data waktu global
@@ -815,7 +816,7 @@ export const mapManager = {
                  return true;
              });
 
-             if (firstValidSingle && !inflightIds.has(firstValidSingle)) idsToFetch.push(firstValidSingle);
+             if (firstValidSingle && !inflightIds.has(String(firstValidSingle))) idsToFetch.push(firstValidSingle);
         } 
         
         if (!idsToFetch.length) { 
@@ -824,7 +825,7 @@ export const mapManager = {
         }
         
         // Tandai ID sedang diproses
-        idsToFetch.forEach(id => inflightIds.add(id));
+        idsToFetch.forEach(id => inflightIds.add(String(id))); // [FIX] Add String
         this._isLoading = true; 
         if (!isFirstLoad && loadingSpinner) { loadingSpinner.style.display = 'block'; }
         
@@ -838,7 +839,8 @@ export const mapManager = {
             
             for (const id in dataMap) {
                 const data = dataMap[id];
-                const didInitTime = this._processIncomingData(id, data);
+                // [FIX] Proses dengan String ID
+                const didInitTime = this._processIncomingData(String(id), data);
                 if (isFirstLoad && didInitTime) { isFirstLoad = false; }
                 
                 // Jika data yang baru diambil adalah lokasi yang sedang aktif (diklik user)
@@ -847,12 +849,18 @@ export const mapManager = {
                     this._isClickLoading = false; 
                     this._activeLocationData = data;
                     if (sidebarManager.isOpen()) { sidebarManager.renderSidebarContent(); }
+
+                    // [FIX INFINITE LOADING LOOP] Render Popup Explisit!
+                    // Ini adalah missing link: background fetch selesai, tapi popup loading masih menunggu.
+                    let coords = [data.longitude, data.latitude];
+                    if(this._markers[id]) coords = this._markers[id].getLngLat().toArray();
+                    this._renderRichPopup(data, coords);
                 }
             }
         } catch (e) { 
             console.error("Gagal fetch data cuaca:", e); 
         } finally {
-            idsToFetch.forEach(id => inflightIds.delete(id));
+            idsToFetch.forEach(id => inflightIds.delete(String(id))); // [FIX] Delete String
             this._isLoading = false; 
             
             // [FIX ISSUE 1 CONFLICT] Matikan spinner HANYA JIKA gempa tidak sedang loading
@@ -875,7 +883,7 @@ export const mapManager = {
             const items = [];
             
             members.forEach(member => {
-                const id = member.id;
+                const id = String(member.id); // [FIX] String ID
                 let data = cacheManager.get(id);
                 
                 // Jika data belum ada di cache, buat item skeleton (isLoading: true)
@@ -925,7 +933,7 @@ export const mapManager = {
             const dataMap = await resp.json();
             const data = dataMap[id];
             if (data) {
-                this._processIncomingData(id, data); 
+                this._processIncomingData(String(id), data); 
                 this._updateMarkerContent(id);
             }
             return data;
@@ -949,9 +957,9 @@ export const mapManager = {
     _triggerSingleClickFromCluster: function(id, memberFallback) {
         popupManager.close(true);
         // Cek data terbaru di cache
-        let data = cacheManager.get(id); 
+        let data = cacheManager.get(String(id)); 
         const clickProps = { 
-            id: id, 
+            id: String(id), 
             nama_simpel: data ? data.nama_simpel : memberFallback.name, 
             nama_label: data ? (data.nama_label || data.nama_simpel) : (memberFallback.label || memberFallback.name), 
             lat: data ? data.latitude : memberFallback.lngLat[1], 
@@ -1018,7 +1026,7 @@ export const mapManager = {
         container.addEventListener('click', (e) => {
             e.stopPropagation(); 
             this.handleUnclusteredClick({ 
-                id: id, 
+                id: String(id), // [FIX] Ensure String
                 nama_simpel: props.nama_simpel, 
                 nama_label: props.nama_label, 
                 lat: props.lat, // Ambil dari props, BUKAN null
@@ -1054,7 +1062,7 @@ export const mapManager = {
             return;
         }
 
-        const cachedData = cacheManager.get(id);
+        const cachedData = cacheManager.get(String(id)); // [FIX] Get as String
         const idx = timeManager.getSelectedTimeIndex();
 
         // --- [MODIFIKASI FIX STATE MARKER GEMPA: CLASS BASED] ---
@@ -1140,7 +1148,7 @@ export const mapManager = {
         }
     },
     
-    setActiveMarkerHighlight: function(id) { this._applyHighlightStyle(id, true); },
+    setActiveMarkerHighlight: function(id) { this._applyHighlightStyle(String(id), true); },
     
     removeActiveMarkerHighlight: function(idToRemove = null, forceRemove = false) { 
         const targetId = idToRemove || this._previousActiveLocationId;
@@ -1153,7 +1161,7 @@ export const mapManager = {
             if (isTargetActive && (sidebarManager.isOpen() || popupManager.isOpen())) { return; }
         }
         
-        this._applyHighlightStyle(targetId, false);
+        this._applyHighlightStyle(String(targetId), false);
         if (!idToRemove) { this._previousActiveLocationId = null; }
     },
     
@@ -1175,7 +1183,7 @@ export const mapManager = {
     
     _processIncomingData: function(id, data) {
         if (!data) return false; 
-        cacheManager.set(id, data);
+        cacheManager.set(String(id), data); // [FIX] Set as String
         const isFirstLoad = (timeManager.getGlobalTimeLookup().length === 0);
         let didInitTime = false;
         if (isFirstLoad && data.hourly?.time?.length > 0) {
@@ -1195,9 +1203,16 @@ export const mapManager = {
      * Mengatur logic: Switching highlight, Buka Popup/Sidebar, dan Fetching data jika perlu.
      */
     handleUnclusteredClick: function(props) {
-        const { id, nama_simpel, nama_label, lat, lon, tipadm } = props;
+        // [FIX] Force String for ID and Float for Coordinates
+        const id = String(props.id); 
+        const nama_simpel = props.nama_simpel;
+        const nama_label = props.nama_label;
+        const lat = parseFloat(props.lat);
+        const lon = parseFloat(props.lon);
+        const tipadm = props.tipadm;
+
         let coordinates = [lon, lat];
-        if ((!coordinates || coordinates[0] === null) && this._markers[id]) { 
+        if ((!coordinates || isNaN(coordinates[0])) && this._markers[id]) { 
             coordinates = this._markers[id].getLngLat().toArray(); 
         }
         if (!coordinates || isNaN(coordinates[0])) return; 
@@ -1228,13 +1243,13 @@ export const mapManager = {
         }
 
         // CASE: Cuaca (Cek Cache -> Fetch)
-        const cachedData = cacheManager.get(id);
-        if (inflightIds.has(id)) { 
-            this._handleInflightState(props, coordinates); 
+        const cachedData = cacheManager.get(id); // [FIX] String ID
+        if (inflightIds.has(id)) { // [FIX] String ID
+            this._handleInflightState({ id, nama_simpel, tipadm }, coordinates); 
         } else if (cachedData) { 
-            this._handleCacheHit(props, cachedData, coordinates); 
+            this._handleCacheHit({ id, nama_simpel, tipadm }, cachedData, coordinates); 
         } else { 
-            this._handleCacheMiss(props, coordinates); 
+            this._handleCacheMiss({ id, nama_simpel, tipadm }, coordinates); 
         }
     },
 
@@ -1255,7 +1270,7 @@ export const mapManager = {
     _handleCacheMiss: async function(props, coordinates) {
         const protocol = window.location.protocol; const hostname = window.location.hostname; const port = '5000'; const baseUrl = `${protocol}//${hostname}:${port}`;
         const { id, nama_simpel, tipadm } = props; 
-        this._activeLocationData = null; this._isClickLoading = true; inflightIds.add(id);
+        this._activeLocationData = null; this._isClickLoading = true; inflightIds.add(String(id)); // [FIX] String
         const loadingContent = popupManager.generateLoadingPopupContent(nama_simpel); const loadingPopupRef = popupManager.open(coordinates, loadingContent);
         if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent(); 
         try {
@@ -1264,20 +1279,26 @@ export const mapManager = {
             const dataMap = await resp.json();
             if (!dataMap?.[id]) throw new Error("Data lokasi tidak ditemukan");
             const data = dataMap[id];
-            this._processIncomingData(id, data);
-            if (this._activeLocationId === id) {
+
+            // [FIX RACE CONDITION] Simpan data aktif DULUAN sebelum proses inisialisasi waktu/UI global
+            if (String(this._activeLocationId) === String(id)) {
                 this._activeLocationData = data; 
-                // Update label setelah fetch API berhasil
                 if (data.nama_label) this._activeLocationLabel = data.nama_label;
-                
-                this._activeLocationData.tipadm = tipadm; this._isClickLoading = false;
+                this._activeLocationData.tipadm = tipadm; 
+            }
+
+            this._processIncomingData(String(id), data); // [FIX] String
+            
+            // [FIX] Render ulang popup jika ini masih lokasi aktif
+            if (String(this._activeLocationId) === String(id)) {
+                this._isClickLoading = false;
                 this._updateMarkerContent(id);
                 this._renderRichPopup(data, coordinates);
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent();
             }
         } catch (e) { 
             console.error(`Fetch failed for ${id}:`, e);
-            if (this._activeLocationId === id) { 
+            if (String(this._activeLocationId) === String(id)) { 
                 this._isClickLoading = false; this._activeLocationData = null;
                 this.removeActiveMarkerHighlight(id, true); 
                 
@@ -1289,7 +1310,7 @@ export const mapManager = {
                 
                 if (sidebarManager.isOpen()) sidebarManager.renderSidebarContent(); 
             }
-        } finally { inflightIds.delete(id); }
+        } finally { inflightIds.delete(String(id)); } // [FIX] String
     },
 
     /**
