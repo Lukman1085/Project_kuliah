@@ -4,7 +4,7 @@ import { timeManager } from "./time_manager.js";
 import { mapManager } from "./map_manager.js";
 import { cacheManager } from "./cache_manager.js"; 
 
-/** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
+/** ➡️ SIDEBAR MANAGER: Mengelola semua logika untuk search bar */
 export const sidebarManager = { 
     _isSidebarOpen: false,
     _subRegionData: null, 
@@ -543,6 +543,16 @@ export const sidebarManager = {
             <i class="sub-region-item-icon ${ikon}"></i>
             <span class="sub-region-item-temp">${dataPoint.suhu?.toFixed(1) ?? '-'}°C</span>
         `;
+        
+        // --- MODIFIKASI DIMULAI ---
+        // Menambahkan interaksi klik untuk navigasi ke sub-wilayah
+        element.style.cursor = 'pointer'; 
+        element.onclick = (e) => {
+            e.stopPropagation(); // Mencegah bubbling yang tidak diinginkan
+            // Memanggil fungsi baru di mapManager untuk menangani logika navigasi
+            mapManager.handleSidebarNavigation(data);
+        };
+        // --- MODIFIKASI SELESAI ---
     },
 
     _renderSubRegionList: function(timeIndex) {

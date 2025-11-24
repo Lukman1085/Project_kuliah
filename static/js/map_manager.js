@@ -1253,6 +1253,51 @@ export const mapManager = {
         }
     },
 
+    // --- [IMPLEMENTASI BARU] ---
+    // Handler Navigasi Sidebar (Tanpa FlyTo Otomatis)
+    handleSidebarNavigation: function(data) {
+        if (!this._map || !data) return;
+
+        console.log(`Sidebar Navigation to: ${data.nama_simpel} (${data.id})`);
+
+        // 1. Handover Highlight (Matikan yang lama)
+        if (this._activeLocationId && String(this._activeLocationId) !== String(data.id)) {
+             this.removeActiveMarkerHighlight(this._activeLocationId, true); 
+        }
+
+        // 2. Set State Lokasi Aktif (tanpa reset penuh agar tidak kedip)
+        this._activeLocationId = String(data.id);
+        this._activeLocationSimpleName = data.nama_simpel;
+        this._activeLocationLabel = data.nama_label || data.nama_simpel;
+        this._activeLocationData = data;
+        this._isClickLoading = false;
+
+        // 3. Render Ulang Sidebar dengan Data Baru
+        sidebarManager.renderSidebarContent();
+
+        // 4. Logika Viewport & Popup
+        const coords = [data.longitude, data.latitude];
+        const bounds = this._map.getBounds();
+        
+        // Cek apakah koordinat target ada di dalam viewport saat ini
+        if (bounds.contains(coords)) {
+            // Jika dalam viewport:
+            // a. Nyalakan Highlight Marker (jika marker ada)
+            this.setActiveMarkerHighlight(data.id);
+            
+            // b. Buka Popup (Rich Popup karena data sudah ada)
+            // Tutup popup lama dulu
+            popupManager.close(true);
+            this._renderRichPopup(data, coords);
+        } else {
+            // Jika TIDAK dalam viewport:
+            // a. Jangan buka popup (sesuai instruksi)
+            // b. Biarkan tombol FlyTo di sidebar yang menangani perpindahan jika user mau
+            console.log("Lokasi di luar viewport, popup tidak dibuka otomatis.");
+        }
+    },
+    // --- AKHIR IMPLEMENTASI BARU ---
+
     _handleInflightState: function(props, coordinates) {
         this._activeLocationData = null; this._isClickLoading = true;
         const loadingContent = popupManager.generateLoadingPopupContent(props.nama_simpel); popupManager.open(coordinates, loadingContent);
