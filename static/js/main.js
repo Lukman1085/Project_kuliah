@@ -298,23 +298,29 @@ document.addEventListener('DOMContentLoaded', function() {
                         this._btn.classList.add('active-mode');
                         mapManager.toggleGempaLayer(true);
                         legendManager.toggle(true); 
-                        
-                        // [FITUR BARU] Switch Sidebar Mode
                         sidebarManager.switchToMode('gempa');
-                        
-                        // [BARU] Matikan akses searchbar saat mode gempa
                         searchBarManager.setDisabledState(true);
+                        
+                        // [FITUR BARU] Matikan Time Picker
+                        timeManager.setDisabledState(true);
+                        
+                        // [FITUR BARU] Tampilkan Indikator Mode
+                        const indicator = document.getElementById('mode-status-indicator');
+                        if (indicator) indicator.style.display = 'flex';
                         
                     } else {
                         this._btn.classList.remove('active-mode');
                         mapManager.toggleGempaLayer(false);
                         legendManager.toggle(false); 
-                        
-                        // [FITUR BARU] Switch Sidebar Mode
                         sidebarManager.switchToMode('weather');
-                        
-                        // [BARU] Nyalakan kembali searchbar
                         searchBarManager.setDisabledState(false);
+                        
+                        // [FITUR BARU] Nyalakan Kembali Time Picker
+                        timeManager.setDisabledState(false);
+                        
+                        // [FITUR BARU] Sembunyikan Indikator
+                        const indicator = document.getElementById('mode-status-indicator');
+                        if (indicator) indicator.style.display = 'none';
                     }
                 };
                 
