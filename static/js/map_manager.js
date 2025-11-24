@@ -14,6 +14,9 @@ export const mapManager = {
     _fetchDebounceTimer: null,
     _isInteracting: false,
     
+    // [FIX ANIMASI] Flag untuk menandai apakah peta sedang dalam animasi programatik (FlyTo)
+    _isFlying: false,
+    
     // State untuk Hover Poligon
     _hoveredStateId: null,
     _hoveredSourceLayer: null,
@@ -40,13 +43,13 @@ export const mapManager = {
             if (this._isInteracting) {
                 this._isInteracting = false;
                 // Trigger fetch manual saat lepas jari (jika peta sudah diam)
-                if (!mapInstance.isMoving()) this.triggerFetchData(); 
+                if (!mapInstance.isMoving() && !this._isFlying) this.triggerFetchData(); 
             }
         });
         window.addEventListener('touchend', () => { 
             if (this._isInteracting) {
                 this._isInteracting = false;
-                if (!mapInstance.isMoving()) this.triggerFetchData();
+                if (!mapInstance.isMoving() && !this._isFlying) this.triggerFetchData();
             }
         });
 
@@ -58,6 +61,14 @@ export const mapManager = {
         // 3. DATA FETCH
         mapInstance.on('moveend', () => { 
             this._isInteracting = false; 
+            
+            // [FIX ANIMASI] Jika moveend dipicu oleh easeTo (flying), jangan fetch dulu.
+            // Biarkan callback easeTo yang menangani penyelesaiannya.
+            if (this._isFlying) {
+                console.log("Moveend diabaikan: Sedang dalam mode Flying.");
+                return;
+            }
+
             this.renderMarkers(); 
             this.triggerFetchData(); 
         });
@@ -167,6 +178,9 @@ export const mapManager = {
     _activeLocationData: null, 
     _previousActiveLocationId: null,
 
+    // [BARU] State Aktif Gempa (untuk fitur FlyTo)
+    _activeGempaData: null,
+
     // Getters
     getIsLoading: function() { return this._isLoading; }, 
     getIsClickLoading: function() { return this._isClickLoading; }, 
@@ -181,6 +195,13 @@ export const mapManager = {
      */
     triggerFetchData: function() {
         if (this._fetchDebounceTimer) clearTimeout(this._fetchDebounceTimer);
+        
+        // [FIX ANIMASI] Jangan fetch jika sedang terbang (Flying)
+        if (this._isFlying) {
+            console.log("Fetch dibatalkan: Map sedang animasi (Flying).");
+            return;
+        }
+
         this._fetchDebounceTimer = setTimeout(() => {
             // Jangan fetch jika user masih menahan mouse/layar!
             if (this._isInteracting) {
@@ -205,7 +226,6 @@ export const mapManager = {
         
         if (map.getLayer('gempa-point-layer')) map.setLayoutProperty('gempa-point-layer', 'visibility', visibility);
         if (map.getLayer('gempa-pulse-layer')) map.setLayoutProperty('gempa-pulse-layer', 'visibility', visibility);
-        // [REVISI] Hapus referensi Heatmap
         if (map.getLayer('gempa-label-layer')) map.setLayoutProperty('gempa-label-layer', 'visibility', visibility);
 
         if (isActive) {
@@ -322,29 +342,183 @@ export const mapManager = {
         const props = feature.properties;
         const coords = feature.geometry.coordinates;
         
+        // [BARU] Simpan data gempa aktif ke memori agar bisa diakses fitur FlyTo
+        this._activeGempaData = {
+            ...props,
+            geometry: { coordinates: coords }
+        };
+
         // Tutup semua popup sebelumnya
         popupManager.close(true);
-        
-        // [FIX ISSUE 2] JANGAN paksa tutup sidebar.
-        // Cek dulu apakah sidebar sedang terbuka.
         
         // Data untuk popup
         const popupContent = popupManager.generateGempaPopupContent(props);
         popupManager.open(coords, popupContent);
         
-        // [FIX ISSUE 2] Fitur Hot-Swap Sidebar
-        // Jika sidebar sudah terbuka (misal sedang lihat cuaca atau gempa lain),
-        // langsung update kontennya dengan data gempa yang baru diklik.
+        // Fitur Hot-Swap Sidebar
         if (sidebarManager.isOpen()) {
             sidebarManager.renderSidebarGempa(props);
         }
-        
+
         // Jika sidebar tertutup, biarkan tertutup sampai user klik "Lihat Analisis" di popup.
     },
 
     // =========================================================================
     // END LOGIKA GEMPA
     // =========================================================================
+
+    // =========================================================================
+    // [BARU] LOGIKA NAVIGASI & ZOOM (CENTRALIZED)
+    // =========================================================================
+    
+    /**
+     * Memindahkan peta ke lokasi marker aktif (Weather atau Gempa)
+     * dan menampilkan popup setelah transisi selesai.
+     */
+    flyToActiveLocation: function() {
+        // 1. Tentukan Mode: Gempa atau Cuaca?
+        if (this._isGempaLayerActive) {
+            this._flyToActiveGempa();
+        } else {
+            this._flyToActiveWeather();
+        }
+    },
+
+    _flyToActiveGempa: function() {
+        if (!this._activeGempaData || !this._map) return;
+        
+        const coords = this._activeGempaData.geometry.coordinates;
+        const currentZoom = this._map.getZoom();
+        const targetZoom = Math.max(currentZoom, 11);
+
+        console.log("FlyTo Gempa:", coords);
+        
+        // [FIX ANIMASI] Kunci fetch data selama animasi
+        this._isFlying = true;
+        this.triggerFetchData(); // Akan dibatalkan oleh flag _isFlying (untuk debounce sebelumnya)
+
+        this._map.easeTo({
+            center: coords,
+            zoom: targetZoom,
+            duration: 1200, 
+            essential: true
+        });
+
+        // Tampilkan popup setelah bergerak (gunakan event 'moveend' sekali saja)
+        this._map.once('moveend', () => {
+             // [FIX ANIMASI] Buka kunci fetch data
+             this._isFlying = false;
+
+             // Pastikan masih di mode gempa
+             if (this._isGempaLayerActive && this._activeGempaData) {
+                 const popupContent = popupManager.generateGempaPopupContent(this._activeGempaData);
+                 popupManager.open(coords, popupContent);
+             }
+        });
+    },
+
+    _flyToActiveWeather: function() {
+        // Gunakan data dari memori (_activeLocationData)
+        // Ini mengatasi masalah jika marker visual hilang dari cache
+        const data = this._activeLocationData;
+        if (!data || !this._map) return;
+        
+        // Dapatkan koordinat dari data, atau fallback ke marker jika ada
+        let coords = [data.longitude, data.latitude];
+        // Jika data longitude/latitude tidak ada di object utama (misal dari klik unclustered), cari di marker
+        if ((!coords[0] || !coords[1]) && this._markers[data.id]) {
+            coords = this._markers[data.id].getLngLat().toArray();
+        }
+        
+        // [CRITICAL FIX] Cek validitas koordinat SEBELUM memulai animasi.
+        // Jangan set _isFlying jika koordinat tidak ada!
+        if (!coords[0] || !coords[1]) {
+            console.warn("Koordinat tidak ditemukan untuk FlyTo.");
+            return; // Keluar segera, jangan kunci peta!
+        }
+
+        // Tentukan Level Zoom berdasarkan TIPADM
+        const tipadm = parseInt(data.tipadm, 10);
+        let targetZoom = 10; // Default
+        
+        if (tipadm === 1) targetZoom = 7;       // Provinsi
+        else if (tipadm === 2) targetZoom = 9;  // Kab/Kota
+        else if (tipadm === 3) targetZoom = 11; // Kecamatan
+        else if (tipadm === 4) targetZoom = 14; // Desa/Kelurahan
+
+        console.log(`FlyTo Weather: ${data.nama_simpel} (TIPADM: ${tipadm}) -> Zoom ${targetZoom}`);
+
+        // [FIX ANIMASI] Kunci fetch data selama animasi (Hanya jika koordinat valid)
+        this._isFlying = true;
+        this.triggerFetchData(); // Batalkan debounce yang pending
+
+        this._map.easeTo({
+            center: coords,
+            zoom: targetZoom,
+            duration: 1200,
+            essential: true
+        });
+
+        // Trigger Popup setelah selesai
+        this._map.once('moveend', () => {
+            // [FIX ANIMASI] Buka kunci dan trigger fetch manual karena moveend diblokir
+            this._isFlying = false;
+            
+            // Kita paksa render ulang dan fetch di lokasi baru
+            this.renderMarkers();
+            this.triggerFetchData();
+
+            // Pastikan tidak pindah mode saat animasi berjalan
+            if (!this._isGempaLayerActive && this._activeLocationId === String(data.id)) {
+                // Panggil renderRichPopup langsung jika data ada di cache
+                const cached = cacheManager.get(data.id);
+                if (cached) {
+                     this._renderRichPopup(cached, coords);
+                } else if (data.type === 'provinsi') {
+                     const content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
+                     popupManager.open(coords, content);
+                } else {
+                     // Jika belum ada, tampilkan loading (Fetch akan berjalan otomatis via triggerFetchData)
+                     const loadingContent = popupManager.generateLoadingPopupContent(data.nama_simpel);
+                     popupManager.open(coords, loadingContent);
+                }
+            }
+        });
+    },
+    
+    /**
+     * Helper publik untuk dipanggil dari SearchBar
+     * agar logika zoom tersentralisasi di sini (DRY).
+     */
+    flyToLocation: function(lat, lon, tipadm, idForSetup = null) {
+         if (!this._map) return;
+         
+         const tip = parseInt(tipadm, 10);
+         let z = 10;
+         if (tip === 1) z = 7;
+         else if (tip === 2) z = 9;
+         else if (tip === 3) z = 11;
+         else if (tip === 4) z = 14;
+
+         // [FIX ANIMASI] Set flying mode
+         this._isFlying = true;
+
+         this._map.easeTo({
+             center: [lon, lat],
+             zoom: z
+         });
+
+         // Release flying mode on moveend
+         this._map.once('moveend', () => {
+             this._isFlying = false;
+             this.renderMarkers();
+             this.triggerFetchData();
+         });
+    },
+
+    // =========================================================================
+
+
     renderMarkers: function() {
         const map = this.getMap();
         if (!map) return;
@@ -472,7 +646,10 @@ export const mapManager = {
                     markerEl = this._createMarkerElement(p.id, {
                         nama_simpel: p.name,
                         nama_label: p.label,
-                        tipadm: p.tipadm
+                        tipadm: p.tipadm,
+                        // [DATA INTEGRITY FIX] Kirim Lat/Lon asli dari vector tile ke pembuat marker
+                        lat: p.lngLat[1], 
+                        lon: p.lngLat[0]
                     });
                 }
                 
@@ -787,7 +964,10 @@ export const mapManager = {
     // --- FUNGSI PENDUKUNG ---
     
     _createMarkerElement: function(id, props) {
-        const safeId = String(id).replace(/\./g, '-');
+        // [FIX DOMException] Strict ID Sanitization
+        // Ganti titik, spasi, slash, dan karakter aneh lainnya dengan dash
+        const safeId = String(id).replace(/[^a-zA-Z0-9-_]/g, '-');
+        
         const tipadm = parseInt(props.tipadm, 10);
         const isProvince = (tipadm === 1);
         const container = document.createElement('div');
@@ -834,11 +1014,16 @@ export const mapManager = {
                 <div class="marker-anchor"></div><div class="marker-pulse"></div>`;
         }
 
+        // [DATA INTEGRITY FIX] Gunakan props.lat dan props.lon yang dikirim dari renderMarkers
         container.addEventListener('click', (e) => {
             e.stopPropagation(); 
             this.handleUnclusteredClick({ 
-                id: id, nama_simpel: props.nama_simpel, nama_label: props.nama_label, 
-                lat: null, lon: null, tipadm: props.tipadm 
+                id: id, 
+                nama_simpel: props.nama_simpel, 
+                nama_label: props.nama_label, 
+                lat: props.lat, // Ambil dari props, BUKAN null
+                lon: props.lon, // Ambil dari props, BUKAN null
+                tipadm: props.tipadm 
             });
         });
         return container;
@@ -854,11 +1039,21 @@ export const mapManager = {
         const el = markerInstance.getElement();
         if (el.querySelector('.marker-theme-province')) return; 
 
-        const safeId = String(id).replace(/\./g, '-');
-        const capsuleEl = el.querySelector(`#capsule-${safeId}`);
-        const weatherIconEl = el.querySelector(`#icon-weather-${safeId}`);
-        const thermoIconEl = el.querySelector(`#icon-thermo-${safeId}`);
-        const rainIconEl = el.querySelector(`#icon-rain-${safeId}`);
+        // [FIX DOMException] Strict Sanitization agar match dengan _createMarkerElement
+        const safeId = String(id).replace(/[^a-zA-Z0-9-_]/g, '-');
+        
+        // [FIX DOMException] Gunakan selector yang lebih aman jika memungkinkan
+        let capsuleEl, weatherIconEl, thermoIconEl, rainIconEl;
+        try {
+            capsuleEl = el.querySelector(`#capsule-${safeId}`);
+            weatherIconEl = el.querySelector(`#icon-weather-${safeId}`);
+            thermoIconEl = el.querySelector(`#icon-thermo-${safeId}`);
+            rainIconEl = el.querySelector(`#icon-rain-${safeId}`);
+        } catch (e) {
+            console.warn(`Query selector error for ID: ${safeId}`, e);
+            return;
+        }
+
         const cachedData = cacheManager.get(id);
         const idx = timeManager.getSelectedTimeIndex();
 
@@ -1025,7 +1220,7 @@ export const mapManager = {
         // CASE: Provinsi (Tampilkan Popup Khusus, tanpa fetch cuaca)
         const tipadmInt = parseInt(tipadm, 10);
         if (tipadmInt === 1) {
-            this._activeLocationData = { id: id, nama_simpel: nama_simpel, nama_label: nama_label, tipadm: 1, type: 'provinsi' };
+            this._activeLocationData = { id: id, nama_simpel: nama_simpel, nama_label: nama_label, tipadm: 1, type: 'provinsi', latitude: lat, longitude: lon }; // [BARU] Pastikan lat/lon masuk data aktif untuk FlyTo
             this._isClickLoading = false;
             if (sidebarManager.isOpen()) { sidebarManager.renderSidebarContent(); }
             const popupContent = popupManager.generateProvincePopupContent(nama_simpel, nama_label);

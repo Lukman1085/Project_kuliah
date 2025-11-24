@@ -80,19 +80,10 @@ export const searchBarManager = {
         
         this.closeDropdown(); 
 
-        let zoom = 10; 
-        const tipadm = parseInt(lokasi.tipadm, 10);
-        if (tipadm === 1) { zoom = 7; }       
-        else if (tipadm === 2) { zoom = 9; } 
-        else if (tipadm === 3) { zoom = 11; } 
-        else if (tipadm === 4) { zoom = 14; } 
-        
-        console.log(`Search click: ${lokasi.nama_label} (TIPADM: ${tipadm}), zooming to ${zoom}`);
+        console.log(`Search click: ${lokasi.nama_label} (TIPADM: ${lokasi.tipadm})`);
 
-        map.easeTo({
-            center: [lokasi.lon, lokasi.lat],
-            zoom: zoom
-        });
+        // [REFACTOR] Gunakan logic sentral di mapManager (DRY)
+        mapManager.flyToLocation(lokasi.lat, lokasi.lon, lokasi.tipadm);
 
         const props = {
             id: lokasi.id,
