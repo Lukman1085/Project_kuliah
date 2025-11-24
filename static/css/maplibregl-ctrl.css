@@ -66,32 +66,109 @@
 
 /* 3. Styling untuk TOMBOL RESET PITCH KUSTOM */
 .maplibregl-ctrl-pitch-reset {
-    /* Style diwarisi dari `.maplibregl-ctrl-group button` */
-    /* (width, height, background-color, transition) */
-    
-    /* Pastikan tidak ada border atau padding default */
     padding: 0;
     border: none;
-    
-    /* Karena ini adalah satu-satunya tombol di grupnya, 
-      ia akan secara otomatis mendapatkan 4 sudut bulat 
-      dari rules `:first-child` dan `:last-child` 
-      yang sudah kita definisikan di atas.
-    */
 }
 
 /* Target SVG di dalam tombol kustom kita */
 .maplibregl-ctrl-pitch-reset svg {
-    /* Warna dan opasitas ikon agar serasi */
     fill: #333;
     opacity: 0.8;
     transition: opacity 0.2s;
-    /* Centering (display: block; margin: auto;) 
-      sudah ditambahkan inline di JS 
-    */
 }
 
 /* Efek hover pada tombol kustom */
 .maplibregl-ctrl-pitch-reset:hover svg {
     opacity: 1;
 }
+
+/* 4. Styling TOMBOL GEMPA */
+.maplibregl-ctrl-gempa.active-mode {
+    background-color: #ffebee !important; /* Merah muda */
+    color: #d32f2f !important;
+    border-color: #ffcdd2 !important;
+}
+
+.maplibregl-ctrl-gempa i {
+    transition: transform 0.3s ease;
+}
+
+.maplibregl-ctrl-gempa.active-mode i {
+    animation: quake-shake 0.5s infinite;
+}
+
+@keyframes quake-shake {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(10deg); }
+    50% { transform: rotate(0deg); }
+    75% { transform: rotate(-10deg); }
+    100% { transform: rotate(0deg); }
+}
+
+/* 5. [BARU] STYLING ZOOM SLIDER */
+.maplibregl-ctrl-zoom-slider {
+    /* Pastikan container cukup tinggi untuk slider vertikal */
+    height: 140px !important; /* Tinggi tetap */
+    width: 32px !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 0;
+    overflow: hidden;
+}
+
+.maplibregl-ctrl-zoom-slider input[type=range] {
+    /* Menghilangkan default appearance */
+    -webkit-appearance: none;
+    width: 120px; /* Panjang slider (karena di-rotate, ini jadi tinggi) */
+    height: 4px; /* Ketebalan track */
+    background: #e0e0e0;
+    outline: none;
+    border-radius: 2px;
+    
+    /* Transformasi Rotasi untuk Webkit (Chrome/Safari) */
+    transform: rotate(-90deg);
+    
+    /* Cross-browser cursor */
+    cursor: pointer;
+}
+
+/* Thumb (Handle Slider) - Webkit */
+.maplibregl-ctrl-zoom-slider input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border: 2px solid #666;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.1s;
+}
+
+.maplibregl-ctrl-zoom-slider input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    border-color: #333;
+}
+
+/* Thumb (Handle Slider) - Firefox */
+.maplibregl-ctrl-zoom-slider input[type=range]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border: 2px solid #666;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.1s;
+}
+
+.maplibregl-ctrl-zoom-slider input[type=range]::-moz-range-thumb:hover {
+    transform: scale(1.2);
+    border-color: #333;
+}
+
+/* Firefox Vertical Support Hack */
+/* Untuk Firefox modern, kita bisa menggunakan orient="vertical" di HTML,
+   tapi rotasi CSS seringkali lebih konsisten antar browser modern. */

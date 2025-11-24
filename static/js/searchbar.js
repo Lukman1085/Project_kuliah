@@ -5,7 +5,8 @@ import { mapManager } from "./map_manager.js";
 export const searchBarManager = {
     elements: {}, 
     results: [], 
-    selectedIndex: -1, 
+    selectedIndex: -1,
+    _originalPlaceholder: "Cari lokasi...", // [BARU] Simpan placeholder asli
 
     init: function(elements) {
         this.elements = elements;
@@ -32,6 +33,36 @@ export const searchBarManager = {
         }
     },
 
+    /**
+     * [FITUR BARU] Mengatur status aktif/non-aktif search bar (Lockdown Mode).
+     * @param {boolean} isDisabled - True untuk mengunci, False untuk membuka.
+     */
+    setDisabledState: function(isDisabled) {
+        const { searchInput } = this.elements;
+        // Kita ambil wrapper langsung dari DOM karena statis
+        const wrapper = document.getElementById('search-wrapper'); 
+
+        if (!searchInput || !wrapper) return;
+
+        if (isDisabled) {
+            // LOCKDOWN: Matikan input, ganti visual, tutup dropdown
+            searchInput.disabled = true;
+            // Simpan placeholder lama jika belum tersimpan default
+            const currentPh = searchInput.getAttribute('placeholder');
+            if (currentPh && currentPh !== "Mode Gempa Aktif") {
+                this._originalPlaceholder = currentPh;
+            }
+            searchInput.setAttribute('placeholder', "Mode Gempa Aktif");
+            wrapper.classList.add('search-disabled');
+            this.closeDropdown(); 
+        } else {
+            // RESTORE: Hidupkan input, kembalikan visual
+            searchInput.disabled = false;
+            searchInput.setAttribute('placeholder', this._originalPlaceholder);
+            wrapper.classList.remove('search-disabled');
+        }
+    },
+
     handleSuggestionClick: function(lokasi) {
         const { searchInput, suggestionsDropdown } = this.elements;
         const map = mapManager.getMap();
@@ -49,19 +80,10 @@ export const searchBarManager = {
         
         this.closeDropdown(); 
 
-        let zoom = 10; 
-        const tipadm = parseInt(lokasi.tipadm, 10);
-        if (tipadm === 1) { zoom = 7; }       
-        else if (tipadm === 2) { zoom = 9; } 
-        else if (tipadm === 3) { zoom = 11; } 
-        else if (tipadm === 4) { zoom = 14; } 
-        
-        console.log(`Search click: ${lokasi.nama_label} (TIPADM: ${tipadm}), zooming to ${zoom}`);
+        console.log(`Search click: ${lokasi.nama_label} (TIPADM: ${lokasi.tipadm})`);
 
-        map.easeTo({
-            center: [lokasi.lon, lokasi.lat],
-            zoom: zoom
-        });
+        // [REFACTOR] Gunakan logic sentral di mapManager (DRY)
+        mapManager.flyToLocation(lokasi.lat, lokasi.lon, lokasi.tipadm);
 
         const props = {
             id: lokasi.id,

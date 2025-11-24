@@ -18,6 +18,31 @@ export const timeManager = {
         console.log("Elemen DOM Waktu telah di-set di timeManager.");
     },
 
+    /**
+     * [FITUR BARU] Mengatur status aktif/non-aktif Time Picker (Lockdown Mode).
+     * @param {boolean} isDisabled - True untuk mengunci, False untuk membuka.
+     */
+    setDisabledState: function(isDisabled) {
+        const container = document.getElementById('datetime-picker-container');
+        const allButtons = container ? container.querySelectorAll('button') : [];
+
+        if (isDisabled) {
+            // Lockdown: Matikan semua interaksi
+            if(container) container.classList.add('disabled-mode');
+            allButtons.forEach(btn => btn.disabled = true);
+        } else {
+            // Restore: Hidupkan kembali
+            if(container) container.classList.remove('disabled-mode');
+            // Aktifkan tombol kembali, TAPI perhatikan logika batas waktu (prev/next)
+            // Kita panggil updateNavigationButtonsState untuk memastikan tombol yang seharusnya disabled (misal di ujung waktu) tetap disabled
+            this.updateNavigationButtonsState(this._selectedTimeIndex);
+            
+            // Calendar btn selalu aktif jika tidak lockdown
+            const calBtn = document.getElementById('calendar-btn');
+            if(calBtn) calBtn.disabled = false;
+        }
+    },
+
     // ... (Fungsi Helper Date & Index SAMA) ...
     getPredictedDateFromIndex: function(index) {
         const startDate = this.getPredictedStartDate(); 

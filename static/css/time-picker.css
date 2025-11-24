@@ -1,57 +1,59 @@
 /* ==========================================================================
-   TIME PICKER CONTAINER (FLOATING BAR)
+   TIME PICKER CONTAINER (FLOATING BAR - MODERN)
    ========================================================================== */
 
 #datetime-picker-container {
     position: fixed;
-    bottom: 20px; /* Jarak dari bawah lebih aman untuk layar poni */
+    bottom: 20px; /* Jarak dari bawah lebih aman */
     left: 50%;
     transform: translateX(-50%);
     
     /* Desain Glassmorphism Modern */
-    background: rgba(255, 255, 255, 0.9); /* Putih transparan */
-    backdrop-filter: blur(10px); /* Efek blur di belakang */
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     
-    padding: 10px 15px;
-    border-radius: 16px; /* Lebih bulat */
-    border: 1px solid rgba(255, 255, 255, 0.5); /* Border halus */
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); /* Shadow lembut */
+    padding: 12px 20px;
+    border-radius: 20px; /* Lebih bulat */
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 4px 8px rgba(0,0,0,0.05);
     
     z-index: 1000;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    font-family: 'Segoe UI', sans-serif;
+    gap: 10px;
+    font-family: 'Manrope', sans-serif; /* Font baru */
     
     /* Animasi muncul */
-    animation: slide-up 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@keyframes slide-up {
-    from { transform: translate(-50%, 20px); opacity: 0; }
-    to { transform: translate(-50%, 0); opacity: 1; }
+/* [BARU] Mode Disabled (Gempa) */
+#datetime-picker-container.disabled-mode {
+    opacity: 0.5;
+    filter: grayscale(100%);
+    pointer-events: none; /* Tidak bisa diklik */
+    transform: translateX(-50%) translateY(20px); /* Sedikit turun */
 }
 
 .datetime-row {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px; /* Jarak antar tombol lebih lega */
+    gap: 12px; 
 }
 
 /* Tombol Navigasi (< >) */
 #datetime-picker-container button {
     background-color: #fff;
     border: 1px solid #e0e0e0;
-    border-radius: 8px; /* Sedikit kotak tapi tumpul */
+    border-radius: 10px; 
     
-    /* Ukuran ramah sentuhan (Touch Target) */
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     
-    font-size: 14px;
+    font-size: 16px;
     color: #333;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -63,9 +65,10 @@
 }
 
 #datetime-picker-container button:hover {
-    background-color: #f0f0f0;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+    background-color: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    color: #007bff;
 }
 
 #datetime-picker-container button:active {
@@ -78,118 +81,122 @@
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+    background-color: #f0f0f0;
 }
 
 /* Teks Tampilan (Tanggal & Jam) */
 #date-display, #hour-display {
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
     color: #2c3e50;
-    padding: 0 10px;
-    min-width: 130px;
+    padding: 0 15px;
+    min-width: 140px;
     text-align: center;
     
-    /* Style seperti 'input field' read-only */
-    background: rgba(0,0,0,0.03);
-    border-radius: 6px;
-    height: 30px;
-    line-height: 30px;
+    /* Style 'pill' shape */
+    background: rgba(0,0,0,0.04);
+    border-radius: 50px;
+    height: 36px;
+    line-height: 36px;
+    letter-spacing: 0.5px;
 }
-#hour-display { min-width: 60px; }
+#hour-display { min-width: 80px; }
 
 /* Tombol Kalender Spesial */
 #calendar-btn {
-    background-color: #007bff !important; /* Warna aksen */
+    background-color: #007bff !important;
     color: white !important;
     border: none !important;
-    font-size: 16px;
+    font-size: 18px;
+    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3) !important;
 }
 #calendar-btn:hover {
     background-color: #0056b3 !important;
 }
 
 /* ==========================================================================
-   CALENDAR POPUP (MODERN)
+   CALENDAR POPUP (MODERN REDESIGN)
    ========================================================================== */
 
 #calendar-popup {
     display: none;
     position: absolute;
-    bottom: calc(100% + 15px); /* Jarak dari picker */
+    bottom: calc(100% + 20px);
     left: 50%;
     transform: translateX(-50%);
     
     background-color: #ffffff;
     border: none;
-    border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2); /* Shadow dalam */
+    border-radius: 20px;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.2);
     
     z-index: 1005;
-    width: 300px; /* Sedikit lebih lebar */
+    width: 320px;
     padding: 20px;
+    font-family: 'Manrope', sans-serif;
     
-    /* Animasi Zoom In */
     animation: zoom-in 0.2s ease-out;
 }
 
 @keyframes zoom-in {
-    from { opacity: 0; transform: translateX(-50%) scale(0.9); }
+    from { opacity: 0; transform: translateX(-50%) scale(0.95); }
     to { opacity: 1; transform: translateX(-50%) scale(1); }
 }
 
-/* Header Kalender (Bulan Tahun) */
-#calendar-popup span#calendar-month-year {
-    display: block;
-    text-align: center;
-    font-weight: 700;
-    font-size: 1.1rem;
-    color: #2c3e50;
+/* Header Kalender */
+#calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 15px;
-    padding: 5px 0;
 }
 
-/* Tombol Navigasi Bulan (di dalam popup, bukan elemen terpisah jika ada) */
-/* Jika Anda punya tombol navigasi bulan di dalam JS, pastikan selectornya pas */
+#calendar-popup span#calendar-month-year {
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: #2c3e50;
+}
+
 #calendar-prev-month, #calendar-next-month {
-    position: absolute;
-    top: 20px;
     background: transparent !important;
     border: none !important;
     font-size: 18px !important;
     color: #555 !important;
     box-shadow: none !important;
-    width: 30px !important;
-    height: 30px !important;
+    width: 32px !important;
+    height: 32px !important;
 }
-#calendar-prev-month { left: 20px; }
-#calendar-next-month { right: 20px; }
+#calendar-prev-month:hover, #calendar-next-month:hover {
+    background: #f0f0f0 !important;
+    color: #000 !important;
+}
 
 /* Grid Kalender */
 #calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 6px; /* Jarak antar tanggal */
+    gap: 4px;
     text-align: center;
 }
 
 .calendar-day-header {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     color: #95a5a6;
     text-transform: uppercase;
-    margin-bottom: 5px;
+    padding-bottom: 8px;
 }
 
 /* Sel Tanggal */
 .calendar-date {
-    width: 36px; /* Ukuran lingkaran */
-    height: 36px;
-    line-height: 36px;
-    padding: 0; /* Reset padding */
+    width: 38px;
+    height: 38px;
+    line-height: 38px;
+    padding: 0;
     
     background-color: transparent;
     border: none;
-    border-radius: 50%; /* Lingkaran penuh */
+    border-radius: 12px; /* Squircle */
     
     font-size: 14px;
     color: #333;
@@ -198,26 +205,25 @@
     cursor: pointer;
     transition: all 0.2s;
     
-    display: flex; /* Center content */
+    display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto; /* Center di grid cell */
+    margin: 0 auto;
 }
 
 .calendar-date:hover:not(.disabled) {
-    background-color: #e0f7fa; /* Biru sangat muda */
-    color: #007bff;
+    background-color: #e3f2fd;
+    color: #1565c0;
 }
 
 .calendar-date.disabled {
-    color: #ccc;
+    color: #ddd;
     cursor: default;
-    background: none;
 }
 
 /* Hari Ini */
 .calendar-date.today {
-    border: 2px solid #007bff; /* Ring biru */
+    border: 2px solid #007bff;
     color: #007bff;
     font-weight: 700;
 }
@@ -229,14 +235,13 @@
     box-shadow: 0 4px 10px rgba(0, 123, 255, 0.4);
 }
 
-/* Panah kecil di bawah popup (segitiga) */
 #calendar-popup::after {
     content: "";
     position: absolute;
-    bottom: -8px;
+    bottom: -10px;
     left: 50%;
     transform: translateX(-50%);
-    border-width: 8px 8px 0;
+    border-width: 10px 10px 0;
     border-style: solid;
     border-color: #fff transparent transparent transparent;
 }

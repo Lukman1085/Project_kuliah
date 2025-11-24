@@ -30,6 +30,11 @@
     <div id="koordinat-info"></div>
     <div id="global-loading-spinner">Memuat data cuaca...</div>
     
+    <!-- [BARU] Indikator Status Mode Gempa -->
+    <div id="mode-status-indicator">
+        <i class="wi wi-earthquake"></i> DALAM MODE GEMPA
+    </div>
+    
     <div id="search-wrapper">
         <div id="search-container">
             <input type="text" id="search-bar" placeholder="Cari lokasi..." autocomplete="off" />
@@ -94,6 +99,13 @@
                             <span id="sidebar-current-wind">... m/s</span>
                         </div>
                     </div>
+
+                    <!-- [IMPLEMENTASI BARU] Footer Sumber Data (Rencana A) -->
+                    <div style="margin-top: 20px; text-align: center; font-size: 0.8rem; opacity: 0.8; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        Data bersumber dari <strong>OPENMETEO</strong>.<br>
+                        Selalu pantau informasi resmi dari otoritas setempat.
+                    </div>
+
                 </div>
                 <!-- ===== AKHIR STRUKTUR BARU ===== -->
 
@@ -139,9 +151,11 @@
             <button id="next-three-hour-btn" aria-label="3 Jam Berikutnya">&gg;</button>
         </div>
         <div id="calendar-popup">
-            <button id="calendar-prev-month" aria-label="Bulan Sebelumnya">&lt;</button>
-            <span id="calendar-month-year">Oktober 2025</span>
-            <button id="calendar-next-month" aria-label="Bulan Berikutnya">&gt;</button>
+            <div id="calendar-header">
+                <button id="calendar-prev-month" aria-label="Bulan Sebelumnya">&lt;</button>
+                <span id="calendar-month-year">Oktober 2025</span>
+                <button id="calendar-next-month" aria-label="Bulan Berikutnya">&gt;</button>
+            </div>
             <div id="calendar-grid">
             </div>
         </div>
