@@ -2,11 +2,12 @@ import { cacheManager } from "./cache_manager.js";
 import { utils } from "./utilities.js";
 import { popupManager } from "./popup_manager.js";
 import { timeManager } from "./time_manager.js";
-// [REFACTOR] Import Modul
 import { MarkerRenderer } from "./marker_renderer.js";
 import { GempaManager } from "./gempa_manager.js";
 import { MapInteraction } from "./map_interaction.js";
-import { WeatherService } from "./weather_service.js"; // <-- Modul Baru
+import { WeatherService } from "./weather_service.js";
+// [REFACTOR] Import Constants
+import { DOM_IDS, CSS_CLASSES, MAP_LAYERS, MAP_SOURCES, MAP_KEYS } from "./constants.js";
 
 /** * 🗺️ MAP MANAGER (FACADE / COORDINATOR) */
 export const mapManager = { 
@@ -30,7 +31,7 @@ export const mapManager = {
     _previousActiveLocationId: null,
     _activeGempaData: null,
 
-    _isClickLoading: false, // State lokal untuk loading klik spesifik
+    _isClickLoading: false,
 
     setSidebarManager: function(managerInstance) {
         this._sidebarManager = managerInstance;
@@ -49,6 +50,7 @@ export const mapManager = {
                     if (!mapInstance.isMoving() && !this._isFlying) this.triggerFetchData();
                 }
             },
+            // [CONSTANTS] Gunakan MAP_LAYERS.GEMPA_POINT
             onGempaClick: (feature) => { if (this._isGempaLayerActive) this._handleGempaClick(feature); },
             shouldSkipHover: () => { return this._isInteracting || this._isHoveringMarker; },
             isGempaMode: () => { return this._isGempaLayerActive; }
@@ -66,7 +68,8 @@ export const mapManager = {
         });
         
         mapInstance.on('sourcedata', (e) => {
-            if (e.sourceId === 'batas-wilayah-vector' && e.isSourceLoaded) {
+            // [CONSTANTS] Gunakan MAP_SOURCES.WILAYAH_VECTOR
+            if (e.sourceId === MAP_SOURCES.WILAYAH_VECTOR && e.isSourceLoaded) {
                 this.renderMarkers();
             }
         });
@@ -74,8 +77,7 @@ export const mapManager = {
 
     getMap: function() { return this._map; },
 
-    // Getters
-    getIsLoading: function() { return WeatherService.isLoading(); }, // Delegasi ke Service
+    getIsLoading: function() { return WeatherService.isLoading(); },
     getIsClickLoading: function() { return this._isClickLoading; }, 
     getActiveLocationId: function() { return this._activeLocationId; }, 
     getActiveLocationSimpleName: function() { return this._activeLocationSimpleName; }, 
@@ -93,7 +95,7 @@ export const mapManager = {
     },
 
     // =========================================================================
-    // DATA FETCHING (REFACTORED VIA SERVICE)
+    // DATA FETCHING
     // =========================================================================
 
     fetchDataForVisibleMarkers: async function() {
@@ -101,70 +103,54 @@ export const mapManager = {
         if (this._isInteracting) return; 
 
         const map = this.getMap(); if (!map) return;
-        const loadingSpinner = document.getElementById('global-loading-spinner');
+        // [CONSTANTS] Gunakan DOM_IDS.GLOBAL_SPINNER
+        const loadingSpinner = document.getElementById(DOM_IDS.GLOBAL_SPINNER);
         
         const renderedIds = Object.keys(this._markers);
         
-        // 1. Identifikasi ID Kandidat (Single Marker & Non-Provinsi)
         const potentialIds = renderedIds.filter(id => {
             if (id.startsWith('cl-')) return false; 
             const marker = this._markers[id];
-            // Cek marker provinsi via DOM class (warisan logic lama)
-            if (marker && marker.getElement().querySelector('.marker-theme-province')) return false; 
+            // [CONSTANTS] Gunakan CSS_CLASSES.MARKER_PROVINCE
+            if (marker && marker.getElement().querySelector(`.${CSS_CLASSES.MARKER_PROVINCE}`)) return false; 
             return true;
         });
 
-        // 2. Update Visual Skeleton (Feedback Cepat)
         potentialIds.forEach(id => {
-            // Jika belum ada di cache, update marker agar terlihat loading (skeleton)
             if (!cacheManager.get(String(id))) this._updateMarkerContent(id);
         });
 
-        // Tampilkan Global Spinner jika perlu
-        // (Misal: Fetch Service sedang bekerja)
-        // Logika spinner ini opsional, bisa diserahkan ke WeatherService jika mau lebih strict
-        
-        // 3. Delegasi ke WeatherService
         const result = await WeatherService.fetchMissingData(potentialIds);
 
-        // 4. Update UI setelah data masuk
         if (result.success) {
-            // Cek apakah ID aktif saat ini termasuk dalam data yang baru diambil
             if (this._isClickLoading && this._activeLocationId && result.dataMap[String(this._activeLocationId)]) {
                 this._finalizeActiveLocationLoad(result.dataMap[String(this._activeLocationId)]);
             }
         }
 
-        // 5. Refresh semua marker (Skeleton -> Real Data)
         this.updateAllMarkersForTime();
     },
 
-    /**
-     * Logika khusus saat data untuk lokasi yang DIKLIK user baru saja tiba.
-     */
     _finalizeActiveLocationLoad: function(data) {
         this._isClickLoading = false; 
         this._activeLocationData = data;
         
-        // Update Sidebar
         if (this._sidebarManager && this._sidebarManager.isOpen()) { 
             this._sidebarManager.renderSidebarContent(); 
         }
         
-        // Update Popup (Rich)
         let coords = [data.longitude, data.latitude];
         if(this._markers[data.id]) coords = this._markers[data.id].getLngLat().toArray();
         this._renderRichPopup(data, coords);
     },
 
     // =========================================================================
-    // EVENT HANDLERS (REFACTORED FETCH SINGLE)
+    // EVENT HANDLERS
     // =========================================================================
 
     handleUnclusteredClick: async function(props) {
         const id = String(props.id);
         
-        // Setup Koordinat
         let coordinates = [parseFloat(props.lon), parseFloat(props.lat)];
         if ((!coordinates[0] || isNaN(coordinates[0])) && this._markers[id]) { 
             coordinates = this._markers[id].getLngLat().toArray(); 
@@ -174,7 +160,6 @@ export const mapManager = {
         popupManager.close(true);
         if (this._sidebarManager) this._sidebarManager.resetContentMode();
 
-        // Handover State
         if (this._activeLocationId && String(this._activeLocationId) !== String(id)) {
              this.removeActiveMarkerHighlight(this._activeLocationId, true); 
         }
@@ -184,7 +169,6 @@ export const mapManager = {
         this._activeLocationLabel = props.nama_label;
         this.setActiveMarkerHighlight(id);
 
-        // CASE 1: Provinsi (Tanpa Fetch)
         if (parseInt(props.tipadm, 10) === 1) {
             this._activeLocationData = { ...props, type: 'provinsi', latitude: coordinates[1], longitude: coordinates[0] };
             this._isClickLoading = false;
@@ -194,7 +178,6 @@ export const mapManager = {
             return;
         }
 
-        // CASE 2: Cuaca (Cek Cache / Fetch)
         const cachedData = cacheManager.get(id);
         if (cachedData) {
             this._activeLocationData = cachedData;
@@ -203,7 +186,6 @@ export const mapManager = {
             if (this._sidebarManager && this._sidebarManager.isOpen()) this._sidebarManager.renderSidebarContent();
             this._renderRichPopup(cachedData, coordinates);
         } else {
-            // Cache Miss -> Fetch Single via Service
             this._handleCacheMiss(props, coordinates);
         }
     },
@@ -211,37 +193,29 @@ export const mapManager = {
     _handleCacheMiss: async function(props, coordinates) {
         const { id, nama_simpel, tipadm } = props;
         
-        // Set UI Loading State
         this._activeLocationData = null; 
         this._isClickLoading = true; 
         
-        // Tampilkan Popup Loading
         const loadingContent = popupManager.generateLoadingPopupContent(nama_simpel); 
         const loadingPopupRef = popupManager.open(coordinates, loadingContent);
         
-        // Tampilkan Sidebar Loading
         if (this._sidebarManager && this._sidebarManager.isOpen()) this._sidebarManager.renderSidebarContent();
 
         try {
-            // [REFACTOR] Panggil Service
             const data = await WeatherService.fetchSingle(id);
             
             if (data) {
-                // Validasi: Masih lokasi aktif kah? (User mungkin sudah klik tempat lain)
                 if (String(this._activeLocationId) === String(id)) {
-                    // Tambahkan properti lokal yang mungkin hilang dari API
                     data.tipadm = tipadm; 
                     if (props.nama_label) data.nama_label = props.nama_label;
-                    
                     this._finalizeActiveLocationLoad(data);
-                    this._updateMarkerContent(id); // Update marker visual (hilangkan skeleton)
+                    this._updateMarkerContent(id);
                 }
             } else {
                 throw new Error("Data kosong.");
             }
         } catch (e) {
             console.error(`Fetch failed for ${id}:`, e);
-            // Error Handling
             if (String(this._activeLocationId) === String(id)) {
                 this._isClickLoading = false; 
                 this._activeLocationData = null;
@@ -257,7 +231,7 @@ export const mapManager = {
     },
 
     // =========================================================================
-    // LOGIKA GEMPA (DELEGASI KE GEMPA MANAGER)
+    // LOGIKA GEMPA
     // =========================================================================
 
     toggleGempaLayer: async function(isActive) {
@@ -265,9 +239,10 @@ export const mapManager = {
         const map = this.getMap(); if (!map) return;
 
         const visibility = isActive ? 'visible' : 'none';
-        if (map.getLayer('gempa-point-layer')) map.setLayoutProperty('gempa-point-layer', 'visibility', visibility);
-        if (map.getLayer('gempa-pulse-layer')) map.setLayoutProperty('gempa-pulse-layer', 'visibility', visibility);
-        if (map.getLayer('gempa-label-layer')) map.setLayoutProperty('gempa-label-layer', 'visibility', visibility);
+        // [CONSTANTS] Gunakan MAP_LAYERS
+        if (map.getLayer(MAP_LAYERS.GEMPA_POINT)) map.setLayoutProperty(MAP_LAYERS.GEMPA_POINT, 'visibility', visibility);
+        if (map.getLayer(MAP_LAYERS.GEMPA_PULSE)) map.setLayoutProperty(MAP_LAYERS.GEMPA_PULSE, 'visibility', visibility);
+        if (map.getLayer(MAP_LAYERS.GEMPA_LABEL)) map.setLayoutProperty(MAP_LAYERS.GEMPA_LABEL, 'visibility', visibility);
 
         if (isActive) {
             await this._loadGempaData();
@@ -281,15 +256,17 @@ export const mapManager = {
     },
 
     _loadGempaData: async function() {
-        const loadingSpinner = document.getElementById('global-loading-spinner');
+        // [CONSTANTS]
+        const loadingSpinner = document.getElementById(DOM_IDS.GLOBAL_SPINNER);
         this._isGempaLoading = true;
         if (loadingSpinner) loadingSpinner.style.display = 'block';
 
         try {
             const features = await GempaManager.fetchAndProcess();
             const map = this.getMap();
-            if (map && map.getSource('gempa-source')) {
-                map.getSource('gempa-source').setData({ type: 'FeatureCollection', features: features });
+            // [CONSTANTS] Gunakan MAP_SOURCES.GEMPA
+            if (map && map.getSource(MAP_SOURCES.GEMPA)) {
+                map.getSource(MAP_SOURCES.GEMPA).setData({ type: 'FeatureCollection', features: features });
             }
         } catch (e) {
             console.error("MapManager: Gagal sinkronisasi data gempa.", e);
@@ -368,7 +345,7 @@ export const mapManager = {
         this._map.once('moveend', () => {
             this._isFlying = false;
             this.renderMarkers();
-            this.triggerFetchData(); // Trigger ulang fetch data di lokasi baru
+            this.triggerFetchData(); 
 
             if (!this._isGempaLayerActive && data && String(this._activeLocationId) === String(data.id)) {
                 const cached = cacheManager.get(String(data.id));
@@ -414,9 +391,25 @@ export const mapManager = {
         let nameKey = '';
         let tipadmVal = 0;
 
-        if (zoom <= 7.99) { targetLayer = 'batas-provinsi-layer'; idKey = 'KDPPUM'; nameKey = 'WADMPR'; tipadmVal = 1; } 
-        else if (zoom <= 10.99) { targetLayer = 'batas-kabupaten-layer'; idKey = 'KDPKAB'; nameKey = 'WADMKK'; tipadmVal = 2; } 
-        else if (zoom <= 14) { targetLayer = 'batas-kecamatan-layer'; idKey = 'KDCPUM'; nameKey = 'WADMKC'; tipadmVal = 3; } 
+        // [CONSTANTS] Menggunakan MAP_KEYS dan MAP_LAYERS
+        if (zoom <= 7.99) { 
+            targetLayer = MAP_LAYERS.PROVINSI_LINE; 
+            idKey = MAP_KEYS.ID_PROV; 
+            nameKey = MAP_KEYS.NAME_PROV; 
+            tipadmVal = 1; 
+        } 
+        else if (zoom <= 10.99) { 
+            targetLayer = MAP_LAYERS.KABUPATEN_LINE; 
+            idKey = MAP_KEYS.ID_KAB; 
+            nameKey = MAP_KEYS.NAME_KAB; 
+            tipadmVal = 2; 
+        } 
+        else if (zoom <= 14) { 
+            targetLayer = MAP_LAYERS.KECAMATAN_LINE; 
+            idKey = MAP_KEYS.ID_KEC; 
+            nameKey = MAP_KEYS.NAME_KEC; 
+            tipadmVal = 3; 
+        } 
         else { this._clearMarkers(new Set()); return; }
         
         if (!map.getLayer(targetLayer)) return;
@@ -443,7 +436,7 @@ export const mapManager = {
             });
         });
 
-        // Klasterisasi
+        // Klasterisasi (Bagian ini dibiarkan di sini sesuai diskusi)
         const clusters = []; 
         const CLUSTER_RADIUS = 90; 
         validPoints.sort((a, b) => b.lngLat[1] - a.lngLat[1]);
@@ -470,7 +463,6 @@ export const mapManager = {
             clusters.push(currentCluster);
         });
 
-        // Render via MarkerRenderer
         const activeMarkerIds = new Set();
 
         clusters.forEach(cluster => {
@@ -522,7 +514,8 @@ export const mapManager = {
                     );
                 }
                 
-                markerEl.classList.add('marker-entrance');
+                // [CONSTANTS] Gunakan CSS_CLASSES.MARKER_ENTRANCE
+                markerEl.classList.add(CSS_CLASSES.MARKER_ENTRANCE);
                 markerEl.style.zIndex = zIndexBase;
 
                 const newMarker = new maplibregl.Marker({ element: markerEl, anchor: 'bottom' })
@@ -544,8 +537,9 @@ export const mapManager = {
             }
 
             const el = this._markers[markerId].getElement();
-            if (this._isGempaLayerActive) el.classList.add('marker-dimmed');
-            else el.classList.remove('marker-dimmed');
+            // [CONSTANTS] CSS_CLASSES.MARKER_DIMMED
+            if (this._isGempaLayerActive) el.classList.add(CSS_CLASSES.MARKER_DIMMED);
+            else el.classList.remove(CSS_CLASSES.MARKER_DIMMED);
         });
 
         this._clearMarkers(activeMarkerIds);
@@ -584,7 +578,6 @@ export const mapManager = {
                 const id = String(member.id); 
                 let data = cacheManager.get(id);
                 if (!data) {
-                     // [REFACTOR] Gunakan logic simple, data akan di-fetch oleh singleFetcher saat discroll/dibuka
                      items.push({ id: id, nama: member.name, isLoading: true, onClick: () => this._triggerSingleClickFromCluster(id, member) });
                 } else {
                     let suhuStr = '-'; let descStr = '...'; let iconStr = 'wi wi-na';
@@ -599,10 +592,8 @@ export const mapManager = {
             return { title: pointCount > 100 ? `Menampilkan 100+ Lokasi:` : `${pointCount} Lokasi di area ini:`, items: items };
         };
 
-        // [REFACTOR] Gunakan WeatherService untuk fetch single
         const singleFetcher = async (id) => {
             try {
-                // Panggil Service (ini akan cache data otomatis)
                 const data = await WeatherService.fetchSingle(id);
                 if (data) {
                     this._updateMarkerContent(id);
@@ -648,8 +639,9 @@ export const mapManager = {
                 }
             }
             const container = this._markers[id].getElement();
-            if (isActive) { container.classList.add('active-marker'); container.style.zIndex = 10000; } 
-            else { container.classList.remove('active-marker'); }
+            // [CONSTANTS] CSS_CLASSES.MARKER_ACTIVE
+            if (isActive) { container.classList.add(CSS_CLASSES.MARKER_ACTIVE); container.style.zIndex = 10000; } 
+            else { container.classList.remove(CSS_CLASSES.MARKER_ACTIVE); }
         }
     },
     
