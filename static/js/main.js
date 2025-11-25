@@ -1,8 +1,10 @@
 // ================================================================
 // 1. IMPORT EKSTERNAL
 // ================================================================
+// [DI] Import keduanya agar bisa dihubungkan
 import { mapManager } from './map_manager.js';
 import { sidebarManager } from './sidebar_manager.js';
+
 import { timeManager } from './time_manager.js';
 import { popupManager } from "./popup_manager.js";
 import { utils, WMO_CODE_MAP } from './utilities.js';
@@ -71,6 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 2. Inisialisasi Manajer (Dependency Injection)
     // ================================================================
     
+    // [DI] Inisialisasi komponen individual
     sidebarManager.initDOM({
         sidebarEl, toggleBtnEl, closeBtnEl, sidebarContentEl, sidebarLocationNameEl,
         sidebarPlaceholderEl, sidebarLoadingEl, sidebarWeatherDetailsEl, sidebarProvinceDetailsEl,
@@ -97,6 +100,12 @@ document.addEventListener('DOMContentLoaded', function() {
     searchBarManager.init({ searchInput, suggestionsDropdown });
 
     calendarManager.initDOM({ calendarPopup, calendarGrid, calendarMonthYear });
+
+    // [DI] SUNTIKAN KETERGANTUNGAN SILANG (CROSS-DEPENDENCY INJECTION)
+    // Menghubungkan Sidebar dan Map yang sebelumnya saling bergantung
+    sidebarManager.setMapManager(mapManager);
+    mapManager.setSidebarManager(sidebarManager);
+    console.log("✅ DEPENDENCY INJECTION: Map <-> Sidebar connected.");
 
     // ================================================================
     // 3. Logika Inisialisasi Awal
