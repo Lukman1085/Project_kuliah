@@ -1,6 +1,8 @@
 import { utils } from "./utilities.js";
 import { timeManager } from "./time_manager.js";
 import { cacheManager } from "./cache_manager.js";
+// [CONSTANTS] Import Constants untuk konsistensi
+import { CSS_CLASSES } from "./constants.js"; 
 
 /** * 🎨 MARKER RENDERER
  * Bertanggung jawab murni untuk pembuatan dan manipulasi DOM Marker.
@@ -10,12 +12,8 @@ export const MarkerRenderer = {
 
     /**
      * Membuat elemen HTML untuk marker tunggal (Non-cluster)
-     * @param {string} id - ID Lokasi
-     * @param {object} props - Properti lokasi (nama, tipadm, lat, lon)
-     * @param {object} handlers - Callback events (onClick, onHover, onLeave)
      */
     createMarkerElement: function(id, props, handlers) {
-        // Sanitasi ID agar aman untuk selector CSS
         const safeId = String(id).replace(/[^a-zA-Z0-9-_]/g, '-');
         const tipadm = parseInt(props.tipadm, 10);
         const isProvince = (tipadm === 1);
@@ -24,7 +22,6 @@ export const MarkerRenderer = {
         container.className = 'marker-container'; 
         container.id = `marker-${safeId}`;
         
-        // Event Listeners (Delegasi ke Handler yang dikirim MapManager)
         if (handlers.onHover) container.addEventListener('mouseenter', () => handlers.onHover(id, tipadm));
         if (handlers.onLeave) container.addEventListener('mouseleave', () => handlers.onLeave());
         if (handlers.onClick) {
@@ -104,13 +101,38 @@ export const MarkerRenderer = {
     },
 
     /**
-     * Memperbarui visual marker yang sudah ada (Update Content)
-     * Logic skeleton vs real data ada di sini.
+     * [PERBAIKAN BUG #1 & #2]
+     * Fungsi khusus untuk update visual state (dimmed/active) TANPA peduli tipe marker.
+     * Ini memastikan Provinsi dan Cluster juga kena efek toggle.
+     */
+    updateVisualStateOnly: function(markerInstance, isGempaActive) {
+        if (!markerInstance) return;
+        const el = markerInstance.getElement();
+        
+        // Gunakan Konstanta CSS
+        if (isGempaActive) {
+            el.classList.add(CSS_CLASSES.MARKER_DIMMED);
+            // Reset opacity manual jika ada sisa inline style
+            el.style.opacity = ''; 
+            el.style.pointerEvents = '';
+        } else {
+            el.classList.remove(CSS_CLASSES.MARKER_DIMMED);
+        }
+    },
+
+    /**
+     * Memperbarui konten DATA marker (Ikon, Suhu, dll).
+     * Tetap memfilter Provinsi karena Provinsi tidak punya data cuaca hourly.
      */
     updateMarkerContent: function(markerInstance, id, isGempaActive) {
         if (!markerInstance) return;
         const el = markerInstance.getElement();
-        if (el.querySelector('.marker-theme-province')) return; 
+        
+        // [KONTEKS] Update Visual State juga dipanggil di sini untuk sinkronisasi saat render ulang
+        this.updateVisualStateOnly(markerInstance, isGempaActive);
+
+        // [FILTER] Provinsi tidak perlu update konten cuaca
+        if (el.querySelector(`.${CSS_CLASSES.MARKER_PROVINCE}`)) return; 
 
         const safeId = String(id).replace(/[^a-zA-Z0-9-_]/g, '-');
         
@@ -121,13 +143,6 @@ export const MarkerRenderer = {
             thermoIconEl = el.querySelector(`#icon-thermo-${safeId}`);
             rainIconEl = el.querySelector(`#icon-rain-${safeId}`);
         } catch (e) { return; }
-
-        // Toggle Dimmed Mode (Visual Feedback Gempa)
-        if (isGempaActive) {
-             el.classList.add('marker-dimmed');
-        } else {
-             el.classList.remove('marker-dimmed');
-        }
 
         const cachedData = cacheManager.get(String(id));
         const idx = timeManager.getSelectedTimeIndex();

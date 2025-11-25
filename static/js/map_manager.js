@@ -6,8 +6,9 @@ import { MarkerRenderer } from "./marker_renderer.js";
 import { GempaManager } from "./gempa_manager.js";
 import { MapInteraction } from "./map_interaction.js";
 import { WeatherService } from "./weather_service.js";
-// [REFACTOR] Import Constants
 import { DOM_IDS, CSS_CLASSES, MAP_LAYERS, MAP_SOURCES, MAP_KEYS } from "./constants.js";
+
+export const inflightIds = new Set();
 
 /** * 🗺️ MAP MANAGER (FACADE / COORDINATOR) */
 export const mapManager = { 
@@ -50,7 +51,6 @@ export const mapManager = {
                     if (!mapInstance.isMoving() && !this._isFlying) this.triggerFetchData();
                 }
             },
-            // [CONSTANTS] Gunakan MAP_LAYERS.GEMPA_POINT
             onGempaClick: (feature) => { if (this._isGempaLayerActive) this._handleGempaClick(feature); },
             shouldSkipHover: () => { return this._isInteracting || this._isHoveringMarker; },
             isGempaMode: () => { return this._isGempaLayerActive; }
@@ -68,7 +68,6 @@ export const mapManager = {
         });
         
         mapInstance.on('sourcedata', (e) => {
-            // [CONSTANTS] Gunakan MAP_SOURCES.WILAYAH_VECTOR
             if (e.sourceId === MAP_SOURCES.WILAYAH_VECTOR && e.isSourceLoaded) {
                 this.renderMarkers();
             }
@@ -103,7 +102,9 @@ export const mapManager = {
         if (this._isInteracting) return; 
 
         const map = this.getMap(); if (!map) return;
-        // [CONSTANTS] Gunakan DOM_IDS.GLOBAL_SPINNER
+        
+        // [PERBAIKAN BUG VISUAL FEEDBACK]
+        // Kembalikan kontrol loading spinner ke Map Manager
         const loadingSpinner = document.getElementById(DOM_IDS.GLOBAL_SPINNER);
         
         const renderedIds = Object.keys(this._markers);
@@ -111,14 +112,24 @@ export const mapManager = {
         const potentialIds = renderedIds.filter(id => {
             if (id.startsWith('cl-')) return false; 
             const marker = this._markers[id];
-            // [CONSTANTS] Gunakan CSS_CLASSES.MARKER_PROVINCE
             if (marker && marker.getElement().querySelector(`.${CSS_CLASSES.MARKER_PROVINCE}`)) return false; 
             return true;
         });
 
+        // Feedback Cepat (Skeleton)
         potentialIds.forEach(id => {
             if (!cacheManager.get(String(id))) this._updateMarkerContent(id);
         });
+
+        // Cek apakah kita perlu fetch (ada ID yang belum di-cache)
+        // Jika ada, nyalakan spinner. Logic filter detail ada di Service.
+        if (potentialIds.length > 0 && loadingSpinner) {
+             // Kita nyalakan dulu, nanti Service akan matikan jika ternyata semua sudah ada di cache
+             // atau biarkan menyala sampai fetch selesai
+             // Optimasi: Cek sederhana di sini agar spinner tidak kedip
+             const needsFetch = potentialIds.some(id => !cacheManager.get(String(id)));
+             if (needsFetch) loadingSpinner.style.display = 'block';
+        }
 
         const result = await WeatherService.fetchMissingData(potentialIds);
 
@@ -126,6 +137,11 @@ export const mapManager = {
             if (this._isClickLoading && this._activeLocationId && result.dataMap[String(this._activeLocationId)]) {
                 this._finalizeActiveLocationLoad(result.dataMap[String(this._activeLocationId)]);
             }
+        }
+
+        // Matikan spinner setelah selesai
+        if (loadingSpinner && !this._isGempaLoading) {
+            loadingSpinner.style.display = 'none';
         }
 
         this.updateAllMarkersForTime();
@@ -152,10 +168,15 @@ export const mapManager = {
         const id = String(props.id);
         
         let coordinates = [parseFloat(props.lon), parseFloat(props.lat)];
+        // Fallback ke posisi marker jika koordinat dari props tidak valid
         if ((!coordinates[0] || isNaN(coordinates[0])) && this._markers[id]) { 
             coordinates = this._markers[id].getLngLat().toArray(); 
         }
-        if (!coordinates[0]) return;
+        // [FIX TYPO / LOGIC] Pastikan koordinat valid sebelum lanjut
+        if (!coordinates || coordinates.length < 2 || isNaN(coordinates[0]) || isNaN(coordinates[1])) {
+            console.warn("Koordinat tidak valid untuk marker ini.");
+            return;
+        }
 
         popupManager.close(true);
         if (this._sidebarManager) this._sidebarManager.resetContentMode();
@@ -239,16 +260,18 @@ export const mapManager = {
         const map = this.getMap(); if (!map) return;
 
         const visibility = isActive ? 'visible' : 'none';
-        // [CONSTANTS] Gunakan MAP_LAYERS
         if (map.getLayer(MAP_LAYERS.GEMPA_POINT)) map.setLayoutProperty(MAP_LAYERS.GEMPA_POINT, 'visibility', visibility);
         if (map.getLayer(MAP_LAYERS.GEMPA_PULSE)) map.setLayoutProperty(MAP_LAYERS.GEMPA_PULSE, 'visibility', visibility);
         if (map.getLayer(MAP_LAYERS.GEMPA_LABEL)) map.setLayoutProperty(MAP_LAYERS.GEMPA_LABEL, 'visibility', visibility);
 
+        for (const id in this._markers) {
+            const marker = this._markers[id];
+            MarkerRenderer.updateVisualStateOnly(marker, isActive);
+        }
+
         if (isActive) {
             await this._loadGempaData();
-            this.updateAllMarkersForTime(); 
         } else {
-            this.updateAllMarkersForTime(); 
             popupManager.close(true);
             console.log("Mode Gempa OFF: Memicu refresh data cuaca...");
             this.triggerFetchData();
@@ -256,7 +279,6 @@ export const mapManager = {
     },
 
     _loadGempaData: async function() {
-        // [CONSTANTS]
         const loadingSpinner = document.getElementById(DOM_IDS.GLOBAL_SPINNER);
         this._isGempaLoading = true;
         if (loadingSpinner) loadingSpinner.style.display = 'block';
@@ -264,7 +286,6 @@ export const mapManager = {
         try {
             const features = await GempaManager.fetchAndProcess();
             const map = this.getMap();
-            // [CONSTANTS] Gunakan MAP_SOURCES.GEMPA
             if (map && map.getSource(MAP_SOURCES.GEMPA)) {
                 map.getSource(MAP_SOURCES.GEMPA).setData({ type: 'FeatureCollection', features: features });
             }
@@ -391,25 +412,9 @@ export const mapManager = {
         let nameKey = '';
         let tipadmVal = 0;
 
-        // [CONSTANTS] Menggunakan MAP_KEYS dan MAP_LAYERS
-        if (zoom <= 7.99) { 
-            targetLayer = MAP_LAYERS.PROVINSI_LINE; 
-            idKey = MAP_KEYS.ID_PROV; 
-            nameKey = MAP_KEYS.NAME_PROV; 
-            tipadmVal = 1; 
-        } 
-        else if (zoom <= 10.99) { 
-            targetLayer = MAP_LAYERS.KABUPATEN_LINE; 
-            idKey = MAP_KEYS.ID_KAB; 
-            nameKey = MAP_KEYS.NAME_KAB; 
-            tipadmVal = 2; 
-        } 
-        else if (zoom <= 14) { 
-            targetLayer = MAP_LAYERS.KECAMATAN_LINE; 
-            idKey = MAP_KEYS.ID_KEC; 
-            nameKey = MAP_KEYS.NAME_KEC; 
-            tipadmVal = 3; 
-        } 
+        if (zoom <= 7.99) { targetLayer = MAP_LAYERS.PROVINSI_LINE; idKey = MAP_KEYS.ID_PROV; nameKey = MAP_KEYS.NAME_PROV; tipadmVal = 1; } 
+        else if (zoom <= 10.99) { targetLayer = MAP_LAYERS.KABUPATEN_LINE; idKey = MAP_KEYS.ID_KAB; nameKey = MAP_KEYS.NAME_KAB; tipadmVal = 2; } 
+        else if (zoom <= 14) { targetLayer = MAP_LAYERS.KECAMATAN_LINE; idKey = MAP_KEYS.ID_KEC; nameKey = MAP_KEYS.NAME_KEC; tipadmVal = 3; } 
         else { this._clearMarkers(new Set()); return; }
         
         if (!map.getLayer(targetLayer)) return;
@@ -436,7 +441,6 @@ export const mapManager = {
             });
         });
 
-        // Klasterisasi (Bagian ini dibiarkan di sini sesuai diskusi)
         const clusters = []; 
         const CLUSTER_RADIUS = 90; 
         validPoints.sort((a, b) => b.lngLat[1] - a.lngLat[1]);
@@ -514,7 +518,6 @@ export const mapManager = {
                     );
                 }
                 
-                // [CONSTANTS] Gunakan CSS_CLASSES.MARKER_ENTRANCE
                 markerEl.classList.add(CSS_CLASSES.MARKER_ENTRANCE);
                 markerEl.style.zIndex = zIndexBase;
 
@@ -536,10 +539,8 @@ export const mapManager = {
                 this._markers[markerId].getElement().style.zIndex = zIndexBase;
             }
 
-            const el = this._markers[markerId].getElement();
-            // [CONSTANTS] CSS_CLASSES.MARKER_DIMMED
-            if (this._isGempaLayerActive) el.classList.add(CSS_CLASSES.MARKER_DIMMED);
-            else el.classList.remove(CSS_CLASSES.MARKER_DIMMED);
+            const marker = this._markers[markerId];
+            MarkerRenderer.updateVisualStateOnly(marker, this._isGempaLayerActive);
         });
 
         this._clearMarkers(activeMarkerIds);
@@ -639,7 +640,6 @@ export const mapManager = {
                 }
             }
             const container = this._markers[id].getElement();
-            // [CONSTANTS] CSS_CLASSES.MARKER_ACTIVE
             if (isActive) { container.classList.add(CSS_CLASSES.MARKER_ACTIVE); container.style.zIndex = 10000; } 
             else { container.classList.remove(CSS_CLASSES.MARKER_ACTIVE); }
         }
@@ -672,8 +672,30 @@ export const mapManager = {
         }
     },
     
-    // ... handleSidebarNavigation sudah ada di atas, logic ini untuk tombol flyTo yang lain
-    
+    handleSidebarNavigation: function(data) {
+        if (!this._map || !data) return;
+        if (this._activeLocationId && String(this._activeLocationId) !== String(data.id)) {
+             this.removeActiveMarkerHighlight(this._activeLocationId, true); 
+        }
+        this._activeLocationId = String(data.id);
+        this._activeLocationSimpleName = data.nama_simpel;
+        this._activeLocationLabel = data.nama_label || data.nama_simpel;
+        this._activeLocationData = data;
+        this._isClickLoading = false;
+
+        if (this._sidebarManager) this._sidebarManager.renderSidebarContent();
+
+        const coords = [data.longitude, data.latitude];
+        const bounds = this._map.getBounds();
+        if (bounds.contains(coords)) {
+            this.setActiveMarkerHighlight(data.id);
+            popupManager.close(true);
+            this._renderRichPopup(data, coords);
+        } else {
+            console.log("Lokasi di luar viewport, popup tidak dibuka otomatis.");
+        }
+    },
+
     _renderRichPopup: function(data, coordinates) {
         const idxLocal = timeManager.getSelectedTimeIndex();
         const hasGlobalTimeDataNow = timeManager.getGlobalTimeLookup().length > 0;

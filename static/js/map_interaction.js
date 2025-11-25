@@ -4,7 +4,7 @@
  */
 export const MapInteraction = {
     _map: null,
-    _callbacks: {}, // Tempat menyimpan fungsi lapor ke MapManager
+    _callbacks: {}, 
     
     // State Internal untuk Hover Poligon
     _hoveredStateId: null,
@@ -32,7 +32,6 @@ export const MapInteraction = {
     _initInteractionGuards: function() {
         const container = this._map.getContainer();
 
-        // Mulai Interaksi
         const startInteract = () => {
             if (this._callbacks.onInteractStart) this._callbacks.onInteractStart();
         };
@@ -40,10 +39,7 @@ export const MapInteraction = {
         container.addEventListener('mousedown', startInteract);
         container.addEventListener('touchstart', startInteract, { passive: true });
 
-        // Selesai Interaksi (Di window agar tertangkap meski lepas mouse di luar peta)
         const endInteract = () => {
-            // Cek apakah peta masih bergerak (inersia)
-            // Kita kirim callback, biarkan MapManager yang memutuskan logic fetch-nya
             if (this._callbacks.onInteractEnd) this._callbacks.onInteractEnd();
         };
 
@@ -58,35 +54,46 @@ export const MapInteraction = {
         const fillLayers = ['batas-provinsi-fill', 'batas-kabupaten-fill', 'batas-kecamatan-fill'];
 
         this._map.on('mousemove', (e) => {
-            // TANYA MAP MANAGER: Apakah saya boleh hover? (Misal: mouse sedang di atas marker)
             if (this._callbacks.shouldSkipHover && this._callbacks.shouldSkipHover()) {
                 return;
             }
 
-            let features = this._map.queryRenderedFeatures(e.point, { layers: fillLayers });
+            // [PERBAIKAN BUG CRITICAL]
+            // Cek apakah layer target sudah ada di style peta sebelum query.
+            // Jika tiles gagal dimuat (404) atau style belum siap, ini mencegah crash.
+            const style = this._map.getStyle();
+            if (!style || !style.layers) return;
             
-            if (features.length > 0) {
-                const feature = features[0];
-                if (feature.id !== undefined) {
-                    if (this._hoveredStateId !== feature.id) {
-                        this.clearHoverState(); // Bersihkan yang lama
-                        
-                        this._hoveredStateId = feature.id;
-                        this._hoveredSourceLayer = feature.sourceLayer;
-                        
-                        this._map.setFeatureState(
-                            { source: 'batas-wilayah-vector', sourceLayer: this._hoveredSourceLayer, id: this._hoveredStateId },
-                            { hover: true }
-                        );
+            // Kita cek layer pertama sebagai sampel
+            if (!this._map.getLayer(fillLayers[0])) return;
+
+            try {
+                let features = this._map.queryRenderedFeatures(e.point, { layers: fillLayers });
+                
+                if (features.length > 0) {
+                    const feature = features[0];
+                    if (feature.id !== undefined) {
+                        if (this._hoveredStateId !== feature.id) {
+                            this.clearHoverState(); 
+                            
+                            this._hoveredStateId = feature.id;
+                            this._hoveredSourceLayer = feature.sourceLayer;
+                            
+                            this._map.setFeatureState(
+                                { source: 'batas-wilayah-vector', sourceLayer: this._hoveredSourceLayer, id: this._hoveredStateId },
+                                { hover: true }
+                            );
+                        }
                     }
+                } else {
+                    this.clearHoverState();
                 }
-            } else {
-                this.clearHoverState();
+            } catch (err) {
+                // Silent catch untuk mencegah flooding console jika terjadi glitch render
             }
         });
 
         this._map.on('mouseleave', () => {
-            // Jika mouse keluar peta, tapi bukan masuk ke marker
             if (this._callbacks.shouldSkipHover && !this._callbacks.shouldSkipHover()) {
                 this.clearHoverState();
             }
@@ -97,13 +104,10 @@ export const MapInteraction = {
      * Menangani klik khusus pada layer (selain Marker HTML)
      */
     _initClickListeners: function() {
-        // Listener Gempa (Layer Simbol/Lingkaran)
         this._map.on('click', 'gempa-point-layer', (e) => {
-            // Cek apakah mode gempa aktif via callback atau logic internal layer visibility
-            // Tapi lebih aman lapor saja ke Manager
             const feature = e.features[0];
             if (feature && this._callbacks.onGempaClick) {
-                e.originalEvent.stopPropagation(); // Stop bubbling
+                e.originalEvent.stopPropagation(); 
                 this._callbacks.onGempaClick(feature);
             }
         });
@@ -138,10 +142,13 @@ export const MapInteraction = {
         this._hoveredStateId = id;
         this._hoveredSourceLayer = sourceLayer;
         
-        this._map.setFeatureState(
-            { source: 'batas-wilayah-vector', sourceLayer: sourceLayer, id: id },
-            { hover: true }
-        );
+        // Safety check sebelum set state
+        if (this._map.getSource('batas-wilayah-vector')) {
+            this._map.setFeatureState(
+                { source: 'batas-wilayah-vector', sourceLayer: sourceLayer, id: id },
+                { hover: true }
+            );
+        }
     },
 
     /**
@@ -149,10 +156,13 @@ export const MapInteraction = {
      */
     clearHoverState: function() {
         if (this._hoveredStateId !== null && this._hoveredSourceLayer !== null && this._map) {
-            this._map.setFeatureState(
-                { source: 'batas-wilayah-vector', sourceLayer: this._hoveredSourceLayer, id: this._hoveredStateId },
-                { hover: false }
-            );
+            // Safety check
+            if (this._map.getSource('batas-wilayah-vector')) {
+                this._map.setFeatureState(
+                    { source: 'batas-wilayah-vector', sourceLayer: this._hoveredSourceLayer, id: this._hoveredStateId },
+                    { hover: false }
+                );
+            }
         }
         this._hoveredStateId = null;
         this._hoveredSourceLayer = null;
