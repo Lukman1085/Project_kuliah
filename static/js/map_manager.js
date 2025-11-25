@@ -8,8 +8,6 @@ import { MapInteraction } from "./map_interaction.js";
 import { WeatherService } from "./weather_service.js";
 import { DOM_IDS, CSS_CLASSES, MAP_LAYERS, MAP_SOURCES, MAP_KEYS } from "./constants.js";
 
-export const inflightIds = new Set();
-
 /** * 🗺️ MAP MANAGER (FACADE / COORDINATOR) */
 export const mapManager = { 
     _map: null, 
