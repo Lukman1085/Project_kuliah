@@ -245,3 +245,86 @@
     border-style: solid;
     border-color: #fff transparent transparent transparent;
 }
+
+/* =======================================================
+   MOBILE OPTIMIZATION: TIME PICKER
+   ======================================================= */
+@media screen and (max-width: 768px) {
+
+    /* 1. Container Utama: Lebih Ramping & Rapi */
+    #datetime-picker-container {
+        /* Lebar responsif, jangan fix pixel */
+        width: 70%; 
+        max-width: 360px; /* Batas maksimal agar tidak terlalu lebar di tablet */
+        
+        /* Posisi dari bawah (sesuaikan agar tidak tertutup menu browser) */
+        bottom: 44px; 
+        
+        /* Padding lebih tipis agar tidak bongsor */
+        padding: 10px 12px;
+        gap: 8px; /* Jarak antar baris dirapatkan */
+        
+        /* Pastikan background blur lebih kuat di HP */
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        background: rgba(255, 255, 255, 0.9);
+        
+        /* Shadow lebih soft */
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        
+        /* Pastikan di atas elemen peta lainnya */
+        z-index: 1000;
+    }
+
+    /* 2. Baris Konten (Row) */
+    .datetime-row {
+        width: 100%;
+        justify-content: space-between; /* Tombol menyebar rata */
+        gap: 8px; /* Jarak antar elemen dalam baris */
+    }
+
+    /* 3. Tombol Panah & Kalender */
+    #datetime-picker-container button {
+        /* Sedikit mengecil untuk hemat tempat, tapi tetap mudah disentuh */
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+        border-radius: 8px;
+    }
+
+    /* 4. Teks Tanggal & Jam (Pills) */
+    #date-display, #hour-display {
+        /* Font lebih kecil agar muat */
+        font-size: 13px;
+        height: 32px;
+        line-height: 32px;
+        
+        /* Hapus min-width desktop agar fleksibel */
+        min-width: 0; 
+        flex-grow: 1; /* Biarkan teks mengisi ruang kosong */
+        padding: 0 8px; /* Padding samping dikurangi */
+        
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* 5. POPUP KALENDER (Sangat Penting untuk Mobile) */
+    #calendar-popup {
+        /* Agar tidak melebar keluar layar HP */
+        width: 90vw; /* 90% lebar layar viewport */
+        max-width: 320px;
+        padding: 15px;
+        
+        /* Posisi Bottom disesuaikan agar panah tooltip pas */
+        bottom: calc(100% + 15px);
+    }
+    
+    /* Ukuran sel tanggal di kalender agar pas di jari */
+    .calendar-date {
+        width: 34px;
+        height: 34px;
+        line-height: 34px;
+        font-size: 13px;
+    }
+}
