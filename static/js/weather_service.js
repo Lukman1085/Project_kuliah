@@ -19,7 +19,11 @@ export const WeatherService = {
      */
     fetchMissingData: async function(potentialIds) {
         // 1. Filter: Hanya ambil yang belum ada di cache & belum sedang di-fetch
-        const idsToFetch = potentialIds.filter(id => {
+        const validIds = potentialIds.filter(id => {
+            return id && id !== 'undefined' && id !== 'null';
+        });
+
+        const idsToFetch = validIds.filter(id => {
             return !cacheManager.get(String(id)) && !this._inflightIds.has(String(id));
         });
 
@@ -89,6 +93,8 @@ export const WeatherService = {
     fetchSingle: async function(id) {
         const safeId = String(id);
         
+        if (!safeId || safeId === 'undefined' || safeId === 'null') return null;
+
         // 1. Cek Cache
         const cached = cacheManager.get(safeId);
         if (cached) return cached;

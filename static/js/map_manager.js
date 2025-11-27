@@ -164,6 +164,11 @@ export const mapManager = {
 
     handleUnclusteredClick: async function(props) {
         const id = String(props.id);
+
+        if (!props.id || id === 'undefined' || id === 'null') {
+            console.warn("ID Marker tidak valid:", props);
+            return;
+        }
         
         let coordinates = [parseFloat(props.lon), parseFloat(props.lat)];
         // Fallback ke posisi marker jika koordinat dari props tidak valid
