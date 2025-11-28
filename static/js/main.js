@@ -1,14 +1,12 @@
 // ================================================================
 // 1. IMPORT EKSTERNAL
 // ================================================================
-// [DI] Import keduanya agar bisa dihubungkan
 import { mapManager } from './map_manager.js';
 import { sidebarManager } from './sidebar_manager.js';
-
 import { timeManager } from './time_manager.js';
 import { popupManager } from "./popup_manager.js";
 import { utils, WMO_CODE_MAP } from './utilities.js';
-import { MAP_STYLE } from './map_style.js';
+import { getMapStyle } from './map_style.js';
 import { ResetPitchControl } from './reset_pitch_ctrl.js';
 import { calendarManager } from './calender_manager.js';
 import { searchBarManager } from './searchbar.js';
@@ -18,10 +16,11 @@ import { legendManager } from './legend_manager.js';
 // 2. KONFIGURASI & STATE GLOBAL
 // ================================================================
 
+// Gunakan API relatif agar kompatibel dengan Vercel/Local
 const protocol = window.location.protocol;
 const hostname = window.location.hostname;
-const port = '5000';
-const baseUrl = `${protocol}//${hostname}:${port}`;
+const port = window.location.port ? `:${window.location.port}` : '';
+const baseUrl = `${protocol}//${hostname}${port}`;
 
 let map; 
 let searchDebounceTimer; 
@@ -30,6 +29,15 @@ let searchDebounceTimer;
 // 3. TITIK MASUK APLIKASI (APPLICATION ENTRYPOINT)
 // ================================================================
 document.addEventListener('DOMContentLoaded', function() {
+
+    // [BARU] Inisialisasi Protokol PMTiles sebelum Map dimuat
+    if (window.pmtiles) {
+        let protocol = new pmtiles.Protocol();
+        maplibregl.addProtocol("pmtiles", protocol.tile);
+        console.log("✅ PMTiles Protocol Registered");
+    } else {
+        console.error("❌ PMTiles library not found!");
+    }
 
     // ================================================================
     // 1. Ambil Elemen UI
@@ -73,11 +81,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // 2. Inisialisasi Manajer (Dependency Injection)
     // ================================================================
     
-    // [DI] Inisialisasi komponen individual
     sidebarManager.initDOM({
         sidebarEl, toggleBtnEl, closeBtnEl, sidebarContentEl, sidebarLocationNameEl,
         sidebarPlaceholderEl, sidebarLoadingEl, sidebarWeatherDetailsEl, sidebarProvinceDetailsEl,
-        sidebarEl, subRegionContainerEl, subRegionTitleEl, subRegionLoadingEl, subRegionListEl
+        subRegionContainerEl, subRegionTitleEl, subRegionLoadingEl, subRegionListEl
     });
 
     sidebarManager.initWeatherElements({
@@ -101,8 +108,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     calendarManager.initDOM({ calendarPopup, calendarGrid, calendarMonthYear });
 
-    // [DI] SUNTIKAN KETERGANTUNGAN SILANG (CROSS-DEPENDENCY INJECTION)
-    // Menghubungkan Sidebar dan Map yang sebelumnya saling bergantung
     sidebarManager.setMapManager(mapManager);
     mapManager.setSidebarManager(sidebarManager);
     console.log("✅ DEPENDENCY INJECTION: Map <-> Sidebar connected.");
@@ -110,6 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ================================================================
     // 3. Logika Inisialisasi Awal
     // ================================================================
+    // Menggunakan API relatif ke root domain (handle Vercel/Local auto)
     fetch(`${baseUrl}/api/wmo-codes`)
         .then(res => res.ok ? res.json() : Promise.reject(`Error ${res.status}`))
         .then(data => { Object.assign(WMO_CODE_MAP, data); })
@@ -166,16 +172,12 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInput.focus();
     });
 
-    // Listener Khusus
     document.addEventListener('requestSidebarDetail', () => { sidebarManager.openSidebarFromPopup(); });
     document.addEventListener('requestSidebarOpen', () => { if (!sidebarManager.isOpen()) { sidebarManager.openSidebar(); } });
     
-    // Listener untuk Membuka Sidebar Gempa dari Popup
     document.addEventListener('requestSidebarGempa', (e) => {
         popupManager.close(true);
-
         if (!sidebarManager.isOpen()) sidebarManager.openSidebar();
-        // Pastikan sidebarManager punya data yang dikirim dari event
         if (e.detail && e.detail.gempaData) {
             sidebarManager.renderSidebarGempa(e.detail.gempaData);
         }
@@ -184,21 +186,34 @@ document.addEventListener('DOMContentLoaded', function() {
     // ================================================================
     // 5. Inisialisasi Peta & Event Peta
     // ================================================================
+
+    const dynamicStyle = getMapStyle();
     
     map = new maplibregl.Map({ 
         container: 'map',
-        style: MAP_STYLE,
-        center: [118.0149, -2.5489], zoom: 4.5, minZoom: 4, maxZoom: 14,
+        style: dynamicStyle,
+        center: [118.0149, -2.5489], 
+        zoom: 4.5, 
+        minZoom: 4, 
+        maxZoom: 14,
         maxBounds: [[90, -15], [145, 10]]
     });
 
     mapManager.setMap(map);
 
     map.on('load', () => {
+        // [PENTING] Memastikan Iconset tersedia
+        // utils.preloadMarkerAssets(map).then(() => {
+        //     console.log("Marker Assets Loaded");
+        //     mapManager.triggerFetchData(); // Pemicu awal data
+        //     mapManager.renderMarkers();
+        // });
+
+        // Add Basemap Label Overlay
         map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
         map.addLayer({ id: 'cartodb-labels-layer', type: 'raster', source: 'cartodb-labels', minzoom: 7 });
 
-        // --- FACTORY ANIMASI CANGGIH (SONAR & PULSE) ---
+        // --- FACTORY ANIMASI (SONAR & PULSE) ---
         function createPulsingDot(type, size, r, g, b, duration) {
             return {
                 width: size,
@@ -223,8 +238,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     if (type === 'sonar') {
                         const waveCount = 3; 
-                        
-                        // 1. Gambar Inti Merah Solid
                         context.beginPath();
                         context.arc(centerX, centerY, 8, 0, Math.PI * 2);
                         context.fillStyle = `rgba(${r}, ${g}, ${b}, 1)`;
@@ -233,15 +246,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         context.lineWidth = 2;
                         context.stroke();
 
-                        // 2. Gambar Gelombang Cincin
                         for (let i = 0; i < waveCount; i++) {
                             const offset = (duration / waveCount) * i;
                             let t = ((now + offset) % duration) / duration;
                             t = 1 - Math.pow(1 - t, 3);
-                            
                             const radius = maxRadius * t;
                             const alpha = Math.max(0, (1 - t) * 0.8);
-
                             context.beginPath();
                             context.arc(centerX, centerY, radius, 0, Math.PI * 2);
                             context.lineWidth = 4 * (1 - t); 
@@ -252,12 +262,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         const t = (now % duration) / duration;
                         const radius = maxRadius * t;
                         const outerAlpha = (1 - t) * 0.6;
-                        
                         context.beginPath();
                         context.arc(centerX, centerY, radius, 0, Math.PI * 2);
                         context.fillStyle = `rgba(${r}, ${g}, ${b}, ${outerAlpha})`;
                         context.fill();
-
                         context.beginPath();
                         context.arc(centerX, centerY, 6, 0, Math.PI * 2);
                         context.fillStyle = 'rgba(255, 255, 255, 0.9)';
@@ -266,7 +274,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         context.strokeStyle = `rgba(${r}, ${g}, ${b}, 1)`;
                         context.stroke();
                     }
-
                     this.data = context.getImageData(0, 0, this.width, this.height).data;
                     map.triggerRepaint();
                     return true;
@@ -274,20 +281,12 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         }
 
-        // 1. SONAR (Tsunami): Merah, Ripple, 2 detik
         map.addImage('pulsing-dot-sonar', createPulsingDot('sonar', 150, 211, 47, 47, 2000), { pixelRatio: 2 });
-        
-        // 2. FAST (Severe): Merah, Dot Cepat, 1 detik
         map.addImage('pulsing-dot-fast', createPulsingDot('dot', 100, 229, 57, 53, 1000), { pixelRatio: 2 });
-        
-        // 3. SLOW (Moderate): Kuning/Oranye, Dot Lambat, 2.5 detik
         map.addImage('pulsing-dot-slow', createPulsingDot('dot', 100, 255, 193, 7, 2500), { pixelRatio: 2 });
-        
 
-        // --- INISIALISASI LEGENDA ---
         legendManager.init(map);
 
-        // Kontrol Kustom Gempa
         class GempaControl {
             onAdd(map) {
                 this._map = map;
@@ -298,7 +297,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 this._btn.title = 'Mode Gempa Bumi';
                 this._btn.className = 'maplibregl-ctrl-gempa';
                 this._btn.innerHTML = `<i class="wi wi-earthquake" style="font-size:18px; margin-top:4px;"></i>`;
-                
                 this._isActive = false;
                 
                 this._btn.onclick = () => {
@@ -309,25 +307,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         legendManager.toggle(true); 
                         sidebarManager.switchToMode('gempa');
                         searchBarManager.setDisabledState(true);
-                        
-                        // [FITUR BARU] Matikan Time Picker
                         timeManager.setDisabledState(true);
-                        
-                        // [FITUR BARU] Tampilkan Indikator Mode
                         const indicator = document.getElementById('mode-status-indicator');
                         if (indicator) indicator.style.display = 'flex';
-                        
                     } else {
                         this._btn.classList.remove('active-mode');
                         mapManager.toggleGempaLayer(false);
                         legendManager.toggle(false); 
                         sidebarManager.switchToMode('weather');
                         searchBarManager.setDisabledState(false);
-                        
-                        // [FITUR BARU] Nyalakan Kembali Time Picker
                         timeManager.setDisabledState(false);
-                        
-                        // [FITUR BARU] Sembunyikan Indikator
                         const indicator = document.getElementById('mode-status-indicator');
                         if (indicator) indicator.style.display = 'none';
                     }
@@ -344,34 +333,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
         map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
         map.addControl(new ResetPitchControl(), 'bottom-right');
-        // Tambahkan Tombol Gempa
         map.addControl(new GempaControl(), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl());
         
         map.on('data', (e) => {
             if (e.sourceId === 'data-cuaca-source' && e.isSourceLoaded) {
-                // Listener untuk source lama (GeoJSON) jika masih digunakan untuk search/highlight tertentu
-                // Tapi untuk render utama marker sudah via renderMarkers()
                 mapManager.fetchDataForVisibleMarkers(); 
             }
         });
 
-        // Trigger render manual pertama kali
+        mapManager.triggerFetchData(); // Pemicu awal data
         mapManager.renderMarkers();
-        mapManager.triggerFetchData();
 
+        // Event Listeners Map
         const allInteractiveLayers = [ 'cluster-background-layer', 'unclustered-point-hit-target', 'provinsi-point-hit-target' ];
         
         map.on('click', (e) => {
             let features = [];
             try {
                 features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
-            } catch (err) {
-                console.warn("Query feature failed:", err);
-                return;
-            }
+            } catch (err) { return; }
 
-            // Logika klik di kanvas kosong
             if (sidebarManager.isOpen() && !features.length) { 
                 const sidebarClicked = e.originalEvent.target.closest('#detail-sidebar');
                 const popupClicked = e.originalEvent.target.closest('.maplibregl-popup');
@@ -381,8 +363,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const calendarClicked = e.originalEvent.target.closest('#calendar-popup');
                 const searchClicked = e.originalEvent.target.closest('#search-wrapper'); 
                 const markerClicked = e.originalEvent.target.closest('.marker-container'); 
-
-                // Tambahkan pengecekan klik di marker gempa agar sidebar tidak tertutup instan
                 const gempaLayerClicked = map.queryRenderedFeatures(e.point, { layers: ['gempa-point-layer', 'gempa-pulse-layer'] }).length > 0;
 
                 if (!sidebarClicked && !popupClicked && !controlClicked && !toggleClicked && !pickerClicked && !calendarClicked && !searchClicked && !markerClicked && !gempaLayerClicked) {
@@ -390,11 +370,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            if (!features.length) { 
-                // [CATATAN] Jangan tutup popup gempa di sini, biarkan ditangani map_manager
-                // popupManager.close(); 
-                return;
-            }
+            if (!features.length) return;
 
             const feature = features[0];
             const layerId = feature.layer.id;
@@ -408,8 +384,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 mapManager.handleProvinceClick(props, coordinates); 
             }
             else if (layerId === 'unclustered-point-hit-target') {
-                // Fallback untuk klik pada layer hit target invisible
-                // (Walaupun biasanya klik ditangkap oleh HTML marker itu sendiri)
                 const dataUntukHandler = { 
                     id: feature.id, 
                     nama_simpel: props.nama_simpel, 
@@ -422,22 +396,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }); 
         
-        // Hover pointer & Info koordinat
         map.on('mousemove', (e) => { 
             try {
                 const features = map.queryRenderedFeatures(e.point, { layers: allInteractiveLayers });
                 map.getCanvas().style.cursor = features.length ? 'pointer' : '';
-            } catch(err) {
-            }
+            } catch(err) {}
         });
         
         const infoKoordinat = document.getElementById('koordinat-info'); 
         infoKoordinat.innerHTML = 'Geser kursor di atas peta'; 
         map.on('mousemove', (e) => { 
-                infoKoordinat.innerHTML = `Latitude: ${e.lngLat.lat.toFixed(5)} | Longitude: ${e.lngLat.lng.toFixed(5)}`;
+            infoKoordinat.innerHTML = `Latitude: ${e.lngLat.lat.toFixed(5)} | Longitude: ${e.lngLat.lng.toFixed(5)}`;
         });
         map.on('mouseout', () => { 
-                infoKoordinat.innerHTML = 'Geser kursor di atas peta';
+            infoKoordinat.innerHTML = 'Geser kursor di atas peta';
         });
 
     }); 

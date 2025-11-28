@@ -47,8 +47,8 @@ export const WeatherService = {
 
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
-        const port = '5000';
-        const baseUrl = `${protocol}//${hostname}:${port}`;
+        const port = window.location.port ? `:${window.location.port}` : '';
+        const baseUrl = `${protocol}//${hostname}${port}`;
 
         try {
             const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${idsToFetch.join(',')}`);
