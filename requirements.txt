@@ -8,5 +8,7 @@ requests==2.31.0
 redis==5.0.1
 pytz==2023.3.post1
 gunicorn==21.2.0
+
+# Delete this line after you successfully migrated database to Supabase
 geopandas
 GeoAlchemy2
