@@ -1,19 +1,20 @@
-/** 🖱️ MAP INTERACTION
+/** 🖱️ MAP INTERACTION (MULTI-SOURCE SUPPORT)
  * Menangani semua event listener peta (Mouse, Touch, Click, Hover).
- * Bertugas sebagai "Indera Perasa" peta, melaporkan kejadian ke MapManager.
+ * Update: Mendukung 3 sumber data terpisah (Provinsi, Kab/Kota, Kecamatan).
  */
 export const MapInteraction = {
     _map: null,
     _callbacks: {}, 
     
-    // State Internal untuk Hover Poligon
+    // State Internal untuk Hover
     _hoveredStateId: null,
-    _hoveredSourceLayer: null,
+    _hoveredSource: null,      // [BARU] Menyimpan ID Source (misal: 'source_provinsi')
+    _hoveredSourceLayer: null, // Menyimpan nama layer dalam vector tile
 
     /**
      * Inisialisasi listener interaksi.
      * @param {object} mapInstance - Objek MapLibre
-     * @param {object} callbacks - Daftar fungsi callback (onInteractStart, onInteractEnd, onGempaClick, shouldSkipHover)
+     * @param {object} callbacks - Daftar fungsi callback
      */
     init: function(mapInstance, callbacks) {
         this._map = mapInstance;
@@ -23,11 +24,11 @@ export const MapInteraction = {
         this._initHoverLogic();
         this._initClickListeners();
         
-        console.log("MapInteraction: Sensor interaksi aktif.");
+        console.log("MapInteraction: Sensor interaksi aktif (Multi-source support).");
     },
 
     /**
-     * Mendeteksi kapan user mulai/selesai menyentuh peta (untuk menunda fetch data)
+     * Mendeteksi kapan user mulai/selesai menyentuh peta
      */
     _initInteractionGuards: function() {
         const container = this._map.getContainer();
@@ -48,48 +49,65 @@ export const MapInteraction = {
     },
 
     /**
-     * Menangani logika Hover pada poligon wilayah (Provinsi/Kab/Kec)
+     * Menangani logika Hover pada poligon wilayah.
+     * [UPDATE] Sekarang menangani 3 source berbeda.
      */
     _initHoverLogic: function() {
+        // Daftar layer fill yang ada di map_style.js
         const fillLayers = ['batas-provinsi-fill', 'batas-kabupaten-fill', 'batas-kecamatan-fill'];
+
+        // Mapping dari Layer ID ke Source Config
+        const layerConfig = {
+            'batas-provinsi-fill': { source: 'source_provinsi', sourceLayer: 'batas_provinsi' },
+            'batas-kabupaten-fill': { source: 'source_kabupaten', sourceLayer: 'batas_kabupatenkota' },
+            'batas-kecamatan-fill': { source: 'source_kecamatan', sourceLayer: 'batas_kecamatandistrik' }
+        };
 
         this._map.on('mousemove', (e) => {
             if (this._callbacks.shouldSkipHover && this._callbacks.shouldSkipHover()) {
                 return;
             }
 
-            // [PERBAIKAN BUG CRITICAL]
-            // Cek apakah layer target sudah ada di style peta sebelum query.
-            // Jika tiles gagal dimuat (404) atau style belum siap, ini mencegah crash.
+            // Cek style readiness
             const style = this._map.getStyle();
             if (!style || !style.layers) return;
-            
-            // Kita cek layer pertama sebagai sampel
-            if (!this._map.getLayer(fillLayers[0])) return;
 
             try {
+                // Query ke semua layer fill sekaligus
                 let features = this._map.queryRenderedFeatures(e.point, { layers: fillLayers });
                 
                 if (features.length > 0) {
                     const feature = features[0];
-                    if (feature.id !== undefined) {
-                        if (this._hoveredStateId !== feature.id) {
+                    const config = layerConfig[feature.layer.id];
+
+                    if (feature.id !== undefined && config) {
+                        // Jika pindah fitur atau pindah layer
+                        if (this._hoveredStateId !== feature.id || this._hoveredSource !== config.source) {
                             this.clearHoverState(); 
                             
                             this._hoveredStateId = feature.id;
-                            this._hoveredSourceLayer = feature.sourceLayer;
+                            this._hoveredSource = config.source;
+                            this._hoveredSourceLayer = config.sourceLayer;
                             
-                            this._map.setFeatureState(
-                                { source: 'batas-wilayah-vector', sourceLayer: this._hoveredSourceLayer, id: this._hoveredStateId },
-                                { hover: true }
-                            );
+                            // Safety check: pastikan source ada sebelum setFeatureState
+                            if (this._map.getSource(this._hoveredSource)) {
+                                this._map.setFeatureState(
+                                    { 
+                                        source: this._hoveredSource, 
+                                        sourceLayer: this._hoveredSourceLayer, 
+                                        id: this._hoveredStateId 
+                                    },
+                                    { hover: true }
+                                );
+                            }
                         }
                     }
                 } else {
                     this.clearHoverState();
                 }
             } catch (err) {
-                // Silent catch untuk mencegah flooding console jika terjadi glitch render
+                // Silent catch untuk glitch render
+                console.warn("Hover logic warning:", err);
             }
         });
 
@@ -101,7 +119,7 @@ export const MapInteraction = {
     },
 
     /**
-     * Menangani klik khusus pada layer (selain Marker HTML)
+     * Menangani klik khusus pada layer gempa
      */
     _initClickListeners: function() {
         this._map.on('click', 'gempa-point-layer', (e) => {
@@ -126,26 +144,41 @@ export const MapInteraction = {
     },
 
     /**
-     * PUBLIC API: Menyalakan highlight poligon secara manual (misal saat hover Marker)
+     * PUBLIC API: Highlight poligon manual (misal saat hover Marker).
+     * [UPDATE] Memilih source yang tepat berdasarkan tipadm.
      */
     highlightPolygon: function(id, tipadm) {
         if (!this._map) return;
         
-        let sourceLayer = '';
-        const tip = parseInt(tipadm, 10);
-        if (tip === 1) sourceLayer = 'batas_provinsi';
-        else if (tip === 2) sourceLayer = 'batas_kabupatenkota';
-        else if (tip === 3) sourceLayer = 'batas_kecamatandistrik';
-        else return; 
+        let targetSource = '';
+        let targetLayer = '';
 
-        this.clearHoverState();
-        this._hoveredStateId = id;
-        this._hoveredSourceLayer = sourceLayer;
+        const tip = parseInt(tipadm, 10);
         
-        // Safety check sebelum set state
-        if (this._map.getSource('batas-wilayah-vector')) {
+        // PENTING: Mapping ini harus sesuai dengan map_style.js
+        if (tip === 1) {
+            targetSource = 'source_provinsi';
+            targetLayer = 'batas_provinsi';
+        } else if (tip === 2) {
+            targetSource = 'source_kabupaten';
+            targetLayer = 'batas_kabupatenkota';
+        } else if (tip === 3) {
+            targetSource = 'source_kecamatan';
+            targetLayer = 'batas_kecamatandistrik';
+        } else {
+            return; 
+        }
+
+        // Bersihkan state sebelumnya jika ada
+        this.clearHoverState();
+
+        this._hoveredStateId = id;
+        this._hoveredSource = targetSource;
+        this._hoveredSourceLayer = targetLayer;
+        
+        if (this._map.getSource(targetSource)) {
             this._map.setFeatureState(
-                { source: 'batas-wilayah-vector', sourceLayer: sourceLayer, id: id },
+                { source: targetSource, sourceLayer: targetLayer, id: id },
                 { hover: true }
             );
         }
@@ -155,16 +188,21 @@ export const MapInteraction = {
      * PUBLIC API: Membersihkan semua efek hover
      */
     clearHoverState: function() {
-        if (this._hoveredStateId !== null && this._hoveredSourceLayer !== null && this._map) {
-            // Safety check
-            if (this._map.getSource('batas-wilayah-vector')) {
+        if (this._hoveredStateId !== null && this._hoveredSource && this._map) {
+            // Safety check source existence
+            if (this._map.getSource(this._hoveredSource)) {
                 this._map.setFeatureState(
-                    { source: 'batas-wilayah-vector', sourceLayer: this._hoveredSourceLayer, id: this._hoveredStateId },
+                    { 
+                        source: this._hoveredSource, 
+                        sourceLayer: this._hoveredSourceLayer, 
+                        id: this._hoveredStateId 
+                    },
                     { hover: false }
                 );
             }
         }
         this._hoveredStateId = null;
+        this._hoveredSource = null;
         this._hoveredSourceLayer = null;
     }
 };
