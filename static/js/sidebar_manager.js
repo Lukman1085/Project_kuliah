@@ -1,20 +1,29 @@
 import { utils } from "./utilities.js";
 import { popupManager } from "./popup_manager.js";
 import { timeManager } from "./time_manager.js";
-import { mapManager } from "./map_manager.js";
 import { cacheManager } from "./cache_manager.js"; 
+// [DI] HAPUS: import { mapManager } from "./map_manager.js";
 
-/** ➡️ SIDEBAR MANAGER: Mengelola semua logika untuk search bar */
+/** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
 export const sidebarManager = { 
     _isSidebarOpen: false,
     _subRegionData: null, 
     _observer: null, 
+
+    // [DI] Variabel penampung untuk Map Manager
+    _mapManager: null,
 
     // [STATE MANAGEMENT]
     _activeContentMode: 'weather', // 'weather' | 'gempa'
     _lastGempaData: null,          // Cache data gempa terakhir
 
     elements: {},
+
+    // [DI] Setter untuk menyuntikkan Map Manager dari Main.js
+    setMapManager: function(managerInstance) {
+        this._mapManager = managerInstance;
+        console.log("SidebarManager: MapManager berhasil disuntikkan.");
+    },
 
     initDOM: function(domElements) {
         this.elements = domElements;
@@ -75,10 +84,10 @@ export const sidebarManager = {
         
         this.renderSidebarContent(); 
         
-        // Jika mode cuaca, pastikan highlight marker aktif kembali
-        if (this._activeContentMode === 'weather') {
-            const activeId = mapManager.getActiveLocationId();
-            if(activeId) mapManager.setActiveMarkerHighlight(activeId); 
+        // [DI] Gunakan this._mapManager
+        if (this._activeContentMode === 'weather' && this._mapManager) {
+            const activeId = this._mapManager.getActiveLocationId();
+            if(activeId) this._mapManager.setActiveMarkerHighlight(activeId); 
         }
     },
 
@@ -91,10 +100,12 @@ export const sidebarManager = {
         toggleBtnEl.innerHTML = '&gt;';
         toggleBtnEl.setAttribute('aria-label', 'Buka detail lokasi');
         
-        const activeId = mapManager.getActiveLocationId();
-        if (!activeId) { return } 
-        
-        mapManager.removeActiveMarkerHighlight(activeId, false); 
+        // [DI] Gunakan this._mapManager
+        if (this._mapManager) {
+            const activeId = this._mapManager.getActiveLocationId();
+            if (!activeId) { return } 
+            this._mapManager.removeActiveMarkerHighlight(activeId, false); 
+        }
     },
 
     toggleSidebar: function() { 
@@ -146,7 +157,13 @@ export const sidebarManager = {
     _renderSidebarLoadingState: function() {
         const { sidebarLoadingEl, sidebarLocationNameEl } = this.elements;
         if (sidebarLoadingEl) sidebarLoadingEl.style.display = 'block';
-        if (sidebarLocationNameEl) sidebarLocationNameEl.textContent = `Memuat ${mapManager.getActiveLocationSimpleName() || 'lokasi'}...`;
+        
+        // [DI] Gunakan this._mapManager
+        let locationName = 'lokasi';
+        if (this._mapManager) {
+            locationName = this._mapManager.getActiveLocationSimpleName() || 'lokasi';
+        }
+        if (sidebarLocationNameEl) sidebarLocationNameEl.textContent = `Memuat ${locationName}...`;
     },
 
     _renderSidebarPlaceholderState: function(customMessage = null) {
@@ -164,8 +181,8 @@ export const sidebarManager = {
             sidebarPlaceholderEl.textContent = message || `Data tidak tersedia.`;
             sidebarPlaceholderEl.style.display = 'block';
         }
-        if (sidebarLocationNameEl) {
-            sidebarLocationNameEl.textContent = mapManager.getActiveLocationSimpleName() || 'Info';
+        if (sidebarLocationNameEl && this._mapManager) {
+            sidebarLocationNameEl.textContent = this._mapManager.getActiveLocationSimpleName() || 'Info';
         }
     },
 
@@ -185,7 +202,10 @@ export const sidebarManager = {
         btn.title = "Pindahkan peta ke lokasi ini";
         btn.onclick = (e) => {
             e.stopPropagation();
-            mapManager.flyToActiveLocation();
+            // [DI] Gunakan this._mapManager dengan safety check
+            if (this._mapManager) {
+                this._mapManager.flyToActiveLocation();
+            }
         };
         return btn;
     },
@@ -208,7 +228,19 @@ export const sidebarManager = {
         
         const nameSpan = document.createElement('span');
         nameSpan.className = 'sidebar-title-text'; // Gunakan Class CSS
-        nameSpan.textContent = mapManager.getActiveLocationSimpleName();
+        
+        // [DI] Gunakan this._mapManager
+        let simpleName = 'Lokasi';
+        let activeLabel = '';
+        let activeData = null;
+
+        if (this._mapManager) {
+            simpleName = this._mapManager.getActiveLocationSimpleName();
+            activeLabel = this._mapManager.getActiveLocationLabel();
+            activeData = this._mapManager.getActiveLocationData();
+        }
+
+        nameSpan.textContent = simpleName;
         
         const flyToBtn = this._createFlyToButton();
         
@@ -231,7 +263,7 @@ export const sidebarManager = {
 
         const cardHTML = `
             <div class="location-label-subtitle">
-                ${mapManager.getActiveLocationLabel()}
+                ${activeLabel}
             </div>
             
             <div class="weather-card-main" style="background: linear-gradient(135deg, #455A64 0%, #263238 100%); margin-bottom: 24px;">
@@ -256,7 +288,6 @@ export const sidebarManager = {
         container.innerHTML = cardHTML;
         container.style.display = 'block';
 
-        const activeData = mapManager.getActiveLocationData();
         this._subRegionData = null;
         this._fetchAndRenderSubRegions(activeData);
     },
@@ -290,7 +321,17 @@ export const sidebarManager = {
         // Pastikan mode sinkron
         this._activeContentMode = 'weather';
 
-        const activeData = mapManager.getActiveLocationData();
+        // [DI] Gunakan this._mapManager
+        let activeData = null;
+        let simpleName = 'Lokasi';
+        let activeLabel = '';
+
+        if (this._mapManager) {
+            activeData = this._mapManager.getActiveLocationData();
+            simpleName = this._mapManager.getActiveLocationSimpleName();
+            activeLabel = this._mapManager.getActiveLocationLabel();
+        }
+
         if (!activeData) {
             this._renderSidebarErrorState("Data lokasi aktif tidak ditemukan.");
             return;
@@ -306,7 +347,7 @@ export const sidebarManager = {
         
         const nameSpan = document.createElement('span');
         nameSpan.className = 'sidebar-title-text'; // Class CSS
-        nameSpan.textContent = mapManager.getActiveLocationSimpleName();
+        nameSpan.textContent = simpleName;
         
         const flyToBtn = this._createFlyToButton();
         
@@ -316,7 +357,7 @@ export const sidebarManager = {
         sidebarLocationNameEl.appendChild(headerWrapper);
 
         const labelEl = sidebarEl.querySelector('#sidebar-location-label-weather');
-        if (labelEl) labelEl.textContent = mapManager.getActiveLocationLabel();
+        if (labelEl) labelEl.textContent = activeLabel;
 
         const isProvinsi = (activeData.tipadm === 1);
         const currentConditionsEl = sidebarEl.querySelector('#sidebar-current-conditions');
@@ -396,8 +437,8 @@ export const sidebarManager = {
         try {
             const protocol = window.location.protocol;
             const hostname = window.location.hostname;
-            const port = '5000';
-            const baseUrl = `${protocol}//${hostname}:${port}`;
+            const port = window.location.port ? `:${window.location.port}` : '';
+            const baseUrl = `${protocol}//${hostname}${port}`;
             
             const url = `${baseUrl}/api/sub-wilayah-cuaca?id=${encodeURIComponent(activeData.id)}&tipadm=${tipadm}&view=simple`;
 
@@ -493,8 +534,8 @@ export const sidebarManager = {
         try {
             const protocol = window.location.protocol;
             const hostname = window.location.hostname;
-            const port = '5000';
-            const baseUrl = `${protocol}//${hostname}:${port}`;
+            const port = window.location.port ? `:${window.location.port}` : '';
+            const baseUrl = `${protocol}//${hostname}${port}`;
             
             const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${id}`);
             if (!resp.ok) throw new Error("Err");
@@ -548,9 +589,13 @@ export const sidebarManager = {
         // Menambahkan interaksi klik untuk navigasi ke sub-wilayah
         element.style.cursor = 'pointer'; 
         element.onclick = (e) => {
-            e.stopPropagation(); // Mencegah bubbling yang tidak diinginkan
-            // Memanggil fungsi baru di mapManager untuk menangani logika navigasi
-            mapManager.handleSidebarNavigation(data);
+            e.stopPropagation(); 
+            // [DI] Panggil fungsi di mapManager (lewat injeksi)
+            if (this._mapManager) {
+                this._mapManager.handleSidebarNavigation(data);
+            } else {
+                console.error("MapManager belum disuntikkan, navigasi gagal.");
+            }
         };
         // --- MODIFIKASI SELESAI ---
     },
@@ -619,18 +664,21 @@ export const sidebarManager = {
         if (lblWeather) lblWeather.textContent = '';
         if (lblProvince) lblProvince.textContent = '';
         
-        if (mapManager.getIsClickLoading()) { 
+        // [DI] Menggunakan this._mapManager
+        if (!this._mapManager) return; // Safety check
+
+        if (this._mapManager.getIsClickLoading()) { 
             this._renderSidebarLoadingState();
-        } else if (!mapManager.getActiveLocationId()) { 
+        } else if (!this._mapManager.getActiveLocationId()) { 
             this._renderSidebarPlaceholderState();
-        } else if (mapManager.getActiveLocationData()?.type === 'provinsi') { 
+        } else if (this._mapManager.getActiveLocationData()?.type === 'provinsi') { 
             this._renderSidebarProvinceState();
-        } else if (mapManager.getActiveLocationData()?.hourly && timeManager.getGlobalTimeLookup().length > 0) { 
+        } else if (this._mapManager.getActiveLocationData()?.hourly && timeManager.getGlobalTimeLookup().length > 0) { 
             this._renderSidebarWeatherState();
-        } else if (mapManager.getActiveLocationId()) { 
+        } else if (this._mapManager.getActiveLocationId()) { 
             const msg = (timeManager.getGlobalTimeLookup().length > 0) 
-                ? `Data cuaca untuk ${mapManager.getActiveLocationLabel()} tidak lengkap atau rusak.`
-                : `Data cuaca untuk ${mapManager.getActiveLocationLabel()} belum dimuat.`; 
+                ? `Data cuaca untuk ${this._mapManager.getActiveLocationLabel()} tidak lengkap atau rusak.`
+                : `Data cuaca untuk ${this._mapManager.getActiveLocationLabel()} belum dimuat.`; 
             this._renderSidebarErrorState(msg);
         } else { 
             this._renderSidebarErrorState('Terjadi kesalahan.');
