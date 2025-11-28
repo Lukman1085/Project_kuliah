@@ -34,6 +34,12 @@ IS_PRODUCTION = ENV_MODE == "production"
 USE_REAL_API_ENV = os.getenv("USE_REAL_API", "false").lower()
 USE_REAL_API = USE_REAL_API_ENV == "true"
 
+# [BARU] Konfigurasi Base URL Peta
+# Di Production: Gunakan URL Supabase Storage
+# Di Development: Gunakan path lokal Flask '/static/maps'
+SUPABASE_MAPS_URL = os.getenv("SUPABASE_MAPS_URL") # Contoh: https://xyz.supabase.co/.../maps
+LOCAL_MAPS_URL = "/static/maps"
+
 print(f"🚀 RUNNING IN {ENV_MODE.upper()} MODE")
 print(f"📡 API SOURCE: {'REAL OPEN-METEO/BMKG' if USE_REAL_API else 'DUMMY DATA'}")
 
@@ -367,7 +373,18 @@ def process_wilayah_data(wilayah_list):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # [LOGIKA UTAMA ENVIRONMENT SWITCHING]
+    # Jika Production: Pakai URL Supabase (harus diset di env)
+    # Jika Development: Pakai URL Lokal
+    if IS_PRODUCTION and SUPABASE_MAPS_URL:
+        map_base_url = SUPABASE_MAPS_URL
+        print(f"🌍 Using Map Source: SUPABASE ({map_base_url})")
+    else:
+        map_base_url = LOCAL_MAPS_URL
+        print(f"💻 Using Map Source: LOCAL ({map_base_url})")
+
+    # Injeksi variable ke template HTML
+    return render_template('index.html', map_base_url=map_base_url)
 
 @app.route('/api/wmo-codes')
 def get_wmo_codes():
