@@ -147,6 +147,17 @@ export const mapManager = {
 
     _finalizeActiveLocationLoad: function(data) {
         this._isClickLoading = false; 
+        // this._activeLocationData = data;
+
+        if (data.nama_label) {
+            this._activeLocationLabel = data.nama_label;
+            // Pastikan data object juga sinkron
+            data.nama_label = this._activeLocationLabel;
+        } else if (this._activeLocationLabel) {
+            // Fallback: Jika data API tidak punya label tapi state punya, pasang ke data
+            data.nama_label = this._activeLocationLabel;
+        }
+
         this._activeLocationData = data;
         
         if (this._sidebarManager && this._sidebarManager.isOpen()) { 
@@ -204,6 +215,7 @@ export const mapManager = {
 
         const cachedData = cacheManager.get(id);
         if (cachedData) {
+            if (cachedData.nama_label) this._activeLocationLabel = cachedData.nama_label;
             this._activeLocationData = cachedData;
             this._activeLocationData.tipadm = props.tipadm;
             this._isClickLoading = false;
