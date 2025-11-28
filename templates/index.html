@@ -11,6 +11,7 @@
     <link href="https://unpkg.com/maplibre-gl@^5.13.0/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@^5.13.0/dist/maplibre-gl.js"></script>
     
+    <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
     
     <!-- Tautan ke file CSS eksternal Anda tetap utuh -->
     <!-- <link rel="stylesheet" href="static/css/styles.css"> -->
@@ -20,6 +21,13 @@
     <link rel="stylesheet" href="static/css/searchbar.css">
     <link rel="stylesheet" href="static/css/maplibregl-ctrl.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css">
+
+    <script>
+        window.APP_CONFIG = {
+            MAP_BASE_URL: "{{ map_base_url }}"
+        };
+        console.log("🛠️ App Config Loaded:", window.APP_CONFIG);
+    </script>
 </head>
 <body>
     <!-- 
@@ -102,7 +110,7 @@
 
                     <!-- [IMPLEMENTASI BARU] Footer Sumber Data (Rencana A) -->
                     <div style="margin-top: 20px; text-align: center; font-size: 0.8rem; opacity: 0.8; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
-                        Data bersumber dari <strong>OPENMETEO</strong>.<br>
+                        Data bersumber dari <strong>Open-Meteo</strong>.<br>
                         Selalu pantau informasi resmi dari otoritas setempat.
                     </div>
 
