@@ -148,6 +148,10 @@ export const mapManager = {
     _finalizeActiveLocationLoad: function(data) {
         this._isClickLoading = false; 
         this._activeLocationData = data;
+
+        if (data.nama_label) {
+            this._activeLocationLabel = data.nama_label;
+        }
         
         if (this._sidebarManager && this._sidebarManager.isOpen()) { 
             this._sidebarManager.renderSidebarContent(); 
@@ -204,6 +208,7 @@ export const mapManager = {
 
         const cachedData = cacheManager.get(id);
         if (cachedData) {
+            if (cachedData.nama_label) this._activeLocationLabel = cachedData.nama_label;
             this._activeLocationData = cachedData;
             this._activeLocationData.tipadm = props.tipadm;
             this._isClickLoading = false;
