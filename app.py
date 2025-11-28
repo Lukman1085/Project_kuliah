@@ -245,46 +245,165 @@ def get_impact_level(mmi, is_tsunami):
         return {"status": "severe", "label": "Guncangan Kuat", "color": "#E53935", "pulse": "fast", "description": "Potensi kerusakan bangunan."}
 
 def generate_dummy_bmkg_data():
+    """
+    Menghasilkan data dummy BMKG (15 item) dengan variasi kategori dampak.
+    Struktur sama persis dengan respon JSON asli BMKG.
+    """
+    print("MODE DUMMY: Menghasilkan 15 data gempa BMKG palsu.")
     gempa_list = []
     now = datetime.now()
-    # Sample Tsunami
+
+    # 1. TSUNAMI CASE (Index 0)
     gempa_list.append({
         "Tanggal": now.strftime("%d %b %Y"),
         "Jam": (now - timedelta(minutes=5)).strftime("%H:%M:%S WIB"),
         "DateTime": (now - timedelta(minutes=5)).isoformat(),
-        "Coordinates": "-3.50,102.00", "Lintang": "3.50 LS", "Bujur": "102.00 BT",
-        "Magnitude": "8.5", "Kedalaman": "10 km",
-        "Wilayah": "250 km BaratDaya BENGKULU", "Potensi": "BERPOTENSI TSUNAMI UNTUK DITERUSKAN PADA MASYARAKAT"
+        "Coordinates": "-3.50,102.00",
+        "Lintang": "3.50 LS",
+        "Bujur": "102.00 BT",
+        "Magnitude": "8.5",
+        "Kedalaman": "10 km",
+        "Wilayah": "250 km BaratDaya BENGKULU",
+        "Potensi": "BERPOTENSI TSUNAMI UNTUK DITERUSKAN PADA MASYARAKAT"
     })
-    # Sample Kuat
-    for i in range(2):
+
+    # 2. SEVERE / GUNCANGAN KUAT (Index 1-3)
+    for i in range(3):
         t = now - timedelta(hours=1, minutes=i*10)
         gempa_list.append({
             "Tanggal": t.strftime("%d %b %Y"),
             "Jam": t.strftime("%H:%M:%S WIB"),
             "DateTime": t.isoformat(),
-            "Coordinates": f"-7.1,107.2", "Lintang": "7.xx LS", "Bujur": "107.xx BT",
-            "Magnitude": "6.5", "Kedalaman": "15 km",
-            "Wilayah": "Tasikmalaya", "Potensi": "Tidak berpotensi tsunami"
+            "Coordinates": f"-7.{random.randint(10,99)},107.{random.randint(10,99)}",
+            "Lintang": "7.xx LS",
+            "Bujur": "107.xx BT",
+            "Magnitude": str(round(random.uniform(6.0, 7.5), 1)),
+            "Kedalaman": "15 km",
+            "Wilayah": f"{random.randint(10,50)} km BaratDaya TASIKMALAYA-JABAR",
+            "Potensi": "Tidak berpotensi tsunami"
         })
+
+    # 3. MODERATE / TERASA (Index 4-8)
+    for i in range(5):
+        t = now - timedelta(hours=5, minutes=i*20)
+        gempa_list.append({
+            "Tanggal": t.strftime("%d %b %Y"),
+            "Jam": t.strftime("%H:%M:%S WIB"),
+            "DateTime": t.isoformat(),
+            "Coordinates": f"-8.{random.randint(10,99)},115.{random.randint(10,99)}", # Bali area
+            "Lintang": "8.xx LS",
+            "Bujur": "115.xx BT",
+            "Magnitude": str(round(random.uniform(4.5, 5.5), 1)),
+            "Kedalaman": "40 km",
+            "Wilayah": f"{random.randint(10,50)} km Selatan DENPASAR-BALI",
+            "Potensi": "Tidak berpotensi tsunami"
+        })
+
+    # 4. WEAK / LEMAH (Index 9-14)
+    for i in range(6):
+        t = now - timedelta(days=1, minutes=i*30)
+        # Gempa dalam atau kecil
+        is_deep = random.choice([True, False])
+        depth = random.randint(150, 400) if is_deep else random.randint(10, 30)
+        mag = round(random.uniform(5.0, 6.0), 1) if is_deep else round(random.uniform(3.0, 4.0), 1)
+        
+        gempa_list.append({
+            "Tanggal": t.strftime("%d %b %Y"),
+            "Jam": t.strftime("%H:%M:%S WIB"),
+            "DateTime": t.isoformat(),
+            "Coordinates": f"-2.{random.randint(10,99)},120.{random.randint(10,99)}", # Sulawesi
+            "Lintang": "2.xx LS",
+            "Bujur": "120.xx BT",
+            "Magnitude": str(mag),
+            "Kedalaman": f"{depth} km",
+            "Wilayah": f"{random.randint(10,50)} km TimurLaut LUWU-SULSEL",
+            "Potensi": "Tidak berpotensi tsunami"
+        })
+
     return {"Infogempa": {"gempa": gempa_list}}
 
 def generate_dummy_usgs_data():
+    """
+    Menghasilkan GeoJSON dummy USGS (50 item) dengan properti lengkap.
+    """
+    print("MODE DUMMY: Menghasilkan 50 data gempa USGS palsu.")
     features = []
     now_ms = int(time.time() * 1000)
-    for i in range(10):
-        mag = round(random.uniform(4.5, 6.5), 1)
+
+    # Helper untuk koordinat acak sekitar Indonesia
+    def random_coords():
+        return [
+            round(random.uniform(95.0, 141.0), 2), # Lon
+            round(random.uniform(-11.0, 6.0), 2),  # Lat
+            round(random.uniform(10.0, 600.0), 1)  # Depth
+        ]
+
+    # 1. TSUNAMI CASE (Manual Injection)
+    features.append({
+        "type": "Feature",
+        "properties": {
+            "mag": 8.2,
+            "place": "Dummy Tsunami Location, Pacific",
+            "time": now_ms - 300000, # 5 mins ago
+            "updated": now_ms,
+            "tz": None,
+            "url": "https://dummy.usgs.gov",
+            "detail": "dummy",
+            "felt": 1000,
+            "cdi": 9.0,
+            "mmi": 9.0,
+            "alert": "red",
+            "status": "reviewed",
+            "tsunami": 1,
+            "sig": 1000,
+            "net": "us",
+            "code": "dummy1",
+            "ids": ",dummy1,",
+            "sources": ",us,",
+            "types": ",geoserve,origin,phase-data,",
+            "nst": None,
+            "dmin": None,
+            "rms": None,
+            "gap": None,
+            "magType": "mww",
+            "type": "earthquake",
+            "title": "M 8.2 - Dummy Tsunami"
+        },
+        "geometry": {
+            "type": "Point",
+            "coordinates": [130.0, -5.0, 15.0] # Banda Sea
+        },
+        "id": "dummy_tsunami_1"
+    })
+
+    # 2. Random Filling (49 items)
+    for i in range(49):
+        coords = random_coords()
+        # Distribusi Magnitudo yang realistis (sedikit yang besar, banyak yang kecil)
+        rand_val = random.random()
+        if rand_val < 0.7: # 70% Kecil/Sedang (4.5 - 5.5)
+            mag = round(random.uniform(4.5, 5.5), 1)
+        elif rand_val < 0.9: # 20% Signifikan (5.5 - 6.5)
+            mag = round(random.uniform(5.5, 6.5), 1)
+        else: # 10% Besar (6.5+)
+            mag = round(random.uniform(6.5, 7.5), 1)
+
         features.append({
             "type": "Feature",
             "properties": {
                 "mag": mag,
-                "place": f"Dummy Loc #{i}",
-                "time": now_ms - random.randint(0, 86400000),
-                "tsunami": 0, "title": f"M {mag} - Dummy"
+                "place": f"Dummy Location #{i+2}, Indonesia Region",
+                "time": now_ms - random.randint(0, 86400000), # Last 24h
+                "tsunami": 0,
+                "title": f"M {mag} - Dummy Loc #{i+2}"
             },
-            "geometry": {"type": "Point", "coordinates": [120.0, -5.0, 30.0]},
-            "id": f"dummy_usgs_{i}"
+            "geometry": {
+                "type": "Point",
+                "coordinates": coords
+            },
+            "id": f"dummy_usgs_{i+2}"
         })
+
     return {"type": "FeatureCollection", "features": features}
 
 # ================== LOGIKA PEMROSESAN API ==================
@@ -555,34 +674,53 @@ def get_data_by_ids():
 # ================== GEMPA ROUTES (DENGAN REDIS) ==================
 
 def parse_bmkg_to_geojson(bmkg_data):
-    # Logika parsing tetap sama, disalin untuk kelengkapan
     features = []
     gempa_list = bmkg_data.get('Infogempa', {}).get('gempa', [])
     if not isinstance(gempa_list, list): gempa_list = [gempa_list]
 
     for g in gempa_list:
         try:
+            # BMKG Coordinates field: "-3.56,101.23" (Lat, Lon) string
             lat_raw, lon_raw = g['Coordinates'].split(',')
             lat, lon = float(lat_raw), float(lon_raw)
             mag = float(g['Magnitude'])
-            depth_val = float(re.split(r'[^\d\.]', g['Kedalaman'])[0])
-            is_tsunami = "berpotensi tsunami" in g.get('Potensi', '').lower() and "tidak" not in g.get('Potensi', '').lower()
             
+            # Parsing Kedalaman "119 km" -> 119.0
+            depth_str = g['Kedalaman']
+            depth_val = float(re.split(r'[^\d\.]', depth_str)[0])
+            
+            # Deteksi Tsunami dari String
+            potensi_text = g.get('Potensi', '').lower()
+            is_tsunami = "berpotensi tsunami" in potensi_text and "tidak" not in potensi_text
+            
+            # [LOGIKA PINTAR] Hitung MMI & Status
             estimated_mmi = calculate_esteva_intensity(mag, depth_val)
             impact = get_impact_level(estimated_mmi, is_tsunami)
             
-            features.append({
+            feature = {
                 "type": "Feature",
                 "properties": {
-                    "mag": mag, "place": g['Wilayah'], "time": g.get('DateTime'), 
-                    "depth": g['Kedalaman'], "depth_km": depth_val, "tsunami": is_tsunami, "source": "bmkg",
-                    "mmi": round(estimated_mmi, 1), "status_label": impact['label'], 
-                    "status_color": impact['color'], "pulse_mode": impact['pulse'], "status_desc": impact['description']
+                    "mag": mag,
+                    "place": g['Wilayah'],
+                    "time": g.get('DateTime'), 
+                    "depth": depth_str,
+                    "depth_km": depth_val,
+                    "tsunami": is_tsunami,
+                    "source": "bmkg",
+                    # [PROPERTI BARU UNTUK UI]
+                    "mmi": round(estimated_mmi, 1),
+                    "status_label": impact['label'],
+                    "status_color": impact['color'],
+                    "pulse_mode": impact['pulse'],
+                    "status_desc": impact['description']
                 },
                 "geometry": {"type": "Point", "coordinates": [lon, lat]},
                 "id": f"bmkg-{g['Tanggal']}-{g['Jam']}" 
-            })
-        except: continue
+            }
+            features.append(feature)
+        except Exception as e:
+            print(f"Skip BMKG Item: {e}")
+            continue
     return {"type": "FeatureCollection", "features": features}
 
 @app.route('/api/gempa/bmkg')
@@ -613,7 +751,14 @@ def get_gempa_usgs():
     if not USE_REAL_API:
         dummy = generate_dummy_usgs_data() # Sudah format geojson
         # Post-process dummy untuk tambah atribut MMI dll (sama seperti real)
-        # ... (logic post-process USGS dummy ada di fungsi generate, sudah lengkap)
+        for feature in dummy.get('features', []):
+            props = feature['properties']
+            depth = feature['geometry']['coordinates'][2]
+            props['depth'] = f"{depth} km"
+            is_tsunami = bool(props.get('tsunami', 0))
+            mmi = calculate_esteva_intensity(props['mag'], depth)
+            impact = get_impact_level(mmi, is_tsunami)
+            props.update({"mmi": round(mmi,1), "status_label": impact['label'], "status_color": impact['color'], "pulse_mode": impact['pulse'], "status_desc": impact['description']})
         set_cache(cache_key, dummy, CACHE_TTL_GEMPA_USGS)
         return jsonify(dummy)
     
