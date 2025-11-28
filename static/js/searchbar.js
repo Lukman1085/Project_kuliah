@@ -191,8 +191,8 @@ export const searchBarManager = {
     fetchLokasi: async function(query) {
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
-        const port = '5000';
-        const baseUrl = `${protocol}//${hostname}:${port}`;
+        const port = window.location.port ? `:${window.location.port}` : '';
+        const baseUrl = `${protocol}//${hostname}${port}`;
 
         const { suggestionsDropdown } = this.elements;
 

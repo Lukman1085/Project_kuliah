@@ -437,8 +437,8 @@ export const sidebarManager = {
         try {
             const protocol = window.location.protocol;
             const hostname = window.location.hostname;
-            const port = '5000';
-            const baseUrl = `${protocol}//${hostname}:${port}`;
+            const port = window.location.port ? `:${window.location.port}` : '';
+            const baseUrl = `${protocol}//${hostname}${port}`;
             
             const url = `${baseUrl}/api/sub-wilayah-cuaca?id=${encodeURIComponent(activeData.id)}&tipadm=${tipadm}&view=simple`;
 
@@ -534,8 +534,8 @@ export const sidebarManager = {
         try {
             const protocol = window.location.protocol;
             const hostname = window.location.hostname;
-            const port = '5000';
-            const baseUrl = `${protocol}//${hostname}:${port}`;
+            const port = window.location.port ? `:${window.location.port}` : '';
+            const baseUrl = `${protocol}//${hostname}${port}`;
             
             const resp = await fetch(`${baseUrl}/api/data-by-ids?ids=${id}`);
             if (!resp.ok) throw new Error("Err");

@@ -14,10 +14,10 @@ export const GempaManager = {
         // (Logic TTL bisa ditambahkan di sini jika perlu lebih kompleks)
         if (this._data) return this._data;
 
-        const protocol = window.location.protocol; 
-        const hostname = window.location.hostname; 
-        const port = '5000'; 
-        const baseUrl = `${protocol}//${hostname}:${port}`;
+        const protocol = window.location.protocol;
+        const hostname = window.location.hostname;
+        const port = window.location.port ? `:${window.location.port}` : '';
+        const baseUrl = `${protocol}//${hostname}${port}`;
         
         try {
             // Fetch Parallel
