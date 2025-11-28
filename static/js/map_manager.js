@@ -65,8 +65,15 @@ export const mapManager = {
             this.triggerFetchData(); 
         });
         
+        // [UPDATE] Listener Sourcedata untuk Multi-Source
         mapInstance.on('sourcedata', (e) => {
-            if (e.sourceId === MAP_SOURCES.WILAYAH_VECTOR && e.isSourceLoaded) {
+            const isWilayahSource = [
+                MAP_SOURCES.SOURCE_PROVINSI, 
+                MAP_SOURCES.SOURCE_KABUPATEN, 
+                MAP_SOURCES.SOURCE_KECAMATAN
+            ].includes(e.sourceId);
+
+            if (isWilayahSource && e.isSourceLoaded) {
                 this.renderMarkers();
             }
         });

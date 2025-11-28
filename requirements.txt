@@ -10,5 +10,6 @@ pytz==2023.3.post1
 gunicorn==21.2.0
 
 # Delete or comment this line after you successfully migrated database to Supabase
+# You only need this when migrating data
 # geopandas
 # GeoAlchemy2

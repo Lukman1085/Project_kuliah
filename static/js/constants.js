@@ -33,7 +33,10 @@ export const MAP_LAYERS = {
 
 export const MAP_SOURCES = {
     GEMPA: 'gempa-source',
-    WILAYAH_VECTOR: 'batas-wilayah-vector'
+    // Nama source ini harus SAMA PERSIS dengan yang ada di map_style.js
+    SOURCE_PROVINSI: 'source_provinsi',
+    SOURCE_KABUPATEN: 'source_kabupaten',
+    SOURCE_KECAMATAN: 'source_kecamatan'
 };
 
 export const MAP_KEYS = {
