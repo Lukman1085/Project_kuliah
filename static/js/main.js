@@ -203,11 +203,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     map.on('load', () => {
         // [PENTING] Memastikan Iconset tersedia
-        utils.preloadMarkerAssets(map).then(() => {
-            console.log("Marker Assets Loaded");
-            mapManager.triggerFetchData(); // Pemicu awal data
-            mapManager.renderMarkers();
-        });
+        // utils.preloadMarkerAssets(map).then(() => {
+        //     console.log("Marker Assets Loaded");
+        //     mapManager.triggerFetchData(); // Pemicu awal data
+        //     mapManager.renderMarkers();
+        // });
 
         // Add Basemap Label Overlay
         map.addSource('cartodb-labels', { type: 'raster', tiles: ['https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png'], tileSize: 256 });
@@ -341,6 +341,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 mapManager.fetchDataForVisibleMarkers(); 
             }
         });
+
+        mapManager.triggerFetchData(); // Pemicu awal data
+        mapManager.renderMarkers();
 
         // Event Listeners Map
         const allInteractiveLayers = [ 'cluster-background-layer', 'unclustered-point-hit-target', 'provinsi-point-hit-target' ];

@@ -44,8 +44,11 @@ print(f"🚀 RUNNING IN {ENV_MODE.upper()} MODE")
 print(f"📡 API SOURCE: {'REAL OPEN-METEO/BMKG' if USE_REAL_API else 'DUMMY DATA'}")
 
 # ================== DATABASE CONFIGURATION (SUPABASE) ==================
+if IS_PRODUCTION:
+    DATABASE_URL = os.getenv("DATABASE_URL")
+else:
+    DATABASE_URL = os.getenv("DEV_DATABASE_URL")
 
-DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     # Fallback message agar tidak crash saat build, tapi akan error saat request DB
     print("WARNING: DATABASE_URL tidak ditemukan. Pastikan env var diset.")
