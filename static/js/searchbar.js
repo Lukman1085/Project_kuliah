@@ -82,26 +82,28 @@ export const searchBarManager = {
 
         console.log(`Search click: ${lokasi.nama_label} (TIPADM: ${lokasi.tipadm})`);
 
-        // [REFACTOR] Gunakan logic sentral di mapManager (DRY)
-        mapManager.flyToLocation(lokasi.lat, lokasi.lon, lokasi.tipadm);
-
-        const props = {
-            id: lokasi.id,
-            nama_simpel: lokasi.nama_simpel,
-            nama_label: lokasi.nama_label,
-            lat: lokasi.lat,
-            lon: lokasi.lon,
-            tipadm: lokasi.tipadm 
-        };
-        
-        setTimeout(() => {
-                mapManager.handleUnclusteredClick(props);
-                
-                if (!sidebarManager.isOpen() && sidebarManager) {
-                    console.log("Search click: Meminta sidebar dibuka.");
-                    document.dispatchEvent(new CustomEvent('requestSidebarOpen'));
-                }
-        }, 700); 
+        // [REFACTOR - RENCANA 2] Gunakan Callback untuk Menjamin Marker Muncul
+        // Menghapus penggunaan setTimeout yang tidak reliabel
+        mapManager.flyToLocation(lokasi.lat, lokasi.lon, lokasi.tipadm, () => {
+            console.log("Navigasi selesai & Tile dimuat. Memilih marker...");
+            
+            const props = {
+                id: lokasi.id,
+                nama_simpel: lokasi.nama_simpel,
+                nama_label: lokasi.nama_label,
+                lat: lokasi.lat,
+                lon: lokasi.lon,
+                tipadm: lokasi.tipadm 
+            };
+            
+            // Sekarang aman untuk memanggil ini karena mapManager.renderMarkers() sudah dijalankan via 'idle'
+            mapManager.handleUnclusteredClick(props);
+            
+            if (!sidebarManager.isOpen() && sidebarManager) {
+                console.log("Search click: Meminta sidebar dibuka.");
+                document.dispatchEvent(new CustomEvent('requestSidebarOpen'));
+            }
+        });
     },
 
     renderSuggestions: function(results) {

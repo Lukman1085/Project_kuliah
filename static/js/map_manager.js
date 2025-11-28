@@ -147,17 +147,6 @@ export const mapManager = {
 
     _finalizeActiveLocationLoad: function(data) {
         this._isClickLoading = false; 
-        // this._activeLocationData = data;
-
-        if (data.nama_label) {
-            this._activeLocationLabel = data.nama_label;
-            // Pastikan data object juga sinkron
-            data.nama_label = this._activeLocationLabel;
-        } else if (this._activeLocationLabel) {
-            // Fallback: Jika data API tidak punya label tapi state punya, pasang ke data
-            data.nama_label = this._activeLocationLabel;
-        }
-
         this._activeLocationData = data;
         
         if (this._sidebarManager && this._sidebarManager.isOpen()) { 
@@ -215,7 +204,6 @@ export const mapManager = {
 
         const cachedData = cacheManager.get(id);
         if (cachedData) {
-            if (cachedData.nama_label) this._activeLocationLabel = cachedData.nama_label;
             this._activeLocationData = cachedData;
             this._activeLocationData.tipadm = props.tipadm;
             this._isClickLoading = false;
@@ -327,9 +315,29 @@ export const mapManager = {
     },
 
     // =========================================================================
-    // LOGIKA NAVIGASI & ZOOM
+    // LOGIKA NAVIGASI & ZOOM (PERBAIKAN RENCANA 2)
     // =========================================================================
     
+    // Helper Internal: Menunggu Peta Idle sebelum Render
+    _waitForMapIdleAndRender: function(callback) {
+        // Fungsi pembantu untuk render dan eksekusi callback
+        const executeLogic = () => {
+            this.renderMarkers();
+            this.triggerFetchData();
+            if (callback && typeof callback === 'function') {
+                callback();
+            }
+        };
+
+        // Jika peta sudah "loaded" (tile selesai), langsung eksekusi
+        // Jika belum, tunggu event 'idle' sekali saja
+        if (this._map.loaded()) {
+            executeLogic();
+        } else {
+            this._map.once('idle', executeLogic);
+        }
+    },
+
     flyToActiveLocation: function() {
         if (this._isGempaLayerActive) this._flyToActiveGempa();
         else this._flyToActiveWeather();
@@ -380,25 +388,26 @@ export const mapManager = {
 
         this._map.once('moveend', () => {
             this._isFlying = false;
-            this.renderMarkers();
-            this.triggerFetchData(); 
-
-            if (!this._isGempaLayerActive && data && String(this._activeLocationId) === String(data.id)) {
-                const cached = cacheManager.get(String(data.id));
-                if (cached) {
-                     this._renderRichPopup(cached, coords);
-                } else if (data.type === 'provinsi') {
-                     const content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
-                     popupManager.open(coords, content);
-                } else {
-                     const loadingContent = popupManager.generateLoadingPopupContent(data.nama_simpel);
-                     popupManager.open(coords, loadingContent);
+            // [MODIFIKASI] Gunakan helper robust idle
+            this._waitForMapIdleAndRender(() => {
+                if (!this._isGempaLayerActive && data && String(this._activeLocationId) === String(data.id)) {
+                    const cached = cacheManager.get(String(data.id));
+                    if (cached) {
+                         this._renderRichPopup(cached, coords);
+                    } else if (data.type === 'provinsi') {
+                         const content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
+                         popupManager.open(coords, content);
+                    } else {
+                         const loadingContent = popupManager.generateLoadingPopupContent(data.nama_simpel);
+                         popupManager.open(coords, loadingContent);
+                    }
                 }
-            }
+            });
         });
     },
     
-    flyToLocation: function(lat, lon, tipadm) {
+    // [MODIFIKASI RENCANA 2] Tambahkan parameter onCompleteCallback
+    flyToLocation: function(lat, lon, tipadm, onCompleteCallback) {
          if (!this._map) return;
          const tip = parseInt(tipadm, 10);
          let z = 10;
@@ -406,10 +415,18 @@ export const mapManager = {
 
          this._isFlying = true;
          this._map.easeTo({ center: [lon, lat], zoom: z });
+         
          this._map.once('moveend', () => {
              this._isFlying = false;
-             this.renderMarkers();
-             this.triggerFetchData();
+             
+             // [MODIFIKASI] Tunggu sampai map IDLE (tile termuat semua) baru jalankan logika marker
+             // Ini mencegah 'Ghost Marker' dimana marker tidak muncul karena queryRenderedFeatures 
+             // dijalankan saat tile belum siap.
+             this._waitForMapIdleAndRender(() => {
+                 if (onCompleteCallback && typeof onCompleteCallback === 'function') {
+                     onCompleteCallback();
+                 }
+             });
          });
     },
 
