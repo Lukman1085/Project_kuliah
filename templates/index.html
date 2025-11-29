@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peta Cuaca Gempa Interaktif</title>
+    
+    <!-- <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
+    <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script> -->
+
+    <link href="https://unpkg.com/maplibre-gl@^5.13.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@^5.13.0/dist/maplibre-gl.js"></script>
+    
+    <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
+    
+    <!-- Tautan ke file CSS eksternal Anda tetap utuh -->
+    <!-- <link rel="stylesheet" href="static/css/styles.css"> -->
+    <link rel="stylesheet" href="static/css/global.css">
+    <link rel="stylesheet" href="static/css/time-picker.css">
+    <link rel="stylesheet" href="static/css/sidebar.css">
+    <link rel="stylesheet" href="static/css/searchbar.css">
+    <link rel="stylesheet" href="static/css/maplibregl-ctrl.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css">
+
+    <script>
+        window.APP_CONFIG = {
+            MAP_BASE_URL: "{{ map_base_url }}"
+        };
+        console.log("🛠️ App Config Loaded:", window.APP_CONFIG);
+    </script>
+</head>
+<body>
+    <!-- 
+      Struktur HTML tidak berubah. 
+      Semua elemen (map, sidebar, picker) masih sama. 
+    -->
+    <div id="map" ></div>
+    <div id="koordinat-info"></div>
+    <div id="global-loading-spinner">Memuat data cuaca...</div>
+    
+    <!-- [BARU] Indikator Status Mode Gempa -->
+    <div id="mode-status-indicator">
+        <i class="wi wi-earthquake"></i> DALAM MODE GEMPA
+    </div>
+    
+    <div id="search-wrapper">
+        <div id="search-container">
+            <input type="text" id="search-bar" placeholder="Cari lokasi..." autocomplete="off" />
+            <button id="search-btn" aria-label="Cari">
+                <!-- Ikon Kaca Pembesar SVG Inline -->
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </button>
+        </div>
+        <div id="suggestions-dropdown" ></div>
+    </div>
+
+    <div id="detail-sidebar" role="dialog" aria-modal="true" aria-labelledby="sidebar-location-name">
+        <div id="sidebar-header">
+            <h2 id="sidebar-location-name">Detail Lokasi</h2>
+            <button id="close-sidebar-btn" aria-label="Tutup detail lokasi">&times;</button>
+        </div>
+        <div id="sidebar-content">
+            <div id="sidebar-placeholder">Pilih satu wilayah di peta.</div>
+            <div id="sidebar-loading" style="display: none;">
+                <i class="wi wi-day-sunny"></i> Memuat data...
+            </div>
+            
+            <!-- BLOK 1: DETAIL CUACA (Untuk Kab/Kota/Kec) -->
+            <div id="sidebar-weather-details" style="display: none;">
+                <div id="sidebar-location-label-weather" class="location-label-subtitle"></div>
+                
+                <!-- ===== STRUKTUR BARU: INFORMASI CUACA UTAMA ===== -->
+                <div id="sidebar-current-conditions" class="weather-card-main">
+                    <!-- Header Waktu (Kecil di atas) -->
+                    <div id="sidebar-current-time" class="weather-header-time">...</div>
+                    
+                    <!-- Baris Utama: Suhu Besar & Ikon Besar -->
+                    <div class="weather-main-row">
+                        <div id="sidebar-current-temp" class="weather-temp-big">-°</div>
+                        <div class="weather-icon-container">
+                            <i id="sidebar-current-icon" class="wi wi-na weather-icon-big"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Deskripsi Cuaca (Teks) -->
+                    <div id="sidebar-current-desc" class="weather-desc-main">...</div>
+
+                    <!-- Grid Detail Tambahan (2x2) -->
+                    <div class="weather-details-grid">
+                        <div class="detail-item">
+                            <i class="wi wi-thermometer detail-icon"></i>
+                            <span id="sidebar-current-feelslike">Terasa ...°</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="wi wi-humidity detail-icon"></i>
+                            <span id="sidebar-current-humidity">...%</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="wi wi-raindrop detail-icon"></i>
+                            <span id="sidebar-current-precipitation">...%</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="wi wi-strong-wind detail-icon"></i>
+                            <span id="sidebar-current-wind">... m/s</span>
+                        </div>
+                    </div>
+
+                    <!-- [IMPLEMENTASI BARU] Footer Sumber Data (Rencana A) -->
+                    <div style="margin-top: 20px; text-align: center; font-size: 0.8rem; opacity: 0.8; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        Data bersumber dari <strong>Open-Meteo</strong>.<br>
+                        Selalu pantau informasi resmi dari otoritas setempat.
+                    </div>
+
+                </div>
+                <!-- ===== AKHIR STRUKTUR BARU ===== -->
+
+                <h3 id="sidebar-daily-forecast-title">Prakiraan 7 Hari Kedepan</h3>
+                <div id="sidebar-daily-forecast-list">
+                    <!-- Item prakiraan harian akan ditambahkan di sini -->
+                </div>
+            </div> <!-- END sidebar-weather-details -->
+
+            <!-- BLOK 2: DETAIL PROVINSI (Hanya Label) -->
+            <div id="sidebar-province-details" style="display: none;">
+                <!-- Konten akan di-render oleh JS -->
+            </div>
+
+            <!-- BLOK 3: SUB WILAYAH (Dipindahkan KELUAR dari weather-details) -->
+            <!-- Ini sekarang independen dan bisa muncul baik di mode Provinsi maupun mode Kab/Kota -->
+            <div id="sidebar-sub-region-container" style="display: none;">
+                <h3 id="sidebar-sub-region-title">Prakiraan Wilayah Bawahan</h3>
+                <div id="sidebar-sub-region-loading" style="display: none; text-align: center; color: #777; margin: 20px 0;">
+                    <i class="wi wi-day-sunny" style="font-size: 1.5rem; display: block; margin-bottom: 5px;"></i> 
+                    Memuat data wilayah...
+                </div>
+                <div id="sidebar-sub-region-list">
+                    <!-- Item sub-wilayah akan dirender oleh JS di sini -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <button id="sidebar-toggle-btn" aria-label="Buka detail lokasi">&gt;</button>
+    <div id="datetime-picker-container">
+        <div class="datetime-row">
+            <button id="prev-day-btn" aria-label="Hari Sebelumnya">&lt;</button>
+            <span id="date-display">Memuat...</span>
+            <button id="calendar-btn" aria-label="Pilih Tanggal">📅</button>
+            <button id="next-day-btn" aria-label="Hari Berikutnya">&gt;</button>
+        </div>
+        <div class="datetime-row">
+            <button id="prev-three-hour-btn" aria-label="3 Jam Sebelumnya">&ll;</button>
+            <button id="prev-hour-btn" aria-label="Jam Sebelumnya">&lt;</button>
+            <span id="hour-display">--:--</span>
+            <button id="next-hour-btn" aria-label="Jam Berikutnya">&gt;</button>
+            <button id="next-three-hour-btn" aria-label="3 Jam Berikutnya">&gg;</button>
+        </div>
+        <div id="calendar-popup">
+            <div id="calendar-header">
+                <button id="calendar-prev-month" aria-label="Bulan Sebelumnya">&lt;</button>
+                <span id="calendar-month-year">Oktober 2025</span>
+                <button id="calendar-next-month" aria-label="Bulan Berikutnya">&gt;</button>
+            </div>
+            <div id="calendar-grid">
+            </div>
+        </div>
+    </div>
+    <!-- <script type="module" src="main.js"></script> -->
+    <script type="module" src="static/js/main.js"></script>
+</body>
+</html>

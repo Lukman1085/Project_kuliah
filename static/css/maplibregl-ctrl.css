@@ -1,0 +1,174 @@
+/* Container utama (Navigasi & Skala) */
+.maplibregl-ctrl-group {
+    background-color: rgba(255, 255, 255, 0.98);
+    border-radius: 8px !important; /* Timpa default */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    /* MapLibre menambahkan margin 10px by default, itu oke */
+}
+
+/* HIERARKI Z-INDEX TINGGI (Level 2: Di atas Marker & Popup) */
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-top-left, 
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+    z-index: 30000 !important;
+}
+
+/* Tombol di dalam grup navigasi */
+.maplibregl-ctrl-group button {
+    background-color: transparent;
+    transition: background-color 0.2s;
+    width: 32px !important; /* Paksa ukuran */
+    height: 32px !important; /* Paksa ukuran */
+}
+
+.maplibregl-ctrl-group button:hover {
+    background-color: #f0f0f0;
+}
+
+/* Radius untuk tombol pertama dan terakhir */
+.maplibregl-ctrl-group button:first-child {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+.maplibregl-ctrl-group button:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+/* Garis pemisah di grup navigasi */
+.maplibregl-ctrl-group button + button {
+    border-top: 1px solid #ddd;
+}
+
+/* Ikon di dalam tombol (compass, zoom) */
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+    opacity: 0.8;
+}
+
+/* Kontrol Skala (di bottom-left) */
+.maplibregl-ctrl-scale {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    padding: 2px 8px !important;
+    border-radius: 3px !important;
+    font-family: sans-serif !important;
+    font-size: 12px !important;
+    color: #333 !important;
+    border: 1px solid #ccc !important;
+    margin-bottom: 10px !important; /* Samakan dengan #koordinat-info */
+    margin-left: 10px !important;
+}
+
+
+/* ======================================================= */
+/* --- CSS BARU (TAMBAHAN INI) --- */
+/* ======================================================= */
+
+/* 3. Styling untuk TOMBOL RESET PITCH KUSTOM */
+.maplibregl-ctrl-pitch-reset {
+    padding: 0;
+    border: none;
+}
+
+/* Target SVG di dalam tombol kustom kita */
+.maplibregl-ctrl-pitch-reset svg {
+    fill: #333;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+/* Efek hover pada tombol kustom */
+.maplibregl-ctrl-pitch-reset:hover svg {
+    opacity: 1;
+}
+
+/* 4. Styling TOMBOL GEMPA */
+.maplibregl-ctrl-gempa.active-mode {
+    background-color: #ffebee !important; /* Merah muda */
+    color: #d32f2f !important;
+    border-color: #ffcdd2 !important;
+}
+
+.maplibregl-ctrl-gempa i {
+    transition: transform 0.3s ease;
+}
+
+.maplibregl-ctrl-gempa.active-mode i {
+    animation: quake-shake 0.5s infinite;
+}
+
+@keyframes quake-shake {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(10deg); }
+    50% { transform: rotate(0deg); }
+    75% { transform: rotate(-10deg); }
+    100% { transform: rotate(0deg); }
+}
+
+/* 5. [BARU] STYLING ZOOM SLIDER */
+.maplibregl-ctrl-zoom-slider {
+    /* Pastikan container cukup tinggi untuk slider vertikal */
+    height: 140px !important; /* Tinggi tetap */
+    width: 32px !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 0;
+    overflow: hidden;
+}
+
+.maplibregl-ctrl-zoom-slider input[type=range] {
+    /* Menghilangkan default appearance */
+    -webkit-appearance: none;
+    width: 120px; /* Panjang slider (karena di-rotate, ini jadi tinggi) */
+    height: 4px; /* Ketebalan track */
+    background: #e0e0e0;
+    outline: none;
+    border-radius: 2px;
+    
+    /* Transformasi Rotasi untuk Webkit (Chrome/Safari) */
+    transform: rotate(-90deg);
+    
+    /* Cross-browser cursor */
+    cursor: pointer;
+}
+
+/* Thumb (Handle Slider) - Webkit */
+.maplibregl-ctrl-zoom-slider input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border: 2px solid #666;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.1s;
+}
+
+.maplibregl-ctrl-zoom-slider input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    border-color: #333;
+}
+
+/* Thumb (Handle Slider) - Firefox */
+.maplibregl-ctrl-zoom-slider input[type=range]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border: 2px solid #666;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.1s;
+}
+
+.maplibregl-ctrl-zoom-slider input[type=range]::-moz-range-thumb:hover {
+    transform: scale(1.2);
+    border-color: #333;
+}
+
+/* Firefox Vertical Support Hack */
+/* Untuk Firefox modern, kita bisa menggunakan orient="vertical" di HTML,
+   tapi rotasi CSS seringkali lebih konsisten antar browser modern. */
