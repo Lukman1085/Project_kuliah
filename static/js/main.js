@@ -127,6 +127,96 @@ document.addEventListener('DOMContentLoaded', function() {
     // 4. Pasang Event Listener
     // ================================================================
 
+    (function initSwipeGesture() {
+        // State Variables
+        let startX = 0, startY = 0;
+        let currentX = 0, currentY = 0;
+        let isDragging = false;
+        const SWIPE_THRESHOLD = 80;
+
+        function isMobile() { return window.innerWidth <= 768; }
+
+        const startEvents = ['touchstart', 'mousedown'];
+        const moveEvents = ['touchmove', 'mousemove'];
+        const endEvents = ['touchend', 'mouseup', 'mouseleave'];
+
+        // Pasang listener
+        [sidebarEl, toggleBtnEl].forEach(el => {
+            startEvents.forEach(evt => el.addEventListener(evt, handleStart, { passive: false }));
+        });
+        moveEvents.forEach(evt => document.addEventListener(evt, handleMove, { passive: false }));
+        endEvents.forEach(evt => document.addEventListener(evt, handleEnd, { passive: false }));
+
+        function handleStart(e) {
+            if (e.type === 'mousedown' && e.button !== 0) return;
+            // Cek konflik scroll konten sidebar
+            if (sidebarEl.contains(e.target) && sidebarContentEl.contains(e.target)) {
+                if (sidebarContentEl.scrollTop > 0) return; 
+            }
+
+            isDragging = true;
+            sidebarEl.style.transition = 'none'; 
+
+            if (e.type === 'touchstart') {
+                startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+            } else {
+                startX = e.clientX; startY = e.clientY;
+            }
+        }
+
+        function handleMove(e) {
+            if (!isDragging) return;
+            if (e.type === 'touchmove') {
+                currentX = e.touches[0].clientX; currentY = e.touches[0].clientY;
+            } else {
+                e.preventDefault(); 
+                currentX = e.clientX; currentY = e.clientY;
+            }
+
+            const diffX = currentX - startX;
+            const diffY = currentY - startY;
+
+            if (isMobile()) {
+                // Mobile: Swipe Up (Buka) / Swipe Down (Tutup)
+                if (!sidebarManager.isOpen() && diffY < 0) {
+                    sidebarEl.style.transform = `translateY(calc(100% + ${diffY}px))`;
+                } else if (sidebarManager.isOpen() && diffY > 0) {
+                    sidebarEl.style.transform = `translateY(${diffY}px)`;
+                }
+            } else {
+                // Desktop: Swipe Kanan (Buka) / Swipe Kiri (Tutup)
+                if (!sidebarManager.isOpen() && diffX > 0) {
+                    sidebarEl.style.transform = `translateX(${diffX}px)`;
+                } else if (sidebarManager.isOpen() && diffX < 0) {
+                    sidebarEl.style.transform = `translateX(${diffX}px)`;
+                }
+            }
+        }
+
+        function handleEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            // Kembalikan transisi halus
+            sidebarEl.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)'; 
+            sidebarEl.style.transform = ''; 
+
+            const diffX = currentX - startX;
+            const diffY = currentY - startY;
+            const isOpen = sidebarManager.isOpen();
+
+            if (isMobile()) {
+                if (!isOpen && diffY < -SWIPE_THRESHOLD) sidebarManager.openSidebar();
+                else if (isOpen && diffY > SWIPE_THRESHOLD) sidebarManager.closeSidebar();
+            } else {
+                if (!isOpen && diffX > SWIPE_THRESHOLD) sidebarManager.openSidebar();
+                else if (isOpen && diffX < -SWIPE_THRESHOLD) sidebarManager.closeSidebar();
+            }
+            // Reset
+            startX = 0; startY = 0; currentX = 0; currentY = 0;
+        }
+    })();
+
     prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 24));
     nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 24));
     prevThreeHourBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 3));
