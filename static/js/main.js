@@ -127,13 +127,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // 4. Pasang Event Listener
     // ================================================================
 
-    (function initSwipeGesture() {
+    // [MULAI] LOGIKA GESTURE SWIPE (KHUSUS MOBILE - BOTTOM SHEET) 
+    // -------------------------------------------------------------
+    (function initMobileSwipeGesture() {
         // State Variables
-        let startX = 0, startY = 0;
-        let currentX = 0, currentY = 0;
+        let startY = 0;
+        let currentY = 0;
         let isDragging = false;
-        const SWIPE_THRESHOLD = 80;
+        const SWIPE_THRESHOLD = 80; // Jarak geser minimal agar bereaksi
 
+        // Helper: Cek apakah mode mobile
         function isMobile() { return window.innerWidth <= 768; }
 
         const startEvents = ['touchstart', 'mousedown'];
@@ -148,48 +151,48 @@ document.addEventListener('DOMContentLoaded', function() {
         endEvents.forEach(evt => document.addEventListener(evt, handleEnd, { passive: false }));
 
         function handleStart(e) {
+            // 1. PENTING: Jika bukan Mobile, HENTIKAN proses gesture
+            if (!isMobile()) return;
+
             if (e.type === 'mousedown' && e.button !== 0) return;
-            // Cek konflik scroll konten sidebar
+            
+            // Cek konflik scroll: Jangan geser jika user sedang scroll konten sidebar ke bawah
             if (sidebarEl.contains(e.target) && sidebarContentEl.contains(e.target)) {
                 if (sidebarContentEl.scrollTop > 0) return; 
             }
 
             isDragging = true;
-            sidebarEl.style.transition = 'none'; 
+            sidebarEl.style.transition = 'none'; // Matikan animasi agar responsif mengikuti jari
 
             if (e.type === 'touchstart') {
-                startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+                startY = e.touches[0].clientY;
             } else {
-                startX = e.clientX; startY = e.clientY;
+                startY = e.clientY;
             }
         }
 
         function handleMove(e) {
             if (!isDragging) return;
+
             if (e.type === 'touchmove') {
-                currentX = e.touches[0].clientX; currentY = e.touches[0].clientY;
+                currentY = e.touches[0].clientY;
             } else {
                 e.preventDefault(); 
-                currentX = e.clientX; currentY = e.clientY;
+                currentY = e.clientY;
             }
 
-            const diffX = currentX - startX;
             const diffY = currentY - startY;
 
-            if (isMobile()) {
-                // Mobile: Swipe Up (Buka) / Swipe Down (Tutup)
-                if (!sidebarManager.isOpen() && diffY < 0) {
-                    sidebarEl.style.transform = `translateY(calc(100% + ${diffY}px))`;
-                } else if (sidebarManager.isOpen() && diffY > 0) {
-                    sidebarEl.style.transform = `translateY(${diffY}px)`;
-                }
-            } else {
-                // Desktop: Swipe Kanan (Buka) / Swipe Kiri (Tutup)
-                if (!sidebarManager.isOpen() && diffX > 0) {
-                    sidebarEl.style.transform = `translateX(${diffX}px)`;
-                } else if (sidebarManager.isOpen() && diffX < 0) {
-                    sidebarEl.style.transform = `translateX(${diffX}px)`;
-                }
+            // Logika Bottom Sheet (Naik/Turun)
+            // A. Kondisi Sidebar Tertutup & Swipe ke ATAS (diffY negatif)
+            if (!sidebarManager.isOpen() && diffY < 0) {
+                // Tarik sidebar naik dari bawah
+                sidebarEl.style.transform = `translateY(calc(100% + ${diffY}px))`;
+            } 
+            // B. Kondisi Sidebar Terbuka & Swipe ke BAWAH (diffY positif)
+            else if (sidebarManager.isOpen() && diffY > 0) {
+                // Dorong sidebar turun
+                sidebarEl.style.transform = `translateY(${diffY}px)`;
             }
         }
 
@@ -197,25 +200,27 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!isDragging) return;
             isDragging = false;
             
-            // Kembalikan transisi halus
+            // Kembalikan transisi halus CSS
             sidebarEl.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)'; 
-            sidebarEl.style.transform = ''; 
+            sidebarEl.style.transform = ''; // Hapus style inline, biarkan Class CSS ambil alih
 
-            const diffX = currentX - startX;
             const diffY = currentY - startY;
             const isOpen = sidebarManager.isOpen();
 
-            if (isMobile()) {
-                if (!isOpen && diffY < -SWIPE_THRESHOLD) sidebarManager.openSidebar();
-                else if (isOpen && diffY > SWIPE_THRESHOLD) sidebarManager.closeSidebar();
-            } else {
-                if (!isOpen && diffX > SWIPE_THRESHOLD) sidebarManager.openSidebar();
-                else if (isOpen && diffX < -SWIPE_THRESHOLD) sidebarManager.closeSidebar();
+            // Keputusan Akhir: Buka atau Tutup?
+            if (!isOpen && diffY < -SWIPE_THRESHOLD) {
+                // Jika geser ke ATAS cukup jauh -> Buka
+                sidebarManager.openSidebar();
+            } else if (isOpen && diffY > SWIPE_THRESHOLD) {
+                // Jika geser ke BAWAH cukup jauh -> Tutup
+                sidebarManager.closeSidebar();
             }
-            // Reset
-            startX = 0; startY = 0; currentX = 0; currentY = 0;
+            
+            // Reset Variable
+            startY = 0; currentY = 0;
         }
     })();
+    // [AKHIR] LOGIKA GESTURE SWIPE
 
     prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 24));
     nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 24));
