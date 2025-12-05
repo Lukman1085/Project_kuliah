@@ -640,3 +640,140 @@
     color: #7f8c8d;
     font-style: italic;
 }
+
+
+/* =======================================================
+   MOBILE TOGGLE BUTTON DENGAN ANIMASI
+   ======================================================= */
+@media screen and (max-width: 768px) {
+
+    #detail-sidebar {
+        /* 1. RESET POSISI DESKTOP */
+        top: auto;        /* Lepaskan jangkaran atas */
+        left: 0;          /* Tempel ke kiri */
+        right: 0;         /* Tempel ke kanan */
+        width: 100%;      /* Lebar penuh */
+        
+        /* 2. ATUR TINGGI & POSISI BAWAH */
+        height: 80vh;     /* Tinggi panel 80% layar (sisakan 20% buat peta mengintip) */
+        bottom: 0;        /* Tempel di dasar layar */
+        
+        /* 3. LOGIKA SEMBUNYI (ANIMASI) */
+        /* Alih-alih geser kiri, kita geser ke bawah (Y axis) */
+        /* 100% artinya turun sejauh tinggi badannya sendiri (sembunyi total) */
+        transform: translateY(100%); 
+        transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        
+        /* 4. VISUAL STYLE BARU */
+        border-radius: 25px 25px 0 0; /* Lengkungan manis di sudut atas */
+        box-shadow: 0 -5px 25px rgba(0,0,0,0.15); /* Bayangan mengarah ke atas */
+        z-index: 2000;    /* Pastikan di atas segalanya */
+    }
+
+    /* KETIKA DIBUKA (Class .sidebar-open ditambahkan via JS) */
+    #detail-sidebar.sidebar-open {
+        left: 0; /* Pastikan left 0 */
+        
+        /* Reset transform ke 0 (Naik ke posisi semula) */
+        transform: translateY(0);
+    }
+
+    /* 5. VISUAL: DRAG HANDLE (Garis abu-abu kecil di atas) */
+    /* Ini memberi sinyal visual bahwa panel ini bisa digeser/muncul dari bawah */
+    #detail-sidebar::before {
+        content: "";
+        display: block;
+        width: 40px;
+        height: 5px;
+        background-color: #e0e0e0;
+        border-radius: 10px;
+        margin: 12px auto 10px auto; /* Posisi di tengah atas */
+    }
+
+    /* 6. PERBAIKAN HEADER */
+    #sidebar-header {
+        padding-top: 5px; /* Kurangi padding karena sudah ada drag handle */
+        border-bottom: none; /* Hapus garis pemisah agar terlihat seamless */
+    }
+    
+    /* 7. PERBAIKAN SCROLL CONTENT */
+    #sidebar-content {
+        padding-bottom: 50px; /* Tambah ruang bawah agar konten terbawah tidak kepotong */
+    }
+
+    /* --- 1. KEYFRAMES ANIMASI (BOUNCE) --- */
+    @keyframes float-arrow {
+        0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+        50% { transform: translate(-50%, -50%) translateY(-15px); } /* Gerakan naik lebih jelas */
+    }
+
+    /* --- 2. CONTAINER TOMBOL (TRANSPARAN) --- */
+    #sidebar-toggle-btn {
+        /* Reset Posisi & Layout */
+        top: auto !important;
+        left: 50%;
+        bottom: 25px; /* Jarak dari bawah */
+        transform: translateX(-50%);
+        position: fixed;
+        z-index: 1000;
+        cursor: pointer;
+        color: black; /* Sembunyikan teks/ikon asli */
+
+        /* Area Sentuh (Hitbox) tetap besar agar mudah dipencet */
+        width: 60px;
+        height: 60px;
+
+        /* HILANGKAN BACKGROUND KOTAK/BULAT */
+        background-color: transparent !important;
+        border: none;
+        box-shadow: none !important; /* Hapus bayangan kotak */
+        
+        /* Sembunyikan teks/ikon HTML asli */
+        color: transparent !important;
+        font-size: 0 !important;
+        
+        /* Hapus efek outline saat diklik di HP */
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* --- 3. IKON PANAH (MODERN & STANDALONE) --- */
+    #sidebar-toggle-btn::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        
+        /* Ukuran Ikon Besar */
+        width: 40px; 
+        height: 40px;
+        
+        /* GAMBAR SVG: Panah Ganda (Chevron Up) */
+        /* Perhatikan: stroke='%23007bff' artinya warna BIRU (Hex #007bff) */
+        /* Jika ingin warna hitam ganti jadi stroke='black' */
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23007bff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='18 15 12 9 6 15'%3E%3C/polyline%3E%3C/svg%3E");
+        
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+        
+        /* EFEK BAYANGAN IKON (PENTING) */
+        /* Agar ikon tetap terlihat meski peta di belakangnya ruwet/berwarna sama */
+        filter: drop-shadow(0 4px 3px rgba(255, 255, 255, 0.8)) drop-shadow(0 2px 10px rgba(0,0,0,0.2));
+        
+        /* Animasi Melayang */
+        animation: float-arrow 2s ease-in-out infinite;
+    }
+
+    /* Efek saat ditekan (Feedback) */
+    #sidebar-toggle-btn:active::after {
+        transform: translate(-50%, -50%) scale(0.9);
+        transition: transform 0.1s;
+    }
+
+    /* Sembunyikan saat Sidebar Terbuka */
+    #detail-sidebar.sidebar-open + #sidebar-toggle-btn {
+        bottom: -100px;
+        opacity: 0;
+        transition: all 0.4s;
+    }
+}

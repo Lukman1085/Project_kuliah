@@ -258,7 +258,7 @@
         max-width: 360px; /* Batas maksimal agar tidak terlalu lebar di tablet */
         
         /* Posisi dari bawah (sesuaikan agar tidak tertutup menu browser) */
-        bottom: 44px; 
+        bottom: 90px; 
         
         /* Padding lebih tipis agar tidak bongsor */
         padding: 10px 12px;
