@@ -249,7 +249,7 @@
 /* =======================================================
    MOBILE OPTIMIZATION: TIME PICKER
    ======================================================= */
-@media screen and (max-width: 768px) {
+@media screen and (max-width: 850px) {
 
     /* 1. Container Utama: Lebih Ramping & Rapi */
     #datetime-picker-container {
