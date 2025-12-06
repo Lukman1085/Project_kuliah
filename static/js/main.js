@@ -51,6 +51,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebarLoadingEl = document.getElementById('sidebar-loading');
     const sidebarWeatherDetailsEl = document.getElementById('sidebar-weather-details');
     const sidebarProvinceDetailsEl = document.getElementById('sidebar-province-details');
+    // [BARU] Header untuk interaksi Toggle
+    const sidebarHeader = document.getElementById('sidebar-header');
     
     const prevDayBtn = document.getElementById('prev-day-btn');
     const nextDayBtn = document.getElementById('next-day-btn');
@@ -127,7 +129,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // 4. Pasang Event Listener
     // ================================================================
 
-    // [MULAI] LOGIKA GESTURE SWIPE (KHUSUS MOBILE - BOTTOM SHEET) 
+    // [BARU] INTERAKSI KLIK HEADER UNTUK TOGGLE PEEKING/EXPANDED
+    sidebarHeader.addEventListener('click', (e) => {
+        // Jangan trigger jika klik tombol close
+        if (e.target.closest('#close-sidebar-btn') || e.target.closest('.sidebar-fly-btn')) return;
+
+        // Cek apakah sidebar sedang dalam mode peeking
+        if (sidebarEl.classList.contains('sidebar-peeking')) {
+            // Jika ya, Expand
+            sidebarManager.setMobilePeekingState(false);
+        } else {
+            // Jika Expanded, Collapse ke Peeking (opsional, atau bisa dibiarkan tidak melakukan apa-apa)
+            // Biasanya klik header saat expanded tidak melakukan apa-apa atau menutup?
+            // User request: "mengecilkan sidebar ulang" -> jadi kita izinkan toggle ke peeking
+            if (sidebarManager.isOpen()) {
+                 sidebarManager.setMobilePeekingState(true);
+            }
+        }
+    });
+
+    // [MULAI] LOGIKA GESTURE SWIPE (KHUSUS MOBILE - BOTTOM SHEET - 3 STATES) 
     // -------------------------------------------------------------
     (function initMobileSwipeGesture() {
         // State Variables
@@ -157,7 +178,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.type === 'mousedown' && e.button !== 0) return;
             
             // Cek konflik scroll: Jangan geser jika user sedang scroll konten sidebar ke bawah
-            if (sidebarEl.contains(e.target) && sidebarContentEl.contains(e.target)) {
+            // Pengecualian: Jika sedang PEEKING, konten tidak bisa discroll, jadi gesture valid
+            const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
+            
+            if (!isPeeking && sidebarEl.contains(e.target) && sidebarContentEl.contains(e.target)) {
                 if (sidebarContentEl.scrollTop > 0) return; 
             }
 
@@ -182,17 +206,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const diffY = currentY - startY;
+            const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
 
-            // Logika Bottom Sheet (Naik/Turun)
-            // A. Kondisi Sidebar Tertutup & Swipe ke ATAS (diffY negatif)
+            // --- LOGIKA PERGERAKAN ---
+            
+            // A. Sidebar Tertutup -> Swipe ATAS (Buka)
             if (!sidebarManager.isOpen() && diffY < 0) {
-                // Tarik sidebar naik dari bawah
-                sidebarEl.style.transform = `translateY(calc(100% + ${diffY}px))`;
-            } 
-            // B. Kondisi Sidebar Terbuka & Swipe ke BAWAH (diffY positif)
-            else if (sidebarManager.isOpen() && diffY > 0) {
-                // Dorong sidebar turun
-                sidebarEl.style.transform = `translateY(${diffY}px)`;
+                 // Tarik naik penuh
+                 sidebarEl.style.transform = `translateY(calc(100% + ${diffY}px))`;
+            }
+            // B. Sidebar Peeking -> Swipe ATAS (Expand) atau BAWAH (Close)
+            else if (isPeeking) {
+                // Basis posisi peeking adalah calc(100% - 80px)
+                // Kita tambahkan diffY ke posisi itu
+                // Ini agak tricky dengan calc di JS, jadi kita simplifikasi visualnya
+                // User menggeser dari posisi 'bawah'.
+                
+                // Visualisasi sederhana: Geser elemen
+                 sidebarEl.style.transform = `translateY(calc(100% - 80px + ${diffY}px))`;
+            }
+            // C. Sidebar Expanded -> Swipe BAWAH (Peeking/Close)
+            else if (sidebarManager.isOpen() && !isPeeking && diffY > 0) {
+                 sidebarEl.style.transform = `translateY(${diffY}px)`;
             }
         }
 
@@ -206,14 +241,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const diffY = currentY - startY;
             const isOpen = sidebarManager.isOpen();
+            const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
 
-            // Keputusan Akhir: Buka atau Tutup?
-            if (!isOpen && diffY < -SWIPE_THRESHOLD) {
-                // Jika geser ke ATAS cukup jauh -> Buka
-                sidebarManager.openSidebar();
-            } else if (isOpen && diffY > SWIPE_THRESHOLD) {
-                // Jika geser ke BAWAH cukup jauh -> Tutup
-                sidebarManager.closeSidebar();
+            // --- LOGIKA KEPUTUSAN 3-STATE ---
+
+            if (!isOpen) {
+                // Dari Tertutup
+                if (diffY < -SWIPE_THRESHOLD) {
+                     // Buka Penuh (Standard)
+                     sidebarManager.openSidebar();
+                }
+            } else if (isPeeking) {
+                // Dari Peeking
+                if (diffY < -SWIPE_THRESHOLD) {
+                    // Geser ATAS -> EXPAND
+                    sidebarManager.setMobilePeekingState(false);
+                } else if (diffY > SWIPE_THRESHOLD) {
+                    // Geser BAWAH -> CLOSE
+                    sidebarManager.closeSidebar();
+                }
+            } else {
+                // Dari Expanded
+                if (diffY > SWIPE_THRESHOLD) {
+                    // Geser BAWAH -> PEEKING (Sesuai request: "mengecilkan sidebar ulang")
+                    // Jika geser sangat jauh/cepat, bisa juga close, tapi Peeking lebih aman
+                    sidebarManager.setMobilePeekingState(true);
+                }
             }
             
             // Reset Variable

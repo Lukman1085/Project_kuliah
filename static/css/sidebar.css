@@ -677,6 +677,13 @@
         /* Reset transform ke 0 (Naik ke posisi semula) */
         transform: translateY(0);
     }
+    
+    /* [BARU] STATE: PEEKING (Mengintip - Hanya Header Terlihat) */
+    /* State ini HARUS dikombinasikan dengan .sidebar-open */
+    /* Kalkulasi: Sisakan sekitar 80px di bawah layar (Tinggi Header + Handle) */
+    #detail-sidebar.sidebar-open.sidebar-peeking {
+        transform: translateY(calc(100% - 80px));
+    }
 
     /* 5. VISUAL: DRAG HANDLE (Garis abu-abu kecil di atas) */
     /* Ini memberi sinyal visual bahwa panel ini bisa digeser/muncul dari bawah */
@@ -694,6 +701,9 @@
     #sidebar-header {
         padding-top: 5px; /* Kurangi padding karena sudah ada drag handle */
         border-bottom: none; /* Hapus garis pemisah agar terlihat seamless */
+        
+        /* [BARU] Jadikan header area interaktif untuk tap/klik */
+        cursor: pointer;
     }
     
     /* 7. PERBAIKAN SCROLL CONTENT */
