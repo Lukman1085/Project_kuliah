@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebarLoadingEl = document.getElementById('sidebar-loading');
     const sidebarWeatherDetailsEl = document.getElementById('sidebar-weather-details');
     const sidebarProvinceDetailsEl = document.getElementById('sidebar-province-details');
-    // [BARU] Header untuk interaksi Toggle
+    // Header untuk interaksi Toggle
     const sidebarHeader = document.getElementById('sidebar-header');
     
     const prevDayBtn = document.getElementById('prev-day-btn');
@@ -129,37 +129,61 @@ document.addEventListener('DOMContentLoaded', function() {
     // 4. Pasang Event Listener
     // ================================================================
 
-    // [BARU] INTERAKSI KLIK HEADER UNTUK TOGGLE PEEKING/EXPANDED
+    // [INTERAKSI 1] KLIK HEADER UNTUK TOGGLE PEEKING/EXPANDED
     sidebarHeader.addEventListener('click', (e) => {
         // Jangan trigger jika klik tombol close atau tombol fly-to
         if (e.target.closest('#close-sidebar-btn') || e.target.closest('.sidebar-fly-btn')) return;
 
-        // [GUARD BARU] Jangan lakukan toggle jika baru saja selesai swipe
-        // Ini mencegah "double action" (swipe selesai -> trigger click -> toggle)
+        // Guard: Jangan lakukan toggle jika baru saja selesai swipe
         if (sidebarHeader.dataset.swiping === "true") return;
 
         // Cek apakah sidebar sedang dalam mode peeking
         if (sidebarEl.classList.contains('sidebar-peeking')) {
             // Jika ya, Expand
             sidebarManager.setMobilePeekingState(false);
-        } else {
+        } else if (sidebarManager.isOpen()) {
             // Jika Expanded, Collapse ke Peeking
-            if (sidebarManager.isOpen()) {
-                 sidebarManager.setMobilePeekingState(true);
+            sidebarManager.setMobilePeekingState(true);
+        }
+    });
+
+    // [INTERAKSI 2 - FIX] LOGIKA KLIK HANDLE (PSEUDO-ELEMENT ::BEFORE) DENGAN DYNAMIC BOUNDARY
+    sidebarEl.addEventListener('click', (e) => {
+        // 1. Filter Target: Pastikan klik terjadi LANSUNG pada container #detail-sidebar
+        // (Bukan pada judul, tombol, atau konten di dalamnya).
+        // Klik pada ::before akan terbaca sebagai klik pada sidebarEl itu sendiri.
+        if (e.target !== sidebarEl) return;
+        if (!sidebarHeader) return; // Safety check
+
+        // 2. Logika Batas Dinamis:
+        // offsetTop header adalah jarak dari atas sidebar sampai ke header.
+        // Area ini secara implisit mencakup tinggi ::before + margin/padding.
+        const headerBoundary = sidebarHeader.offsetTop;
+
+        // 3. Cek Posisi Klik (Hit Testing):
+        // e.offsetY adalah posisi Y kursor relatif terhadap elemen target (sidebarEl).
+        // Jika Y < headerBoundary, berarti klik terjadi di "ruang kosong" di atas header (Handle Area).
+        if (e.offsetY < headerBoundary) {
+            console.log("Handle Clicked (Detected above Header via Dynamic Boundary)");
+
+            // Logika Toggle (Sama seperti header)
+            if (sidebarEl.classList.contains('sidebar-peeking')) {
+                sidebarManager.setMobilePeekingState(false); // Expand
+            } else if (sidebarManager.isOpen()) {
+                sidebarManager.setMobilePeekingState(true);  // Collapse to Peeking
             }
         }
     });
 
-    // [MULAI] LOGIKA GESTURE SWIPE (KHUSUS MOBILE - BOTTOM SHEET - 3 STATES - REVISED) 
-    // -------------------------------------------------------------
+    // [INTERAKSI 3] LOGIKA GESTURE SWIPE (KHUSUS MOBILE - BOTTOM SHEET)
     (function initMobileSwipeGesture() {
         // State Variables
         let startY = 0;
         let currentY = 0;
         let isDragging = false;
-        let hasMoved = false; // [BARU] Penanda apakah jari benar-benar bergerak
-        const SWIPE_THRESHOLD = 80; // Jarak geser minimal agar bereaksi snap
-        const MOVE_DEADZONE = 10;   // [BARU] Toleransi getaran jari (pixel)
+        let hasMoved = false; 
+        const SWIPE_THRESHOLD = 80; 
+        const MOVE_DEADZONE = 10;   
 
         // Helper: Cek apakah mode mobile
         function isMobile() { return window.innerWidth <= 768; }
@@ -176,27 +200,21 @@ document.addEventListener('DOMContentLoaded', function() {
         endEvents.forEach(evt => document.addEventListener(evt, handleEnd, { passive: false }));
 
         function handleStart(e) {
-            // 1. PENTING: Jika bukan Mobile, HENTIKAN proses gesture
             if (!isMobile()) return;
 
-            // [PERBAIKAN] EXCLUSION GUARD: 
-            // Jangan mulai swipe jika user menekan tombol interaktif (Button/Input),
-            // KECUALI tombol toggle utama (#sidebar-toggle-btn) yang memang didesain untuk ditarik.
-            
+            // Exclusion Guard
             const targetEl = e.target;
             const isButton = targetEl.closest('button');
             const isInput = targetEl.closest('input');
             const isToggleBtn = targetEl.closest('#sidebar-toggle-btn');
 
-            // Jika (Input) ATAU (Tombol TAPI BUKAN Toggle Utama) -> Batalkan swipe
             if (isInput || (isButton && !isToggleBtn)) {
                 return;
             }
 
             if (e.type === 'mousedown' && e.button !== 0) return;
             
-            // Cek konflik scroll: Jangan geser jika user sedang scroll konten sidebar ke bawah
-            // Pengecualian: Jika sedang PEEKING, konten tidak bisa discroll, jadi gesture valid
+            // Cek konflik scroll konten
             const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
             
             if (!isPeeking && sidebarEl.contains(e.target) && sidebarContentEl.contains(e.target)) {
@@ -204,8 +222,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             isDragging = true;
-            hasMoved = false; // Reset status gerakan
-            sidebarEl.style.transition = 'none'; // Matikan animasi agar responsif mengikuti jari
+            hasMoved = false; 
+            sidebarEl.style.transition = 'none'; 
 
             if (e.type === 'touchstart') {
                 startY = e.touches[0].clientY;
@@ -227,14 +245,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const diffY = clientY - startY;
 
-            // [BARU] DEADZONE CHECK
-            // Jika gerakan belum melebihi deadzone, jangan lakukan apa-apa
-            // Ini mencegah efek "bounce" saat user hanya ingin klik (tapi jari bergetar 1-2px)
+            // Deadzone Check
             if (!hasMoved && Math.abs(diffY) < MOVE_DEADZONE) {
                 return;
             }
 
-            hasMoved = true; // Konfirmasi bahwa ini adalah swipe
+            hasMoved = true; 
             currentY = clientY;
 
             const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
@@ -243,17 +259,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // A. Sidebar Tertutup -> Swipe ATAS (Buka)
             if (!sidebarManager.isOpen() && diffY < 0) {
-                 // Tarik naik penuh
                  sidebarEl.style.transform = `translateY(calc(100% + ${diffY}px))`;
             }
             // B. Sidebar Peeking -> Swipe ATAS (Expand) atau BAWAH (Close)
             else if (isPeeking) {
-                // Basis posisi peeking adalah calc(100% - 80px)
-                // Kita tambahkan diffY ke posisi itu
-                // Ini agak tricky dengan calc di JS, jadi kita simplifikasi visualnya
-                // User menggeser dari posisi 'bawah'.
-                
-                // Visualisasi sederhana: Geser elemen
                  sidebarEl.style.transform = `translateY(calc(100% - 80px + ${diffY}px))`;
             }
             // C. Sidebar Expanded -> Swipe BAWAH (Peeking/Close)
@@ -268,17 +277,13 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Kembalikan transisi halus CSS
             sidebarEl.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)'; 
-            sidebarEl.style.transform = ''; // Hapus style inline, biarkan Class CSS ambil alih
+            sidebarEl.style.transform = ''; 
 
-            // [BARU] JIKA TIDAK ADA GERAKAN SIGNIFIKAN, BERHENTI DI SINI
-            // Biarkan browser menangani ini sebagai event 'click' biasa
             if (!hasMoved) {
                 return;
             }
 
-            // [BARU] CLICK-THROUGH GUARD
-            // Jika user benar-benar swipe, pasang bendera sementara di header
-            // agar listener klik header tidak terpicu
+            // Click-through guard untuk mencegah klik header tertrigger
             sidebarHeader.dataset.swiping = "true";
             setTimeout(() => { delete sidebarHeader.dataset.swiping; }, 100);
 
@@ -291,31 +296,25 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!isOpen) {
                 // Dari Tertutup
                 if (diffY < -SWIPE_THRESHOLD) {
-                     // Buka Penuh (Standard)
                      sidebarManager.openSidebar();
                 }
             } else if (isPeeking) {
                 // Dari Peeking
                 if (diffY < -SWIPE_THRESHOLD) {
-                    // Geser ATAS -> EXPAND
-                    sidebarManager.setMobilePeekingState(false);
+                    sidebarManager.setMobilePeekingState(false); // EXPAND
                 } else if (diffY > SWIPE_THRESHOLD) {
-                    // Geser BAWAH -> CLOSE
-                    sidebarManager.closeSidebar();
+                    sidebarManager.closeSidebar(); // CLOSE
                 }
             } else {
                 // Dari Expanded
                 if (diffY > SWIPE_THRESHOLD) {
-                    // Geser BAWAH -> PEEKING
-                    sidebarManager.setMobilePeekingState(true);
+                    sidebarManager.setMobilePeekingState(true); // PEEKING
                 }
             }
             
-            // Reset Variable
             startY = 0; currentY = 0;
         }
     })();
-    // [AKHIR] LOGIKA GESTURE SWIPE
 
     prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 24));
     nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 24));
