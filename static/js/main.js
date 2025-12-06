@@ -131,31 +131,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // [BARU] INTERAKSI KLIK HEADER UNTUK TOGGLE PEEKING/EXPANDED
     sidebarHeader.addEventListener('click', (e) => {
-        // Jangan trigger jika klik tombol close
+        // Jangan trigger jika klik tombol close atau tombol fly-to
         if (e.target.closest('#close-sidebar-btn') || e.target.closest('.sidebar-fly-btn')) return;
+
+        // [GUARD BARU] Jangan lakukan toggle jika baru saja selesai swipe
+        // Ini mencegah "double action" (swipe selesai -> trigger click -> toggle)
+        if (sidebarHeader.dataset.swiping === "true") return;
 
         // Cek apakah sidebar sedang dalam mode peeking
         if (sidebarEl.classList.contains('sidebar-peeking')) {
             // Jika ya, Expand
             sidebarManager.setMobilePeekingState(false);
         } else {
-            // Jika Expanded, Collapse ke Peeking (opsional, atau bisa dibiarkan tidak melakukan apa-apa)
-            // Biasanya klik header saat expanded tidak melakukan apa-apa atau menutup?
-            // User request: "mengecilkan sidebar ulang" -> jadi kita izinkan toggle ke peeking
+            // Jika Expanded, Collapse ke Peeking
             if (sidebarManager.isOpen()) {
                  sidebarManager.setMobilePeekingState(true);
             }
         }
     });
 
-    // [MULAI] LOGIKA GESTURE SWIPE (KHUSUS MOBILE - BOTTOM SHEET - 3 STATES) 
+    // [MULAI] LOGIKA GESTURE SWIPE (KHUSUS MOBILE - BOTTOM SHEET - 3 STATES - REVISED) 
     // -------------------------------------------------------------
     (function initMobileSwipeGesture() {
         // State Variables
         let startY = 0;
         let currentY = 0;
         let isDragging = false;
-        const SWIPE_THRESHOLD = 80; // Jarak geser minimal agar bereaksi
+        let hasMoved = false; // [BARU] Penanda apakah jari benar-benar bergerak
+        const SWIPE_THRESHOLD = 80; // Jarak geser minimal agar bereaksi snap
+        const MOVE_DEADZONE = 10;   // [BARU] Toleransi getaran jari (pixel)
 
         // Helper: Cek apakah mode mobile
         function isMobile() { return window.innerWidth <= 768; }
@@ -175,6 +179,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // 1. PENTING: Jika bukan Mobile, HENTIKAN proses gesture
             if (!isMobile()) return;
 
+            // [BARU] EXCLUSION GUARD: Jangan mulai swipe jika user menekan tombol interaktif
+            // Ini memastikan tombol FlyTo dan Close bisa diklik dengan normal
+            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.sidebar-fly-btn') || e.target.closest('#close-sidebar-btn')) {
+                return;
+            }
+
             if (e.type === 'mousedown' && e.button !== 0) return;
             
             // Cek konflik scroll: Jangan geser jika user sedang scroll konten sidebar ke bawah
@@ -186,6 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             isDragging = true;
+            hasMoved = false; // Reset status gerakan
             sidebarEl.style.transition = 'none'; // Matikan animasi agar responsif mengikuti jari
 
             if (e.type === 'touchstart') {
@@ -198,14 +209,26 @@ document.addEventListener('DOMContentLoaded', function() {
         function handleMove(e) {
             if (!isDragging) return;
 
+            let clientY;
             if (e.type === 'touchmove') {
-                currentY = e.touches[0].clientY;
+                clientY = e.touches[0].clientY;
             } else {
                 e.preventDefault(); 
-                currentY = e.clientY;
+                clientY = e.clientY;
             }
 
-            const diffY = currentY - startY;
+            const diffY = clientY - startY;
+
+            // [BARU] DEADZONE CHECK
+            // Jika gerakan belum melebihi deadzone, jangan lakukan apa-apa
+            // Ini mencegah efek "bounce" saat user hanya ingin klik (tapi jari bergetar 1-2px)
+            if (!hasMoved && Math.abs(diffY) < MOVE_DEADZONE) {
+                return;
+            }
+
+            hasMoved = true; // Konfirmasi bahwa ini adalah swipe
+            currentY = clientY;
+
             const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
 
             // --- LOGIKA PERGERAKAN ---
@@ -239,6 +262,18 @@ document.addEventListener('DOMContentLoaded', function() {
             sidebarEl.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)'; 
             sidebarEl.style.transform = ''; // Hapus style inline, biarkan Class CSS ambil alih
 
+            // [BARU] JIKA TIDAK ADA GERAKAN SIGNIFIKAN, BERHENTI DI SINI
+            // Biarkan browser menangani ini sebagai event 'click' biasa
+            if (!hasMoved) {
+                return;
+            }
+
+            // [BARU] CLICK-THROUGH GUARD
+            // Jika user benar-benar swipe, pasang bendera sementara di header
+            // agar listener klik header tidak terpicu
+            sidebarHeader.dataset.swiping = "true";
+            setTimeout(() => { delete sidebarHeader.dataset.swiping; }, 100);
+
             const diffY = currentY - startY;
             const isOpen = sidebarManager.isOpen();
             const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
@@ -263,8 +298,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 // Dari Expanded
                 if (diffY > SWIPE_THRESHOLD) {
-                    // Geser BAWAH -> PEEKING (Sesuai request: "mengecilkan sidebar ulang")
-                    // Jika geser sangat jauh/cepat, bisa juga close, tapi Peeking lebih aman
+                    // Geser BAWAH -> PEEKING
                     sidebarManager.setMobilePeekingState(true);
                 }
             }
