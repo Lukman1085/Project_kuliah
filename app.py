@@ -7,7 +7,8 @@ import requests
 import redis
 import re
 from datetime import datetime, timedelta
-from flask import Flask, Response, render_template, request, jsonify
+from functools import wraps
+from flask import Flask, Response, render_template, request, jsonify, make_response
 from flask_cors import CORS
 from flask_compress import Compress
 from sqlalchemy import create_engine, text
@@ -42,6 +43,32 @@ LOCAL_MAPS_URL = "/static/maps"
 
 print(f"🚀 RUNNING IN {ENV_MODE.upper()} MODE")
 print(f"📡 API SOURCE: {'REAL OPEN-METEO/BMKG' if USE_REAL_API else 'DUMMY DATA'}")
+
+# ================== DECORATOR CACHE CDN (SOLUSI VERCEL) ==================
+
+def cache_control(max_age=60, s_maxage=600, stale_while_revalidate=300):
+    """
+    Decorator untuk menambahkan header Cache-Control pada response Flask.
+    Sangat penting untuk Vercel Serverless agar tidak memukul backend terus menerus.
+    
+    Arguments:
+    - max_age: Waktu cache di browser user (detik).
+    - s_maxage: Waktu cache di CDN Vercel (Edge) (detik).
+    - stale_while_revalidate: Waktu menyajikan data lama sambil update di background.
+    """
+    def decorator(view):
+        @wraps(view)
+        def wrapped_view(*args, **kwargs):
+            response = make_response(view(*args, **kwargs))
+            
+            # Header Kunci untuk Vercel Edge Caching
+            # public: Boleh dicache oleh siapa saja (termasuk CDN)
+            response.headers['Cache-Control'] = (
+                f"public, max-age={max_age}, s-maxage={s_maxage}, stale-while-revalidate={stale_while_revalidate}"
+            )
+            return response
+        return wrapped_view
+    return decorator
 
 # ================== DATABASE CONFIGURATION (SUPABASE) ==================
 if IS_PRODUCTION:
@@ -509,10 +536,12 @@ def index():
     return render_template('index.html', map_base_url=map_base_url)
 
 @app.route('/api/wmo-codes')
+@cache_control(max_age=3600, s_maxage=86400) # Cache 1 Hari
 def get_wmo_codes():
     return jsonify(WMO_CODE_MAP)
 
 @app.route('/api/provinsi-info')
+@cache_control(max_age=300, s_maxage=3600) # Cache 1 Jam (Data Statis)
 def get_provinsi_info():
     if not Session: return jsonify({"error": "Database not connected"}), 500
     session = Session()
@@ -532,6 +561,7 @@ def get_provinsi_info():
         session.close()
 
 @app.route('/api/cari-lokasi')
+@cache_control(max_age=60, s_maxage=300) # Cache 5 menit (pencarian sering berulang)
 def cari_lokasi():
     if not Session: return jsonify({"error": "Database not connected"}), 500
     q = request.args.get('q', '').strip()
@@ -559,6 +589,7 @@ def cari_lokasi():
         session.close()
 
 @app.route('/api/data-cuaca')
+@cache_control(max_age=300, s_maxage=1800) # Cache 30 menit
 def get_data_cuaca():
     if not Session: return jsonify({"error": "Database not connected"}), 500
     bbox_str = request.args.get('bbox')
@@ -599,6 +630,7 @@ def get_data_cuaca():
         session.close()
 
 @app.route('/api/sub-wilayah-cuaca')
+@cache_control(max_age=300, s_maxage=1800) # Cache 30 menit
 def get_sub_wilayah_cuaca():
     if not Session: return jsonify({"error": "Database not connected"}), 500
     parent_id = request.args.get('id')
@@ -638,6 +670,7 @@ def get_sub_wilayah_cuaca():
         session.close()
 
 @app.route('/api/data-by-ids')
+@cache_control(max_age=300, s_maxage=1800) # Cache 30 menit
 def get_data_by_ids():
     if not Session: return jsonify({"error": "Database not connected"}), 500
     ids_str = request.args.get('ids')
@@ -724,6 +757,7 @@ def parse_bmkg_to_geojson(bmkg_data):
     return {"type": "FeatureCollection", "features": features}
 
 @app.route('/api/gempa/bmkg')
+@cache_control(max_age=60, s_maxage=60, stale_while_revalidate=30) # Cache 1 menit
 def get_gempa_bmkg():
     cache_key = "gempa:bmkg"
     cached = get_cache(cache_key)
@@ -743,6 +777,7 @@ def get_gempa_bmkg():
         return jsonify(get_cache(cache_key) or {"features": []})
 
 @app.route('/api/gempa/usgs')
+@cache_control(max_age=300, s_maxage=300) # Cache 5 menit
 def get_gempa_usgs():
     cache_key = "gempa:usgs"
     cached = get_cache(cache_key)
