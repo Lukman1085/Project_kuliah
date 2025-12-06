@@ -623,6 +623,15 @@ export const mapManager = {
     handleClientClusterClick: async function(clusterData, coordinates) {
         const members = clusterData._directMembers; 
         if (!members) return;
+
+        // [UPDATE UX MOBILE] Logic Peeking saat Cluster diklik
+        // Sama seperti marker biasa, jika sidebar terbuka penuh, turunkan ke peeking
+        if (this._sidebarManager && this._sidebarManager.isOpen()) {
+            if (typeof this._sidebarManager.setMobilePeekingState === 'function') {
+                this._sidebarManager.setMobilePeekingState(true);
+            }
+        }
+
         popupManager.close(true);
         const pointCount = members.length;
         

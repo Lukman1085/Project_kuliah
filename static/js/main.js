@@ -179,9 +179,17 @@ document.addEventListener('DOMContentLoaded', function() {
             // 1. PENTING: Jika bukan Mobile, HENTIKAN proses gesture
             if (!isMobile()) return;
 
-            // [BARU] EXCLUSION GUARD: Jangan mulai swipe jika user menekan tombol interaktif
-            // Ini memastikan tombol FlyTo dan Close bisa diklik dengan normal
-            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.sidebar-fly-btn') || e.target.closest('#close-sidebar-btn')) {
+            // [PERBAIKAN] EXCLUSION GUARD: 
+            // Jangan mulai swipe jika user menekan tombol interaktif (Button/Input),
+            // KECUALI tombol toggle utama (#sidebar-toggle-btn) yang memang didesain untuk ditarik.
+            
+            const targetEl = e.target;
+            const isButton = targetEl.closest('button');
+            const isInput = targetEl.closest('input');
+            const isToggleBtn = targetEl.closest('#sidebar-toggle-btn');
+
+            // Jika (Input) ATAU (Tombol TAPI BUKAN Toggle Utama) -> Batalkan swipe
+            if (isInput || (isButton && !isToggleBtn)) {
                 return;
             }
 
