@@ -10,7 +10,9 @@ import { getMapStyle } from './map_style.js';
 import { ResetPitchControl } from './reset_pitch_ctrl.js';
 import { calendarManager } from './calender_manager.js';
 import { searchBarManager } from './searchbar.js';
-import { legendManager } from './legend_manager.js'; 
+import { legendManager } from './legend_manager.js';
+// [BARU] Import service Vercel
+import { initVercelServices } from './vercel_services.js';
 
 // ================================================================
 // 2. KONFIGURASI & STATE GLOBAL
@@ -29,6 +31,10 @@ let searchDebounceTimer;
 // 3. TITIK MASUK APLIKASI (APPLICATION ENTRYPOINT)
 // ================================================================
 document.addEventListener('DOMContentLoaded', function() {
+
+    // [BARU] Inisialisasi Vercel Analytics & Speed Insights
+    // Panggil sedini mungkin saat DOM Ready
+    initVercelServices();
 
     // [BARU] Inisialisasi Protokol PMTiles sebelum Map dimuat
     if (window.pmtiles) {
