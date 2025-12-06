@@ -1,4 +1,5 @@
 venv/ 
+venvm/
 
 /legacy_file
 /static/images/icons/

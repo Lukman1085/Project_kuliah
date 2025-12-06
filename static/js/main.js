@@ -10,7 +10,9 @@ import { getMapStyle } from './map_style.js';
 import { ResetPitchControl } from './reset_pitch_ctrl.js';
 import { calendarManager } from './calender_manager.js';
 import { searchBarManager } from './searchbar.js';
-import { legendManager } from './legend_manager.js'; 
+import { legendManager } from './legend_manager.js';
+// [BARU] Import service Vercel
+import { initVercelServices } from './vercel_services.js';
 
 // ================================================================
 // 2. KONFIGURASI & STATE GLOBAL
@@ -29,6 +31,10 @@ let searchDebounceTimer;
 // 3. TITIK MASUK APLIKASI (APPLICATION ENTRYPOINT)
 // ================================================================
 document.addEventListener('DOMContentLoaded', function() {
+
+    // [BARU] Inisialisasi Vercel Analytics & Speed Insights
+    // Panggil sedini mungkin saat DOM Ready
+    initVercelServices();
 
     // [BARU] Inisialisasi Protokol PMTiles sebelum Map dimuat
     if (window.pmtiles) {
@@ -51,6 +57,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebarLoadingEl = document.getElementById('sidebar-loading');
     const sidebarWeatherDetailsEl = document.getElementById('sidebar-weather-details');
     const sidebarProvinceDetailsEl = document.getElementById('sidebar-province-details');
+    // Header untuk interaksi Toggle
+    const sidebarHeader = document.getElementById('sidebar-header');
     
     const prevDayBtn = document.getElementById('prev-day-btn');
     const nextDayBtn = document.getElementById('next-day-btn');
@@ -126,6 +134,193 @@ document.addEventListener('DOMContentLoaded', function() {
     // ================================================================
     // 4. Pasang Event Listener
     // ================================================================
+
+    // [INTERAKSI 1] KLIK HEADER UNTUK TOGGLE PEEKING/EXPANDED
+    sidebarHeader.addEventListener('click', (e) => {
+        // Jangan trigger jika klik tombol close atau tombol fly-to
+        if (e.target.closest('#close-sidebar-btn') || e.target.closest('.sidebar-fly-btn')) return;
+
+        // Guard: Jangan lakukan toggle jika baru saja selesai swipe
+        if (sidebarHeader.dataset.swiping === "true") return;
+
+        // Cek apakah sidebar sedang dalam mode peeking
+        if (sidebarEl.classList.contains('sidebar-peeking')) {
+            // Jika ya, Expand
+            sidebarManager.setMobilePeekingState(false);
+        } else if (sidebarManager.isOpen()) {
+            // Jika Expanded, Collapse ke Peeking
+            sidebarManager.setMobilePeekingState(true);
+        }
+    });
+
+    // [INTERAKSI 2 - FIX] LOGIKA KLIK HANDLE (PSEUDO-ELEMENT ::BEFORE) DENGAN DYNAMIC BOUNDARY
+    sidebarEl.addEventListener('click', (e) => {
+        // 1. Filter Target: Pastikan klik terjadi LANSUNG pada container #detail-sidebar
+        // (Bukan pada judul, tombol, atau konten di dalamnya).
+        // Klik pada ::before akan terbaca sebagai klik pada sidebarEl itu sendiri.
+        if (e.target !== sidebarEl) return;
+        if (!sidebarHeader) return; // Safety check
+
+        // 2. Logika Batas Dinamis:
+        // offsetTop header adalah jarak dari atas sidebar sampai ke header.
+        // Area ini secara implisit mencakup tinggi ::before + margin/padding.
+        const headerBoundary = sidebarHeader.offsetTop;
+
+        // 3. Cek Posisi Klik (Hit Testing):
+        // e.offsetY adalah posisi Y kursor relatif terhadap elemen target (sidebarEl).
+        // Jika Y < headerBoundary, berarti klik terjadi di "ruang kosong" di atas header (Handle Area).
+        if (e.offsetY < headerBoundary) {
+            console.log("Handle Clicked (Detected above Header via Dynamic Boundary)");
+
+            // Logika Toggle (Sama seperti header)
+            if (sidebarEl.classList.contains('sidebar-peeking')) {
+                sidebarManager.setMobilePeekingState(false); // Expand
+            } else if (sidebarManager.isOpen()) {
+                sidebarManager.setMobilePeekingState(true);  // Collapse to Peeking
+            }
+        }
+    });
+
+    // [INTERAKSI 3] LOGIKA GESTURE SWIPE (KHUSUS MOBILE - BOTTOM SHEET)
+    (function initMobileSwipeGesture() {
+        // State Variables
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+        let hasMoved = false; 
+        const SWIPE_THRESHOLD = 80; 
+        const MOVE_DEADZONE = 10;   
+
+        // Helper: Cek apakah mode mobile
+        function isMobile() { return window.innerWidth <= 768; }
+
+        const startEvents = ['touchstart', 'mousedown'];
+        const moveEvents = ['touchmove', 'mousemove'];
+        const endEvents = ['touchend', 'mouseup', 'mouseleave'];
+
+        // Pasang listener
+        [sidebarEl, toggleBtnEl].forEach(el => {
+            startEvents.forEach(evt => el.addEventListener(evt, handleStart, { passive: false }));
+        });
+        moveEvents.forEach(evt => document.addEventListener(evt, handleMove, { passive: false }));
+        endEvents.forEach(evt => document.addEventListener(evt, handleEnd, { passive: false }));
+
+        function handleStart(e) {
+            if (!isMobile()) return;
+
+            // Exclusion Guard
+            const targetEl = e.target;
+            const isButton = targetEl.closest('button');
+            const isInput = targetEl.closest('input');
+            const isToggleBtn = targetEl.closest('#sidebar-toggle-btn');
+
+            if (isInput || (isButton && !isToggleBtn)) {
+                return;
+            }
+
+            if (e.type === 'mousedown' && e.button !== 0) return;
+            
+            // Cek konflik scroll konten
+            const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
+            
+            if (!isPeeking && sidebarEl.contains(e.target) && sidebarContentEl.contains(e.target)) {
+                if (sidebarContentEl.scrollTop > 0) return; 
+            }
+
+            isDragging = true;
+            hasMoved = false; 
+            sidebarEl.style.transition = 'none'; 
+
+            if (e.type === 'touchstart') {
+                startY = e.touches[0].clientY;
+            } else {
+                startY = e.clientY;
+            }
+        }
+
+        function handleMove(e) {
+            if (!isDragging) return;
+
+            let clientY;
+            if (e.type === 'touchmove') {
+                clientY = e.touches[0].clientY;
+            } else {
+                e.preventDefault(); 
+                clientY = e.clientY;
+            }
+
+            const diffY = clientY - startY;
+
+            // Deadzone Check
+            if (!hasMoved && Math.abs(diffY) < MOVE_DEADZONE) {
+                return;
+            }
+
+            hasMoved = true; 
+            currentY = clientY;
+
+            const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
+
+            // --- LOGIKA PERGERAKAN ---
+            
+            // A. Sidebar Tertutup -> Swipe ATAS (Buka)
+            if (!sidebarManager.isOpen() && diffY < 0) {
+                 sidebarEl.style.transform = `translateY(calc(100% + ${diffY}px))`;
+            }
+            // B. Sidebar Peeking -> Swipe ATAS (Expand) atau BAWAH (Close)
+            else if (isPeeking) {
+                 sidebarEl.style.transform = `translateY(calc(100% - 80px + ${diffY}px))`;
+            }
+            // C. Sidebar Expanded -> Swipe BAWAH (Peeking/Close)
+            else if (sidebarManager.isOpen() && !isPeeking && diffY > 0) {
+                 sidebarEl.style.transform = `translateY(${diffY}px)`;
+            }
+        }
+
+        function handleEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            // Kembalikan transisi halus CSS
+            sidebarEl.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)'; 
+            sidebarEl.style.transform = ''; 
+
+            if (!hasMoved) {
+                return;
+            }
+
+            // Click-through guard untuk mencegah klik header tertrigger
+            sidebarHeader.dataset.swiping = "true";
+            setTimeout(() => { delete sidebarHeader.dataset.swiping; }, 100);
+
+            const diffY = currentY - startY;
+            const isOpen = sidebarManager.isOpen();
+            const isPeeking = sidebarEl.classList.contains('sidebar-peeking');
+
+            // --- LOGIKA KEPUTUSAN 3-STATE ---
+
+            if (!isOpen) {
+                // Dari Tertutup
+                if (diffY < -SWIPE_THRESHOLD) {
+                     sidebarManager.openSidebar();
+                }
+            } else if (isPeeking) {
+                // Dari Peeking
+                if (diffY < -SWIPE_THRESHOLD) {
+                    sidebarManager.setMobilePeekingState(false); // EXPAND
+                } else if (diffY > SWIPE_THRESHOLD) {
+                    sidebarManager.closeSidebar(); // CLOSE
+                }
+            } else {
+                // Dari Expanded
+                if (diffY > SWIPE_THRESHOLD) {
+                    sidebarManager.setMobilePeekingState(true); // PEEKING
+                }
+            }
+            
+            startY = 0; currentY = 0;
+        }
+    })();
 
     prevDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() - 24));
     nextDayBtn.addEventListener('click', () => timeManager.handleTimeChange(timeManager.getSelectedTimeIndex() + 24));

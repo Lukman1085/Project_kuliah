@@ -192,6 +192,16 @@ export const mapManager = {
             return;
         }
 
+        // [UPDATE UX MOBILE] Logic Peeking saat Marker diklik
+        // Jika sidebar sedang terbuka (Expanded), kita "turunkan" ke mode Peeking
+        // supaya user bisa melihat marker yang baru saja dipilih di peta.
+        // Ini juga mencegah efek "bounce" karena sidebar langsung beranimasi turun sebelum konten dirender ulang.
+        if (this._sidebarManager && this._sidebarManager.isOpen()) {
+            if (typeof this._sidebarManager.setMobilePeekingState === 'function') {
+                this._sidebarManager.setMobilePeekingState(true);
+            }
+        }
+
         popupManager.close(true);
         if (this._sidebarManager) this._sidebarManager.resetContentMode();
 
@@ -613,6 +623,15 @@ export const mapManager = {
     handleClientClusterClick: async function(clusterData, coordinates) {
         const members = clusterData._directMembers; 
         if (!members) return;
+
+        // [UPDATE UX MOBILE] Logic Peeking saat Cluster diklik
+        // Sama seperti marker biasa, jika sidebar terbuka penuh, turunkan ke peeking
+        if (this._sidebarManager && this._sidebarManager.isOpen()) {
+            if (typeof this._sidebarManager.setMobilePeekingState === 'function') {
+                this._sidebarManager.setMobilePeekingState(true);
+            }
+        }
+
         popupManager.close(true);
         const pointCount = members.length;
         
