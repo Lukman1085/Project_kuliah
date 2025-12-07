@@ -1,4 +1,24 @@
-body { margin: 0; padding: 0; }
+/* =======================================================
+   GLOBAL RESET: Mencegah 'Rubber Band' & Scroll Liar
+   ======================================================= */
+html, body {
+    /* 1. Kunci ukuran layar */
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    
+    /* 2. MATIKAN OVERSCROLL (KUNCI UTAMA) */
+    /* Ini mencegah halaman 'mental' saat ditarik di ujung atas/bawah */
+    overscroll-behavior: none; 
+    
+    /* 3. Matikan scrollbar default browser */
+    overflow: hidden; 
+    
+    /* 4. Optimasi Sentuhan */
+    /* Mencegah zoom cubit default browser (opsional, jika ingin map handle zoom) */
+    touch-action: none; 
+}
 #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1;}
 
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap');
