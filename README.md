@@ -233,9 +233,9 @@ web-cuaca/
 
 Proyek ini dibuat untuk memenuhi penugasan mata kuliah.
 
-  * **Dzaky**
-  * **Lukman**
-  * **Salman**
+  * **Dzaky Dzakwan**
+  * **Lukman Hakim**
+  * **Salman Dzaky**
 
 ## 📄 Lisensi
 
