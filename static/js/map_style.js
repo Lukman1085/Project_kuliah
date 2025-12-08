@@ -3,6 +3,7 @@
 // =================================================================
 
 const COLORS = {
+    negara: '#37474F',     // [BARU] Warna Negara (Gelap/Netral)
     provinsi: '#455A64',   
     kabupaten: '#90A4AE',  
     kecamatan: '#CFD8DC',  
@@ -39,7 +40,16 @@ export const getMapStyle = () => {
                 attribution: '&copy; OSM &copy; CARTO' 
             },
 
-            // 2. VECTOR SOURCE 1: PROVINSI (Zoom 4-7.99)
+            // [BARU] VECTOR SOURCE 0: NEGARA (Zoom 0-5)
+            // Pastikan file batas_negara.pmtiles ada di folder maps
+            'source_negara': { 
+                type: 'vector', 
+                url: `pmtiles://${baseUrl}/batas_negara.pmtiles`, 
+                attribution: 'BIG',
+                promoteId: 'KDPPUM' // Asumsi ID menggunakan kolom yang sama dengan provinsi (00)
+            },
+
+            // 2. VECTOR SOURCE 1: PROVINSI (Zoom 5-7.99)
             'source_provinsi': { 
                 type: 'vector', 
                 // Konstruksi URL PMTiles: pmtiles:// + BASE_URL + /filename
@@ -86,15 +96,33 @@ export const getMapStyle = () => {
             // --- LAYER 1: BASEMAP ---
             { id: 'cartodb-positron-layer', type: 'raster', source: 'cartodb-positron-nolabels' },
 
+            // --- [BARU] LAYER NEGARA (PMTILES) ---
+            // Minzoom 4 (sesuai setting map init) s/d Maxzoom 5
+            { 
+                id: 'batas-negara-fill', type: 'fill', source: 'source_negara', 'source-layer': 'batas_negara', 
+                minzoom: 0, maxzoom: 5, // Muncul dari jauh sampai zoom 5
+                paint: { 
+                    'fill-color': COLORS.hover_fill, 
+                    'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.1, 0] 
+                } 
+            },
+            { 
+                id: 'batas-negara-layer', type: 'line', source: 'source_negara', 'source-layer': 'batas_negara', 
+                minzoom: 0, maxzoom: 5, 
+                layout: { 'line-join': 'round', 'line-cap': 'round' }, 
+                paint: { 'line-color': COLORS.negara, 'line-width': 2, 'line-opacity': 0.9 } // Garis lebih tebal untuk negara
+            },
+
             // --- LAYER PROVINSI (PMTILES) ---
+            // [UPDATE] Minzoom diubah dari 4 menjadi 5 agar nyambung dengan negara
             { 
                 id: 'batas-provinsi-fill', type: 'fill', source: 'source_provinsi', 'source-layer': 'batas_provinsi', 
-                minzoom: 4, maxzoom: 7.99, 
+                minzoom: 5, maxzoom: 7.99, 
                 paint: { 'fill-color': COLORS.hover_fill, 'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.1, 0] } 
             },
             { 
                 id: 'batas-provinsi-layer', type: 'line', source: 'source_provinsi', 'source-layer': 'batas_provinsi', 
-                minzoom: 4, maxzoom: 7.99, 
+                minzoom: 5, maxzoom: 7.99, 
                 layout: { 'line-join': 'round', 'line-cap': 'round' }, 
                 paint: { 'line-color': COLORS.provinsi, 'line-width': 1.5, 'line-opacity': 0.8 } 
             },

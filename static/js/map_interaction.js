@@ -1,14 +1,16 @@
 /** 🖱️ MAP INTERACTION (MULTI-SOURCE SUPPORT)
  * Menangani semua event listener peta (Mouse, Touch, Click, Hover).
- * Update: Mendukung 3 sumber data terpisah (Provinsi, Kab/Kota, Kecamatan).
+ * Update: Mendukung 4 sumber data terpisah (Negara, Provinsi, Kab/Kota, Kecamatan).
  */
+import { MAP_LAYERS, MAP_SOURCES } from "./constants.js";
+
 export const MapInteraction = {
     _map: null,
     _callbacks: {}, 
     
     // State Internal untuk Hover
     _hoveredStateId: null,
-    _hoveredSource: null,      // [BARU] Menyimpan ID Source (misal: 'source_provinsi')
+    _hoveredSource: null,      // Menyimpan ID Source (misal: 'source_provinsi')
     _hoveredSourceLayer: null, // Menyimpan nama layer dalam vector tile
 
     /**
@@ -50,14 +52,22 @@ export const MapInteraction = {
 
     /**
      * Menangani logika Hover pada poligon wilayah.
-     * [UPDATE] Sekarang menangani 3 source berbeda.
+     * [UPDATE] Sekarang menangani 4 source berbeda termasuk Negara.
      */
     _initHoverLogic: function() {
-        // Daftar layer fill yang ada di map_style.js
-        const fillLayers = ['batas-provinsi-fill', 'batas-kabupaten-fill', 'batas-kecamatan-fill'];
+        // Daftar layer fill yang ada di map_style.js (Gunakan Constants jika memungkinkan, atau string langsung)
+        // Disini kita gunakan string langsung agar sesuai dengan map_style.js yang baru diupdate
+        const fillLayers = [
+            'batas-negara-fill',     // [BARU]
+            'batas-provinsi-fill', 
+            'batas-kabupaten-fill', 
+            'batas-kecamatan-fill'
+        ];
 
         // Mapping dari Layer ID ke Source Config
+        // Pastikan 'sourceLayer' sesuai dengan nama layer di dalam PMTiles
         const layerConfig = {
+            'batas-negara-fill': { source: 'source_negara', sourceLayer: 'batas_negara' }, // [BARU]
             'batas-provinsi-fill': { source: 'source_provinsi', sourceLayer: 'batas_provinsi' },
             'batas-kabupaten-fill': { source: 'source_kabupaten', sourceLayer: 'batas_kabupatenkota' },
             'batas-kecamatan-fill': { source: 'source_kecamatan', sourceLayer: 'batas_kecamatandistrik' }
@@ -107,7 +117,7 @@ export const MapInteraction = {
                 }
             } catch (err) {
                 // Silent catch untuk glitch render
-                console.warn("Hover logic warning:", err);
+                // console.warn("Hover logic warning:", err);
             }
         });
 
@@ -156,7 +166,10 @@ export const MapInteraction = {
         const tip = parseInt(tipadm, 10);
         
         // PENTING: Mapping ini harus sesuai dengan map_style.js
-        if (tip === 1) {
+        if (tip === 0) { // [BARU] TIPADM 0 = NEGARA
+            targetSource = 'source_negara';
+            targetLayer = 'batas_negara';
+        } else if (tip === 1) {
             targetSource = 'source_provinsi';
             targetLayer = 'batas_provinsi';
         } else if (tip === 2) {

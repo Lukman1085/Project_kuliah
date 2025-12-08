@@ -65,9 +65,10 @@ export const mapManager = {
             this.triggerFetchData(); 
         });
         
-        // [UPDATE] Listener Sourcedata untuk Multi-Source
+        // [UPDATE] Listener Sourcedata untuk Multi-Source (Termasuk Negara)
         mapInstance.on('sourcedata', (e) => {
             const isWilayahSource = [
+                MAP_SOURCES.SOURCE_NEGARA, // [BARU]
                 MAP_SOURCES.SOURCE_PROVINSI, 
                 MAP_SOURCES.SOURCE_KABUPATEN, 
                 MAP_SOURCES.SOURCE_KECAMATAN
@@ -108,8 +109,6 @@ export const mapManager = {
 
         const map = this.getMap(); if (!map) return;
         
-        // [PERBAIKAN BUG VISUAL FEEDBACK]
-        // Kembalikan kontrol loading spinner ke Map Manager
         const loadingSpinner = document.getElementById(DOM_IDS.GLOBAL_SPINNER);
         
         const renderedIds = Object.keys(this._markers);
@@ -117,6 +116,8 @@ export const mapManager = {
         const potentialIds = renderedIds.filter(id => {
             if (id.startsWith('cl-')) return false; 
             const marker = this._markers[id];
+            // [PENTING] Filter ini sekarang mencakup Negara & Provinsi
+            // karena keduanya menggunakan class CSS CSS_CLASSES.MARKER_PROVINCE
             if (marker && marker.getElement().querySelector(`.${CSS_CLASSES.MARKER_PROVINCE}`)) return false; 
             return true;
         });
@@ -186,13 +187,12 @@ export const mapManager = {
         if ((!coordinates[0] || isNaN(coordinates[0])) && this._markers[id]) { 
             coordinates = this._markers[id].getLngLat().toArray(); 
         }
-        // [FIX TYPO / LOGIC] Pastikan koordinat valid sebelum lanjut
         if (!coordinates || coordinates.length < 2 || isNaN(coordinates[0]) || isNaN(coordinates[1])) {
             console.warn("Koordinat tidak valid untuk marker ini.");
             return;
         }
 
-        // [UPDATE UX MOBILE] Logic Peeking saat Marker diklik
+        // [UX MOBILE] Logic Peeking saat Marker diklik
         // Jika sidebar sedang terbuka (Expanded), kita "turunkan" ke mode Peeking
         // supaya user bisa melihat marker yang baru saja dipilih di peta.
         // Ini juga mencegah efek "bounce" karena sidebar langsung beranimasi turun sebelum konten dirender ulang.
@@ -214,10 +214,23 @@ export const mapManager = {
         this._activeLocationLabel = props.nama_label;
         this.setActiveMarkerHighlight(id);
 
-        if (parseInt(props.tipadm, 10) === 1) {
-            this._activeLocationData = { ...props, type: 'provinsi', latitude: coordinates[1], longitude: coordinates[0] };
+        // [UPDATE] Penanganan Tipe 0 (Negara) dan 1 (Provinsi)
+        const tipadm = parseInt(props.tipadm, 10);
+        if (tipadm <= 1) {
+            const typeName = tipadm === 0 ? 'negara' : 'provinsi';
+            this._activeLocationData = { 
+                ...props, 
+                type: typeName, 
+                latitude: coordinates[1], 
+                longitude: coordinates[0] 
+            };
             this._isClickLoading = false;
-            if (this._sidebarManager && this._sidebarManager.isOpen()) this._sidebarManager.renderSidebarContent();
+            
+            if (this._sidebarManager && this._sidebarManager.isOpen()) {
+                this._sidebarManager.renderSidebarContent();
+            }
+            
+            // Gunakan generator popup Provinsi (bisa diadaptasi untuk Negara juga karena isinya mirip)
             const popupContent = popupManager.generateProvincePopupContent(props.nama_simpel, props.nama_label);
             popupManager.open(coordinates, popupContent);
             return;
@@ -337,7 +350,7 @@ export const mapManager = {
     },
 
     // =========================================================================
-    // LOGIKA NAVIGASI & ZOOM (PERBAIKAN RENCANA 2)
+    // LOGIKA NAVIGASI & ZOOM
     // =========================================================================
     
     // Helper Internal: Menunggu Peta Idle sebelum Render
@@ -399,7 +412,12 @@ export const mapManager = {
 
         const tipadm = parseInt(data.tipadm, 10);
         let targetZoom = 10; 
-        if (tipadm === 1) targetZoom = 7; else if (tipadm === 2) targetZoom = 9; else if (tipadm === 3) targetZoom = 11; else if (tipadm === 4) targetZoom = 14;
+        // [UPDATE] Target Zoom untuk Negara
+        if (tipadm === 0) targetZoom = 4.5;
+        else if (tipadm === 1) targetZoom = 7; 
+        else if (tipadm === 2) targetZoom = 9; 
+        else if (tipadm === 3) targetZoom = 11; 
+        else if (tipadm === 4) targetZoom = 14;
 
         this._isFlying = true;
         this.triggerFetchData();
@@ -410,13 +428,13 @@ export const mapManager = {
 
         this._map.once('moveend', () => {
             this._isFlying = false;
-            // [MODIFIKASI] Gunakan helper robust idle
             this._waitForMapIdleAndRender(() => {
                 if (!this._isGempaLayerActive && data && String(this._activeLocationId) === String(data.id)) {
                     const cached = cacheManager.get(String(data.id));
+                    // Handle Popup untuk tipe non-cuaca (Negara/Provinsi)
                     if (cached) {
                          this._renderRichPopup(cached, coords);
-                    } else if (data.type === 'provinsi') {
+                    } else if (data.type === 'provinsi' || data.type === 'negara') {
                          const content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
                          popupManager.open(coords, content);
                     } else {
@@ -428,12 +446,17 @@ export const mapManager = {
         });
     },
     
-    // [MODIFIKASI RENCANA 2] Tambahkan parameter onCompleteCallback
     flyToLocation: function(lat, lon, tipadm, onCompleteCallback) {
          if (!this._map) return;
          const tip = parseInt(tipadm, 10);
          let z = 10;
-         if (tip === 1) z = 7; else if (tip === 2) z = 9; else if (tip === 3) z = 11; else if (tip === 4) z = 14;
+         
+         // [UPDATE] Target Zoom untuk Negara
+         if (tip === 0) z = 4.5;
+         else if (tip === 1) z = 7; 
+         else if (tip === 2) z = 9; 
+         else if (tip === 3) z = 11; 
+         else if (tip === 4) z = 14;
 
          this._isFlying = true;
          this._map.easeTo({ center: [lon, lat], zoom: z });
@@ -441,7 +464,7 @@ export const mapManager = {
          this._map.once('moveend', () => {
              this._isFlying = false;
              
-             // [MODIFIKASI] Tunggu sampai map IDLE (tile termuat semua) baru jalankan logika marker
+             // Tunggu sampai map IDLE (tile termuat semua) baru jalankan logika marker
              // Ini mencegah 'Ghost Marker' dimana marker tidak muncul karena queryRenderedFeatures 
              // dijalankan saat tile belum siap.
              this._waitForMapIdleAndRender(() => {
@@ -466,13 +489,22 @@ export const mapManager = {
         let nameKey = '';
         let tipadmVal = 0;
 
-        if (zoom <= 7.99) { targetLayer = MAP_LAYERS.PROVINSI_LINE; idKey = MAP_KEYS.ID_PROV; nameKey = MAP_KEYS.NAME_PROV; tipadmVal = 1; } 
+        // [UPDATE] Logika Zoom untuk Negara (0-4.99)
+        // Layer ID dan Keys menggunakan Constants
+        if (zoom <= 4.99) { 
+            targetLayer = MAP_LAYERS.NEGARA_LINE; 
+            idKey = MAP_KEYS.ID_NEGARA; 
+            nameKey = MAP_KEYS.NAME_NEGARA; 
+            tipadmVal = 0; 
+        } 
+        else if (zoom <= 7.99) { targetLayer = MAP_LAYERS.PROVINSI_LINE; idKey = MAP_KEYS.ID_PROV; nameKey = MAP_KEYS.NAME_PROV; tipadmVal = 1; } 
         else if (zoom <= 10.99) { targetLayer = MAP_LAYERS.KABUPATEN_LINE; idKey = MAP_KEYS.ID_KAB; nameKey = MAP_KEYS.NAME_KAB; tipadmVal = 2; } 
         else if (zoom <= 14) { targetLayer = MAP_LAYERS.KECAMATAN_LINE; idKey = MAP_KEYS.ID_KEC; nameKey = MAP_KEYS.NAME_KEC; tipadmVal = 3; } 
         else { this._clearMarkers(new Set()); return; }
         
         if (!map.getLayer(targetLayer)) return;
 
+        // Query fitur yang dirender
         const features = map.queryRenderedFeatures({ layers: [targetLayer] });
         const bounds = map.getBounds();
         const validPoints = [];
@@ -485,16 +517,22 @@ export const mapManager = {
             const lon = parseFloat(props.longitude);
 
             if (!id || isNaN(lat) || isNaN(lon) || processedIds.has(id)) return;
+            // Pastikan titik berada dalam viewport
             if (!bounds.contains([lon, lat])) return; 
 
             processedIds.add(id);
             validPoints.push({
                 screenPoint: map.project([lon, lat]),
                 lngLat: [lon, lat],
-                id: id, props: props, tipadm: tipadmVal, name: props[nameKey], label: props.label || props[nameKey]
+                id: id, 
+                props: props, 
+                tipadm: tipadmVal, 
+                name: props[nameKey], 
+                label: props.label || props[nameKey]
             });
         });
 
+        // Logika Clustering (Client-side)
         const clusters = []; 
         const CLUSTER_RADIUS = 90; 
         validPoints.sort((a, b) => b.lngLat[1] - a.lngLat[1]);
@@ -582,7 +620,9 @@ export const mapManager = {
                 this._markers[markerId] = newMarker;
 
                 if (!cluster.isCluster) {
+                    // Update konten hanya jika BUKAN Negara/Provinsi (filter ada di dalam fungsi updateMarkerContent)
                     this._updateMarkerContent(primaryId);
+                    
                     if (primaryId === String(this._activeLocationId)) {
                          this._applyHighlightStyle(primaryId, true);
                     }
@@ -624,7 +664,7 @@ export const mapManager = {
         const members = clusterData._directMembers; 
         if (!members) return;
 
-        // [UPDATE UX MOBILE] Logic Peeking saat Cluster diklik
+        // [UX MOBILE] Logic Peeking saat Cluster diklik
         // Sama seperti marker biasa, jika sidebar terbuka penuh, turunkan ke peeking
         if (this._sidebarManager && this._sidebarManager.isOpen()) {
             if (typeof this._sidebarManager.setMobilePeekingState === 'function') {
@@ -639,7 +679,25 @@ export const mapManager = {
             const idxDisplay = timeManager.getSelectedTimeIndex();
             const items = [];
             members.forEach(member => {
-                const id = String(member.id); 
+                const id = String(member.id);
+                // [UPDATE] Cek Tipe Member 
+                const tipadm = parseInt(member.tipadm, 10);
+                
+                // Jika Negara/Provinsi, tidak perlu cek cache cuaca
+                if (tipadm <= 1) {
+                     items.push({ 
+                         id: id, 
+                         nama: member.name, 
+                         // Icon khusus untuk list cluster
+                         icon: tipadm === 0 ? 'wi wi-earthquake' : 'wi wi-stars', // Placeholder icon
+                         suhu: '-', 
+                         desc: tipadm === 0 ? 'Negara' : 'Provinsi',
+                         isLoading: false, 
+                         onClick: () => this._triggerSingleClickFromCluster(id, member) 
+                     });
+                     return;
+                }
+
                 let data = cacheManager.get(id);
                 if (!data) {
                      items.push({ id: id, nama: member.name, isLoading: true, onClick: () => this._triggerSingleClickFromCluster(id, member) });
@@ -657,7 +715,12 @@ export const mapManager = {
         };
 
         const singleFetcher = async (id) => {
+            // [UPDATE] Skip fetch jika marker adalah Negara/Provinsi (walaupun jarang ada di cluster)
             try {
+                // Kita perlu tahu tipadm dulu, tapi di sini hanya ada ID.
+                // Asumsi: Cluster biasanya terdiri dari level yang sama.
+                // Jika cluster berisi kecamatan, aman di-fetch.
+                // Untuk amannya, kita fetch saja, service akan return null/error jika tidak ditemukan
                 const data = await WeatherService.fetchSingle(id);
                 if (data) {
                     this._updateMarkerContent(id);
@@ -698,7 +761,10 @@ export const mapManager = {
                     capsule.style.border = '2px solid #e74c3c';
                     capsule.style.transform = 'scale(1.15)';
                 } else {
-                    capsule.style.border = 'none';
+                    capsule.style.border = 'none'; // Reset to default CSS
+                    // Khusus Negara, border defaultnya putih (dari marker renderer), jadi hati-hati
+                    // Solusi: Kosongkan inline style border agar kembali ke CSS / Style awal
+                    capsule.style.border = ''; 
                     capsule.style.transform = 'scale(1)';
                 }
             }
@@ -737,6 +803,24 @@ export const mapManager = {
     
     handleSidebarNavigation: function(data) {
         if (!this._map || !data) return;
+        // --- [PERBAIKAN DIMULAI] ---
+        
+        // 1. Normalisasi properti 'type' berdasarkan 'tipadm'
+        // API sub-wilayah mungkin tidak mengirim properti 'type', jadi kita tentukan manual
+        if (!data.type && data.tipadm !== undefined) {
+            const tip = parseInt(data.tipadm, 10);
+            if (tip === 0) data.type = 'negara';
+            else if (tip === 1) data.type = 'provinsi';
+            else if (tip === 2) data.type = 'kabupaten';
+            else if (tip === 3) data.type = 'kecamatan';
+        }
+
+        // 2. Normalisasi Koordinat (Pencegahan Error LngLat NaN yang sebelumnya Anda perbaiki)
+        // Pastikan kita punya longitude/latitude yang valid
+        if (data.longitude === undefined && data.lon !== undefined) data.longitude = data.lon;
+        if (data.latitude === undefined && data.lat !== undefined) data.latitude = data.lat;
+
+        // --- [PERBAIKAN SELESAI] ---
         if (this._activeLocationId && String(this._activeLocationId) !== String(data.id)) {
              this.removeActiveMarkerHighlight(this._activeLocationId, true); 
         }
@@ -760,6 +844,13 @@ export const mapManager = {
     },
 
     _renderRichPopup: function(data, coordinates) {
+        // [UPDATE] Jika Negara/Provinsi, buka popup info simple
+        if (parseInt(data.tipadm, 10) <= 1) {
+             const content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
+             popupManager.open(coordinates, content);
+             return;
+        }
+
         const idxLocal = timeManager.getSelectedTimeIndex();
         const hasGlobalTimeDataNow = timeManager.getGlobalTimeLookup().length > 0;
         const localTimeStringNow = hasGlobalTimeDataNow ? timeManager.getGlobalTimeLookup()[idxLocal] : null;

@@ -2,7 +2,6 @@ import { utils } from "./utilities.js";
 import { popupManager } from "./popup_manager.js";
 import { timeManager } from "./time_manager.js";
 import { cacheManager } from "./cache_manager.js"; 
-// [DI] HAPUS: import { mapManager } from "./map_manager.js";
 
 /** ➡️ SIDEBAR MANAGER: Mengelola logika buka/tutup dan render sidebar */
 export const sidebarManager = { 
@@ -43,7 +42,8 @@ export const sidebarManager = {
                 if (entry.isIntersecting) {
                     const target = entry.target;
                     const id = target.dataset.id;
-                    if (id && !target.dataset.loaded) {
+                    // [UPDATE] Cek jika dataset.skiploading ada (untuk provinsi)
+                    if (id && !target.dataset.loaded && target.dataset.skiploading !== "true") {
                         this._fetchSingleSubRegionWeather(id, target);
                         observer.unobserve(target);
                     }
@@ -73,7 +73,7 @@ export const sidebarManager = {
         return this._isSidebarOpen;
     },
 
-    // [BARU] Fungsi Helper untuk Mode Peeking (Mobile Only)
+    // Fungsi Helper untuk Mode Peeking (Mobile Only)
     setMobilePeekingState: function(enable) {
         const { sidebarEl } = this.elements;
         if (!sidebarEl) return;
@@ -125,7 +125,6 @@ export const sidebarManager = {
         this._isSidebarOpen = false;
         toggleBtnEl.innerHTML = '&gt;';
         toggleBtnEl.setAttribute('aria-label', 'Buka detail lokasi');
-        
         // [DI] Gunakan this._mapManager
         if (this._mapManager) {
             const activeId = this._mapManager.getActiveLocationId();
@@ -155,10 +154,8 @@ export const sidebarManager = {
      */
     switchToMode: function(mode) {
         if (mode !== 'weather' && mode !== 'gempa') return;
-        
         console.log(`Sidebar switching mode to: ${mode}`);
         this._activeContentMode = mode;
-
         // Jika sidebar terbuka, render ulang konten sesuai mode baru
         if (this.isOpen()) {
             this.renderSidebarContent();
@@ -187,8 +184,6 @@ export const sidebarManager = {
     _renderSidebarLoadingState: function() {
         const { sidebarLoadingEl, sidebarLocationNameEl } = this.elements;
         if (sidebarLoadingEl) sidebarLoadingEl.style.display = 'block';
-        
-        // [DI] Gunakan this._mapManager
         let locationName = 'lokasi';
         if (this._mapManager) {
             locationName = this._mapManager.getActiveLocationSimpleName() || 'lokasi';
@@ -216,7 +211,7 @@ export const sidebarManager = {
         }
     },
 
-    // [MODIFIKASI] Helper tombol Pindah Lokasi dengan LOGIKA PEEKING
+    // Helper tombol Pindah Lokasi dengan LOGIKA PEEKING
     _createFlyToButton: function() {
         const btn = document.createElement('button');
         btn.className = 'sidebar-fly-btn'; // Class khusus untuk styling
@@ -236,8 +231,6 @@ export const sidebarManager = {
             // [LOGIKA BARU - PEEKING MODE]
             // Otomatis turunkan sidebar agar peta terlihat saat terbang
             this.setMobilePeekingState(true);
-
-            // [DI] Gunakan this._mapManager dengan safety check
             if (this._mapManager) {
                 this._mapManager.flyToActiveLocation();
             }
@@ -245,26 +238,85 @@ export const sidebarManager = {
         return btn;
     },
 
+    /**
+     * [BARU] Render tampilan khusus Negara.
+     * Mirip Provinsi, tapi dengan style khusus dan daftar provinsi di bawahnya.
+     */
+    _renderSidebarCountryState: function() {
+        const { sidebarProvinceDetailsEl, sidebarLocationNameEl } = this.elements;
+        if (!sidebarProvinceDetailsEl || !sidebarLocationNameEl) return;
+
+        this._activeContentMode = 'weather';
+        const container = sidebarProvinceDetailsEl;
+        container.innerHTML = ''; 
+        sidebarLocationNameEl.innerHTML = '';
+        
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'sidebar-title-wrapper';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'sidebar-title-text';
+        
+        let simpleName = 'Negara';
+        let activeData = null;
+
+        if (this._mapManager) {
+            simpleName = this._mapManager.getActiveLocationSimpleName().toUpperCase();
+            activeData = this._mapManager.getActiveLocationData();
+        }
+
+        nameSpan.textContent = simpleName;
+        const flyToBtn = this._createFlyToButton();
+        headerWrapper.appendChild(nameSpan);
+        headerWrapper.appendChild(flyToBtn);
+        sidebarLocationNameEl.appendChild(headerWrapper);
+
+        const svgFlag = `
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+        `;
+
+        const cardHTML = `
+            <div class="location-label-subtitle">WILAYAH KEDAULATAN</div>
+            <div class="weather-card-main" style="background: linear-gradient(135deg, #b71c1c 0%, #880e4f 100%); margin-bottom: 24px; box-shadow: 0 8px 20px rgba(183, 28, 28, 0.4);">
+                <div class="weather-header-time" style="color:#ffcdd2;">NEGARA KESATUAN</div>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 0;">
+                    <div style="width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                        ${svgFlag}
+                    </div>
+                    <div style="font-size: 1.5rem; font-weight: 800; letter-spacing:1px;">${simpleName}</div>
+                    <div style="font-size: 0.85rem; opacity: 0.9; margin-top: 5px;">Ibu Kota: Jakarta (Nusantara)</div>
+                </div>
+
+                <div style="margin-top: 15px; text-align: center; font-size: 0.75rem; opacity: 0.9; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); color:#ffebee;">
+                    Pilih Provinsi di bawah untuk melihat detail cuaca regional.
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = cardHTML;
+        container.style.display = 'block';
+
+        this._subRegionData = null;
+        this._fetchAndRenderSubRegions(activeData);
+    },
+
     _renderSidebarProvinceState: function() {
         const { sidebarProvinceDetailsEl, sidebarLocationNameEl } = this.elements;
         if (!sidebarProvinceDetailsEl || !sidebarLocationNameEl) return;
 
-        // Pastikan mode sinkron
         this._activeContentMode = 'weather';
-
         const container = sidebarProvinceDetailsEl;
         container.innerHTML = ''; 
-        
-        // [PERBAIKAN TATA LETAK] Gunakan Wrapper CSS Class, bukan inline style
         sidebarLocationNameEl.innerHTML = '';
         
         const headerWrapper = document.createElement('div');
-        headerWrapper.className = 'sidebar-title-wrapper'; // Gunakan Class CSS
-        
+        headerWrapper.className = 'sidebar-title-wrapper'; 
         const nameSpan = document.createElement('span');
-        nameSpan.className = 'sidebar-title-text'; // Gunakan Class CSS
+        nameSpan.className = 'sidebar-title-text';
         
-        // [DI] Gunakan this._mapManager
         let simpleName = 'Lokasi';
         let activeLabel = '';
         let activeData = null;
@@ -276,14 +328,10 @@ export const sidebarManager = {
         }
 
         nameSpan.textContent = simpleName;
-        
         const flyToBtn = this._createFlyToButton();
-        
         headerWrapper.appendChild(nameSpan);
         headerWrapper.appendChild(flyToBtn);
-        
         sidebarLocationNameEl.appendChild(headerWrapper);
-
 
         const now = new Date();
         const formattedDate = now.toLocaleDateString('id-ID', {
@@ -356,7 +404,6 @@ export const sidebarManager = {
         // Pastikan mode sinkron
         this._activeContentMode = 'weather';
 
-        // [DI] Gunakan this._mapManager
         let activeData = null;
         let simpleName = 'Lokasi';
         let activeLabel = '';
@@ -373,22 +420,18 @@ export const sidebarManager = {
         }
 
         sidebarWeatherDetailsEl.style.display = 'block';
-        
-        // [PERBAIKAN TATA LETAK] Gunakan Wrapper CSS Class, bukan inline style
         sidebarLocationNameEl.innerHTML = '';
         
         const headerWrapper = document.createElement('div');
-        headerWrapper.className = 'sidebar-title-wrapper'; // Class CSS
+        headerWrapper.className = 'sidebar-title-wrapper'; 
         
         const nameSpan = document.createElement('span');
-        nameSpan.className = 'sidebar-title-text'; // Class CSS
+        nameSpan.className = 'sidebar-title-text';
         nameSpan.textContent = simpleName;
         
         const flyToBtn = this._createFlyToButton();
-        
         headerWrapper.appendChild(nameSpan);
         headerWrapper.appendChild(flyToBtn);
-        
         sidebarLocationNameEl.appendChild(headerWrapper);
 
         const labelEl = sidebarEl.querySelector('#sidebar-location-label-weather');
@@ -403,7 +446,6 @@ export const sidebarManager = {
             if (currentConditionsEl) currentConditionsEl.style.display = 'none';
             if (dailyForecastTitleEl) dailyForecastTitleEl.style.display = 'none';
             if (dailyForecastListEl) dailyForecastListEl.style.display = 'none';
-            
             this._subRegionData = null;
             this._fetchAndRenderSubRegions(activeData);
             return; 
@@ -451,11 +493,11 @@ export const sidebarManager = {
     _fetchAndRenderSubRegions: async function(activeData) {
         const { subRegionContainerEl, subRegionLoadingEl, subRegionListEl, subRegionTitleEl } = this.elements;
         
-        if (!activeData || !activeData.id) {
-            return; 
-        }
+        if (!activeData || !activeData.id) { return; }
 
         const tipadm = Number(activeData.tipadm);
+        
+        // Render jika level < 4 (Desa paling bawah)
         if (tipadm >= 4) {
             if (subRegionContainerEl) subRegionContainerEl.style.display = 'none';
             return; 
@@ -465,9 +507,9 @@ export const sidebarManager = {
         if (subRegionLoadingEl) subRegionLoadingEl.style.display = 'block';
         if (subRegionListEl) subRegionListEl.innerHTML = '';
 
-        const titles = { 1: "Kab/Kota", 2: "Kecamatan", 3: "Kel/Desa" };
+        const titles = { 0: "Provinsi", 1: "Kab/Kota", 2: "Kecamatan", 3: "Kel/Desa" };
         const titleKey = tipadm; 
-        if (subRegionTitleEl) subRegionTitleEl.textContent = `Prakiraan per ${titles[titleKey] || 'Wilayah Bawahan'}`;
+        if (subRegionTitleEl) subRegionTitleEl.textContent = `Daftar ${titles[titleKey] || 'Wilayah Bawahan'}`;
 
         try {
             const protocol = window.location.protocol;
@@ -475,6 +517,7 @@ export const sidebarManager = {
             const port = window.location.port ? `:${window.location.port}` : '';
             const baseUrl = `${protocol}//${hostname}${port}`;
             
+            // [UPDATE] tipadm dikirim ke API
             const url = `${baseUrl}/api/sub-wilayah-cuaca?id=${encodeURIComponent(activeData.id)}&tipadm=${tipadm}&view=simple`;
 
             const resp = await fetch(url);
@@ -491,13 +534,22 @@ export const sidebarManager = {
                 return;
             }
             
+            // Render list dengan data sederhana (belum fetch cuaca detail)
             this._renderSubRegionListSkeleton(simpleData);
 
+            // [CRITICAL] Hanya fetch cuaca otomatis jika BUKAN provinsi
+            // Jika simpleData berisi Provinsi (tipadm=1), kita JANGAN panggil fetchSingle
             if (timeManager.getGlobalTimeLookup().length === 0 && simpleData.length > 0) {
-                const firstId = simpleData[0].id;
-                const firstEl = document.getElementById(`sub-region-${firstId}`);
-                if (firstEl) {
-                    this._fetchSingleSubRegionWeather(firstId, firstEl);
+                const firstItem = simpleData[0];
+                const firstTip = parseInt(firstItem.tipadm, 10);
+                
+                // Fetch cuaca hanya untuk Kab/Kota ke bawah (> 1)
+                if (firstTip > 1) {
+                    const firstId = firstItem.id;
+                    const firstEl = document.getElementById(`sub-region-${firstId}`);
+                    if (firstEl) {
+                        this._fetchSingleSubRegionWeather(firstId, firstEl);
+                    }
                 }
             }
 
@@ -505,8 +557,6 @@ export const sidebarManager = {
             console.error("Gagal fetch sub-wilayah:", e);
             if (subRegionLoadingEl) subRegionLoadingEl.style.display = 'none';
             if (subRegionTitleEl) subRegionTitleEl.textContent = "Gagal memuat data";
-            
-            // [IMPLEMENTASI BARU] Error Card State
             if (subRegionListEl) {
                 subRegionListEl.innerHTML = `
                     <div class="error-state-card">
@@ -530,25 +580,54 @@ export const sidebarManager = {
         
         simpleData.forEach(item => {
             const div = document.createElement('div');
-            div.className = 'sub-region-item skeleton-mode'; 
+            // [UPDATE] Cek jika Provinsi (tipadm 1) -> Jangan pakai skeleton mode, langsung render static
+            const tipadm = parseInt(item.tipadm, 10);
+            const isProvince = tipadm === 1;
+
             div.id = `sub-region-${item.id}`;
             div.dataset.id = item.id; 
-            
-            const cached = cacheManager.get(item.id);
-            if (cached) {
-                this._fillSubRegionItem(div, cached);
+            div.style.cursor = 'pointer'; 
+            div.onclick = (e) => {
+                e.stopPropagation(); 
+                if (this._mapManager) {
+                    this._mapManager.handleSidebarNavigation(item);
+                }
+            };
+
+            if (isProvince) {
+                // RENDER STATIC LANGSUNG (Tanpa fetch cuaca)
+                div.className = 'sub-region-item'; 
                 div.dataset.loaded = "true";
-            } else {
+                div.dataset.skiploading = "true"; // Flag agar observer tidak memicu fetch
                 div.innerHTML = `
                     <div class="sub-region-info-col">
                         <span class="sub-region-item-name">${item.nama_simpel}</span>
-                        <span class="sub-region-item-desc skeleton-loading"></span>
+                        <span class="sub-region-item-desc" style="color:#0056b3;">Provinsi</span>
                     </div>
-                    <i class="sub-region-item-icon skeleton-loading"></i>
-                    <span class="sub-region-item-temp skeleton-loading"></span>
+                    <i class="sub-region-item-icon wi wi-stars"></i>
+                    <span class="sub-region-item-temp" style="font-size:0.9rem; color:#888;">&rarr;</span>
                 `;
-                if (this._observer) {
-                    this._observer.observe(div);
+            } else {
+                // RENDER SKELETON (Menunggu fetch cuaca)
+                const cached = cacheManager.get(item.id);
+                if (cached) {
+                    div.className = 'sub-region-item';
+                    this._fillSubRegionItem(div, cached);
+                    div.dataset.loaded = "true";
+                } else {
+                    div.className = 'sub-region-item skeleton-mode';
+                    div.innerHTML = `
+                        <div class="sub-region-info-col">
+                            <span class="sub-region-item-name">${item.nama_simpel}</span>
+                            <span class="sub-region-item-desc skeleton-loading"></span>
+                        </div>
+                        <i class="sub-region-item-icon skeleton-loading"></i>
+                        <span class="sub-region-item-temp skeleton-loading"></span>
+                    `;
+                    // Observer hanya aktif untuk item non-provinsi
+                    if (this._observer) {
+                        this._observer.observe(div);
+                    }
                 }
             }
             
@@ -580,6 +659,7 @@ export const sidebarManager = {
             
             if (data) {
                 cacheManager.set(id, data);
+                // Inisialisasi waktu global jika belum ada
                 if (timeManager.getGlobalTimeLookup().length === 0 && data.hourly?.time) {
                      timeManager.setGlobalTimeLookup(data.hourly.time);
                      timeManager.initializeOrSync(new Date(data.hourly.time[0]));
@@ -641,7 +721,8 @@ export const sidebarManager = {
 
         const items = subRegionListEl.querySelectorAll('.sub-region-item');
         items.forEach(item => {
-            if (item.dataset.loaded === "true") {
+            // Hanya update yang sudah terload DAN bukan static item (provinsi)
+            if (item.dataset.loaded === "true" && item.dataset.skiploading !== "true") {
                 const id = item.dataset.id;
                 const data = cacheManager.get(id);
                 if (data) {
@@ -656,41 +737,26 @@ export const sidebarManager = {
         
         if (!this._isSidebarOpen || !sidebarContentEl) { return; }
         
-        // [WARNING]: renderSidebarContent ini bisa dipanggil saat sidebar sedang PEEKING.
-        // Kita TIDAK boleh memaksa reset class peeking di sini agar animasi tidak glitch,
-        // kecuali ada logika khusus. Biarkan status peeking dihandle oleh openSidebar/togglePeeking.
-
         this._hideAllSidebarSections(); 
 
-        // [LOGIKA BARU] Branching berdasarkan Mode
-        
-        // MODE GEMPA
         if (this._activeContentMode === 'gempa') {
-            // [PERBAIKAN TATA LETAK] Gunakan Wrapper CSS Class
             this.elements.sidebarLocationNameEl.innerHTML = '';
-            
             const headerWrapper = document.createElement('div');
             headerWrapper.className = 'sidebar-title-wrapper';
-            
             const nameSpan = document.createElement('span');
             nameSpan.className = 'sidebar-title-text';
             nameSpan.textContent = 'Info Gempa';
-            
             const flyToBtn = this._createFlyToButton();
-            
             headerWrapper.appendChild(nameSpan);
             headerWrapper.appendChild(flyToBtn);
-            
             this.elements.sidebarLocationNameEl.appendChild(headerWrapper);
 
             const lblWeather = sidebarEl.querySelector('#sidebar-location-label-weather');
             if (lblWeather) lblWeather.textContent = '';
 
             if (this._lastGempaData) {
-                // Render data gempa terakhir
                 this.renderSidebarGempa(this._lastGempaData);
             } else {
-                // Placeholder Gempa
                 this._renderSidebarPlaceholderState("Mode Gempa Aktif. Pilih titik gempa di peta untuk detail.");
             }
             return;
@@ -703,24 +769,27 @@ export const sidebarManager = {
         if (lblWeather) lblWeather.textContent = '';
         if (lblProvince) lblProvince.textContent = '';
         
-        // [DI] Menggunakan this._mapManager
-        if (!this._mapManager) return; // Safety check
+        if (!this._mapManager) return; 
 
         if (this._mapManager.getIsClickLoading()) { 
             this._renderSidebarLoadingState();
         } else if (!this._mapManager.getActiveLocationId()) { 
             this._renderSidebarPlaceholderState();
-        } else if (this._mapManager.getActiveLocationData()?.type === 'provinsi') { 
-            this._renderSidebarProvinceState();
-        } else if (this._mapManager.getActiveLocationData()?.hourly && timeManager.getGlobalTimeLookup().length > 0) { 
-            this._renderSidebarWeatherState();
-        } else if (this._mapManager.getActiveLocationId()) { 
-            const msg = (timeManager.getGlobalTimeLookup().length > 0) 
-                ? `Data cuaca untuk ${this._mapManager.getActiveLocationLabel()} tidak lengkap atau rusak.`
-                : `Data cuaca untuk ${this._mapManager.getActiveLocationLabel()} belum dimuat.`; 
-            this._renderSidebarErrorState(msg);
-        } else { 
-            this._renderSidebarErrorState('Terjadi kesalahan.');
+        } else {
+            const data = this._mapManager.getActiveLocationData();
+            if (data?.type === 'negara') {
+                this._renderSidebarCountryState();
+            } else if (data?.type === 'provinsi') { 
+                this._renderSidebarProvinceState();
+            } else if (data?.hourly && timeManager.getGlobalTimeLookup().length > 0) { 
+                this._renderSidebarWeatherState();
+            } else {
+                // Fallback error jika ID ada tapi data tidak lengkap
+                const msg = (timeManager.getGlobalTimeLookup().length > 0) 
+                    ? `Data cuaca untuk ${this._mapManager.getActiveLocationLabel()} tidak lengkap atau rusak.`
+                    : `Data cuaca untuk ${this._mapManager.getActiveLocationLabel()} belum dimuat.`; 
+                this._renderSidebarErrorState(msg);
+            }
         }
     },
 
@@ -782,21 +851,15 @@ export const sidebarManager = {
 
         this._hideAllSidebarSections();
         
-        // [PERBAIKAN TATA LETAK] Header dengan tombol FlyTo untuk Gempa
         this.elements.sidebarLocationNameEl.innerHTML = '';
-        
         const headerWrapper = document.createElement('div');
-        headerWrapper.className = 'sidebar-title-wrapper'; // Class CSS
-        
+        headerWrapper.className = 'sidebar-title-wrapper';
         const nameSpan = document.createElement('span');
-        nameSpan.className = 'sidebar-title-text'; // Class CSS
+        nameSpan.className = 'sidebar-title-text';
         nameSpan.textContent = 'Detail Gempa Bumi';
-        
         const flyToBtn = this._createFlyToButton();
-        
         headerWrapper.appendChild(nameSpan);
         headerWrapper.appendChild(flyToBtn);
-        
         this.elements.sidebarLocationNameEl.appendChild(headerWrapper);
 
         this.elements.sidebarEl.querySelector('#sidebar-location-label-weather').textContent = '';
@@ -831,18 +894,14 @@ export const sidebarManager = {
         gempaContainer.innerHTML = `
             <!-- Kartu Informasi Gempa -->
             <div class="weather-card-main ${themeClass}" style="margin-bottom: 24px;">
-                
                 <div class="weather-header-time">${formattedTime}</div>
-                
                 <div style="font-size: 1.2rem; font-weight: 700; line-height: 1.3; margin-bottom: 15px; opacity: 0.95;">
                     ${gempaData.place}
                 </div>
-
                 ${isTsunami ? `
                 <div style="background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.5); padding:8px; border-radius:8px; margin-bottom:15px; text-align:center; font-weight:800; color:#fff; display:flex; align-items:center; justify-content:center; gap:8px;">
                     <i class="wi wi-tsunami" style="font-size:1.4rem;"></i> BERPOTENSI TSUNAMI
                 </div>` : ''}
-                
                 <div class="weather-main-row">
                     <div class="weather-temp-big">
                         ${gempaData.mag.toFixed(1)}<span style="font-size:0.5em; opacity:0.8; font-weight:600; margin-left:5px;">M</span>
@@ -851,11 +910,9 @@ export const sidebarManager = {
                         <i class="wi wi-earthquake weather-icon-big"></i>
                     </div>
                 </div>
-                
                 <div class="weather-desc-main" style="margin-bottom:20px; font-size:1.2rem;">
                     ${statusLabel}
                 </div>
-
                 <div class="weather-details-grid">
                     <div class="detail-item">
                         <i class="wi wi-direction-down detail-icon"></i>
@@ -870,7 +927,6 @@ export const sidebarManager = {
                         <span style="font-size:0.9rem; line-height:1.4;">${gempaData.status_desc || 'Tidak ada data dampak.'}</span>
                     </div>
                 </div>
-
                 <div style="margin-top: 20px; text-align: center; font-size: 0.8rem; opacity: 0.8; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
                     Data Batas Wilayah: <strong>Badan Informasi Geospasial</strong><br>
                     Data cuaca bersumber dari <strong>${sourceName}</strong>.<br>
