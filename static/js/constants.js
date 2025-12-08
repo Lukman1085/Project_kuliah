@@ -22,10 +22,12 @@ export const MAP_LAYERS = {
     GEMPA_LABEL: 'gempa-label-layer',
     
     // Layer Wilayah (Vector Tile)
+    NEGARA_FILL: 'batas-negara-fill',      // [BARU]
     PROVINSI_FILL: 'batas-provinsi-fill',
     KABUPATEN_FILL: 'batas-kabupaten-fill',
     KECAMATAN_FILL: 'batas-kecamatan-fill',
     
+    NEGARA_LINE: 'batas-negara-layer',     // [BARU]
     PROVINSI_LINE: 'batas-provinsi-layer',
     KABUPATEN_LINE: 'batas-kabupaten-layer',
     KECAMATAN_LINE: 'batas-kecamatan-layer'
@@ -34,15 +36,19 @@ export const MAP_LAYERS = {
 export const MAP_SOURCES = {
     GEMPA: 'gempa-source',
     // Nama source ini harus SAMA PERSIS dengan yang ada di map_style.js
+    SOURCE_NEGARA: 'source_negara',        // [BARU]
     SOURCE_PROVINSI: 'source_provinsi',
     SOURCE_KABUPATEN: 'source_kabupaten',
     SOURCE_KECAMATAN: 'source_kecamatan'
 };
 
 export const MAP_KEYS = {
+    ID_NEGARA: 'KDPPUM', // [TODO] Sesuaikan dengan kolom ID di PMTiles negara (Biasanya ISO atau 00)
     ID_PROV: 'KDPPUM',
     ID_KAB: 'KDPKAB',
     ID_KEC: 'KDCPUM',
+    // Key Nama
+    NAME_NEGARA: 'WADMPR', // Menggunakan kolom yang sama dengan provinsi jika struktur tabelnya mirip
     NAME_PROV: 'WADMPR',
     NAME_KAB: 'WADMKK',
     NAME_KEC: 'WADMKC'
