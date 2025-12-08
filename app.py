@@ -649,11 +649,10 @@ def get_sub_wilayah_cuaca():
         query_text = ""
         params = {"parent_id_prefix": f"{parent_id}.%"}
         
-        # [UPDATE] Penanganan Negara (0) -> Provinsi (1)
+        # [PERBAIKAN 1] Filter NULL di SQL
         if target_tipadm == 1:
-            # Mengambil semua provinsi (parent id negara '00' tidak perlu prefix karena kode provinsi 2 digit unik)
-            query_text = 'SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_provinsi'
-            params = {} # Tidak butuh filter prefix jika asumsi 1 negara
+            query_text = 'SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude, longitude, "TIPADM" as tipadm FROM batas_provinsi WHERE "WADMPR" IS NOT NULL'
+            params = {} 
         elif target_tipadm == 2:
             query_text = 'SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_kabupatenkota WHERE "KDPKAB" LIKE :parent_id_prefix'
         elif target_tipadm == 3:
@@ -667,13 +666,16 @@ def get_sub_wilayah_cuaca():
             sub_wilayah = [dict(row) for row in result.mappings()]
             
             if view_mode == 'simple':
-                return jsonify(sorted(sub_wilayah, key=lambda x: x.get('nama_simpel', '')))
+                # [PERBAIKAN 2] Safety sorting untuk nilai None
+                return jsonify(sorted(sub_wilayah, key=lambda x: (x.get('nama_simpel') or '')))
             
-            # Full processing (Weather fetching skipped inside process_wilayah_data for tipadm 0/1)
+            # Full processing
             data_lengkap = process_wilayah_data(sub_wilayah)
-            return jsonify(sorted(data_lengkap.values(), key=lambda x: x.get('nama_simpel', '')))
+            # Terapkan safety sorting juga di sini
+            return jsonify(sorted(data_lengkap.values(), key=lambda x: (x.get('nama_simpel') or '')))
         return jsonify([])
     except Exception as e:
+        print(f"ERROR API SUB-WILAYAH: {e}") # Tambahkan print untuk debug di masa depan
         return jsonify({"error": str(e)}), 500
     finally:
         session.close()

@@ -803,6 +803,24 @@ export const mapManager = {
     
     handleSidebarNavigation: function(data) {
         if (!this._map || !data) return;
+        // --- [PERBAIKAN DIMULAI] ---
+        
+        // 1. Normalisasi properti 'type' berdasarkan 'tipadm'
+        // API sub-wilayah mungkin tidak mengirim properti 'type', jadi kita tentukan manual
+        if (!data.type && data.tipadm !== undefined) {
+            const tip = parseInt(data.tipadm, 10);
+            if (tip === 0) data.type = 'negara';
+            else if (tip === 1) data.type = 'provinsi';
+            else if (tip === 2) data.type = 'kabupaten';
+            else if (tip === 3) data.type = 'kecamatan';
+        }
+
+        // 2. Normalisasi Koordinat (Pencegahan Error LngLat NaN yang sebelumnya Anda perbaiki)
+        // Pastikan kita punya longitude/latitude yang valid
+        if (data.longitude === undefined && data.lon !== undefined) data.longitude = data.lon;
+        if (data.latitude === undefined && data.lat !== undefined) data.latitude = data.lat;
+
+        // --- [PERBAIKAN SELESAI] ---
         if (this._activeLocationId && String(this._activeLocationId) !== String(data.id)) {
              this.removeActiveMarkerHighlight(this._activeLocationId, true); 
         }
