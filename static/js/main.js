@@ -183,20 +183,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // [MULAI] LOGIKA SWIPE FINAL (ANTI-UNDERFLOW & PIXEL PERFECT)
     // -------------------------------------------------------------
+    // [MULAI] LOGIKA SWIPE FINAL (SCROLL-FRIENDLY)
+    // -------------------------------------------------------------
     (function initMobileSwipeGesture() {
         let startY = 0;
         let currentY = 0;
         let isDragging = false;
+        let isContentTouch = false; // Flag baru untuk deteksi area konten
         const SWIPE_THRESHOLD = 80;
 
-        // Helper
         function isMobile() { return window.innerWidth <= 768; }
 
         const startEvents = ['touchstart', 'mousedown'];
         const moveEvents = ['touchmove', 'mousemove'];
         const endEvents = ['touchend', 'mouseup', 'mouseleave'];
 
-        // Event Listeners
+        // Gunakan { passive: false } agar kita bisa kontrol preventDefault
         [sidebarEl, toggleBtnEl].forEach(el => {
             startEvents.forEach(evt => el.addEventListener(evt, handleStart, { passive: false }));
         });
@@ -207,13 +209,23 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!isMobile()) return;
             if (e.type === 'mousedown' && e.button !== 0) return;
 
-            // Cek konflik scroll konten
+            // 1. CEK KONTEKS SCROLL
+            // Apakah user menyentuh area konten yang bisa di-scroll?
             if (sidebarEl.contains(e.target) && sidebarContentEl.contains(e.target)) {
-                if (sidebarContentEl.scrollTop > 0) return; 
+                // Jika posisi scroll TIDAK di paling atas (sudah turun),
+                // Maka user pasti ingin scroll balik ke atas. JANGAN aktifkan drag.
+                if (sidebarContentEl.scrollTop > 0) return;
+                
+                // Jika posisi scroll DI PALING ATAS (0),
+                // Ada 2 kemungkinan: User mau scroll ke bawah (Native) ATAU tarik panel tutup (Swipe).
+                // Kita tandai dulu, keputusannya nanti di handleMove.
+                isContentTouch = true;
+            } else {
+                isContentTouch = false;
             }
 
             isDragging = true;
-            sidebarEl.style.transition = 'none'; // Matikan animasi
+            sidebarEl.style.transition = 'none'; // Matikan animasi biar responsif
 
             if (e.type === 'touchstart') startY = e.touches[0].clientY;
             else startY = e.clientY;
@@ -222,47 +234,43 @@ document.addEventListener('DOMContentLoaded', function() {
         function handleMove(e) {
             if (!isDragging) return;
 
-            // Cegah map ikut gerak
-            if (e.cancelable) e.preventDefault(); 
-            e.stopPropagation();
-
             if (e.type === 'touchmove') currentY = e.touches[0].clientY;
             else currentY = e.clientY;
 
             const diffY = currentY - startY;
-            
-            // [LOGIKA BARU] MENGGUNAKAN PIXEL UNTUK CLAMPING
-            // Ambil tinggi sidebar saat ini (misal: 600px)
+
+            // 2. LOGIKA PENENTU: SCROLL vs SWIPE
+            // Jika user menyentuh konten & sidebar sedang terbuka
+            if (isContentTouch && sidebarManager.isOpen()) {
+                // Jika gerakan jari ke ATAS (diffY negatif) -> Artinya user mau scroll ke bawah
+                if (diffY < 0) {
+                    // BATALKAN DRAG! Biarkan browser melakukan scroll native.
+                    isDragging = false; 
+                    sidebarEl.style.transform = ''; // Reset posisi jika sempat gerak dikit
+                    return; // KELUAR DARI FUNGSI (Jangan panggil preventDefault)
+                }
+            }
+
+            // 3. BLOKIR MAP & LAYAR (Hanya jika kita yakin ini SWIPE)
+            // Jika sampai baris ini, berarti fix ini adalah aksi SWIPE sidebar.
+            // Maka kita matikan scroll browser/map.
+            if (e.cancelable) e.preventDefault(); 
+            e.stopPropagation();
+
             const sidebarHeight = sidebarEl.offsetHeight; 
 
             if (!sidebarManager.isOpen()) {
-                // --- KASUS: MEMBUKA (SWIPE UP) ---
-                // Start position secara visual adalah di 'sidebarHeight' (karena translateY 100%)
-                // Kita ingin gerak menuju 0.
-                
-                // Rumus: Tinggi Asli + Pergerakan Jari (diffY negatif)
+                // --- KASUS: BUKA (SWIPE UP) ---
                 let newPos = sidebarHeight + diffY;
-
-                // CLAMPING (PENTING):
-                // Jangan biarkan newPos kurang dari 0.
-                // Jika < 0, paksa jadi 0. Ini mencegah sidebar terbang ke atas.
-                if (newPos < 0) newPos = 0; 
-                
+                if (newPos < 0) newPos = 0; // Clamping agar tidak bablas
                 sidebarEl.style.transform = `translateY(${newPos}px)`;
 
             } else {
-                // --- KASUS: MENUTUP (SWIPE DOWN) ---
-                // Start position adalah 0.
-                
-                // Rumus: 0 + Pergerakan Jari (diffY positif)
+                // --- KASUS: TUTUP (SWIPE DOWN) ---
                 let newPos = diffY;
-
-                // CLAMPING:
-                // Jangan biarkan newPos kurang dari 0 (mencegah ditarik ke atas saat sudah terbuka)
-                if (newPos < 0) {
-                    // Efek Resistance (Kenyal) sangat sedikit jika dipaksa tarik ke atas
-                    newPos = newPos * 0.1; 
-                }
+                
+                // Cegah ditarik ke atas saat sudah terbuka (Resistance)
+                if (newPos < 0) newPos = 0; 
                 
                 sidebarEl.style.transform = `translateY(${newPos}px)`;
             }
@@ -274,23 +282,17 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Kembalikan animasi CSS
             sidebarEl.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)'; 
-            sidebarEl.style.transform = ''; // Hapus style inline pixel tadi
+            sidebarEl.style.transform = ''; 
 
             const diffY = currentY - startY;
             const isOpen = sidebarManager.isOpen();
 
-            // Logika Keputusan (Threshold)
             if (diffY === 0) return;
 
             if (!isOpen) {
-                // Jika geser ke ATAS cukup jauh -> BUKA
                 if (diffY < -SWIPE_THRESHOLD) sidebarManager.openSidebar();
-                // Jika tidak, CSS akan otomatis menariknya kembali ke bawah (karena transform dihapus)
             } else {
-                // Jika geser ke BAWAH cukup jauh -> TUTUP
-                if (diffY > SWIPE_THRESHOLD) {
-                    if (sidebarContentEl.scrollTop <= 0) sidebarManager.closeSidebar();
-                }
+                if (diffY > SWIPE_THRESHOLD) sidebarManager.closeSidebar();
             }
             
             startY = 0; currentY = 0;
