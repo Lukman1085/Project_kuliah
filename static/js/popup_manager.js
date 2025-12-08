@@ -106,6 +106,49 @@ export const popupManager = {
         return container;
     },
 
+    /** * [BARU] GENERATOR 2.5: POPUP NEGARA (Eksklusif) */
+    generateCountryPopupContent: function(namaSimpel) {
+        const container = document.createElement('div');
+        container.className = 'weather-popup-card province-mode'; // Re-use style provinsi
+
+        const header = document.createElement('div');
+        header.className = 'popup-header';
+        // Warna header khusus negara (Merah Tua)
+        header.style.background = '#b71c1c';
+        header.style.color = '#fff';
+        header.innerHTML = `
+            <div class="popup-subtitle" style="color:#ffcdd2;">NEGARA KESATUAN</div>
+            <div class="popup-title large" style="color:#fff;">${namaSimpel.toUpperCase()}</div>
+        `;
+        container.appendChild(header);
+
+        const body = document.createElement('div');
+        body.className = 'popup-body-text';
+        body.innerHTML = `
+            <div style="display:flex; justify-content:center; margin-bottom:10px;">
+                <!-- Ikon Garuda / Peta Indonesia SVG -->
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="#b71c1c" style="opacity:0.8;">
+                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+            </div>
+            Lihat daftar Provinsi di seluruh Indonesia.
+        `;
+        container.appendChild(body);
+
+        const footer = document.createElement('div');
+        footer.className = 'popup-footer';
+        const button = document.createElement('button');
+        button.className = 'popup-btn-detail';
+        button.textContent = 'Buka Direktori Provinsi';
+        button.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('requestSidebarDetail'));
+        });
+        footer.appendChild(button);
+        container.appendChild(footer);
+
+        return container;
+    },
+
     /** * GENERATOR 3: POPUP LOADING (Konsisten) */
     generateLoadingPopupContent: function(nama) {
         const container = document.createElement('div');
@@ -129,7 +172,7 @@ export const popupManager = {
         return container;
     },
 
-    /** * [IMPLEMENTASI BARU] GENERATOR: POPUP ERROR (Styled) */
+    /** * GENERATOR: POPUP ERROR (Styled) */
     generateErrorPopupContent: function(title, message) {
         const container = document.createElement('div');
         container.className = 'weather-popup-card'; 
@@ -226,7 +269,7 @@ export const popupManager = {
         return container;
     },
 
-    /** * [MODIFIKASI FINAL] GENERATOR 5: POPUP GEMPA REDESIGN */
+    /** * GENERATOR 5: POPUP GEMPA REDESIGN */
     generateGempaPopupContent: function(props) {
         const container = document.createElement('div');
         container.className = 'gempa-popup-card'; 
@@ -336,7 +379,7 @@ export const popupManager = {
             
             if (content instanceof HTMLElement) {
                 if (content.querySelector('.cluster-popup-content')) this._activePopupType = 'cluster';
-                else if (content.classList.contains('province-mode')) this._activePopupType = 'province';
+                else if (content.classList.contains('province-mode')) this._activePopupType = 'province'; // Berlaku juga untuk negara
                 else this._activePopupType = 'weather';
             } else {
                 this._activePopupType = 'loading'; 
@@ -402,10 +445,7 @@ export const popupManager = {
         const listContainer = popupEl.querySelector('.cluster-popup-content');
         if (!listContainer) return;
 
-        const options = {
-            root: listContainer, 
-            threshold: 0.1
-        };
+        const options = { root: listContainer, threshold: 0.1 };
 
         if (this._clusterObserver) this._clusterObserver.disconnect();
 
@@ -418,7 +458,6 @@ export const popupManager = {
                     if (id && !itemEl.dataset.loaded && this._clusterFetchCallback) {
                         // Unobserve dulu biar tidak double trigger
                         observer.unobserve(itemEl);
-                        
                         // Trigger Fetch Single
                         this._clusterFetchCallback(id).then(data => {
                             // Update Tampilan Baris Ini Saja
@@ -434,10 +473,35 @@ export const popupManager = {
         skeletons.forEach(el => this._clusterObserver.observe(el));
     },
 
-    // [BARU] Update parsial satu baris item (dari Skeleton -> Real Data)
+    // Update parsial satu baris item (dari Skeleton -> Real Data)
     _updateSingleClusterItem: function(itemEl, data) {
         const idxDisplay = timeManager.getSelectedTimeIndex();
-        if (!data.hourly || idxDisplay < 0) return;
+        
+        // [UPDATE] Cek jika data adalah Negara/Provinsi (tidak punya hourly)
+        if (!data.hourly) {
+             const tip = parseInt(data.tipadm, 10);
+             if (tip <= 1) {
+                 itemEl.classList.remove('skeleton-mode');
+                 itemEl.dataset.loaded = "true";
+                 const role = tip === 0 ? "Negara" : "Provinsi";
+                 const icon = tip === 0 ? "wi wi-earthquake" : "wi wi-stars"; // Placeholder icon
+                 
+                 itemEl.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <i class="${icon}" style="font-size:1.4rem; color:#555; width:24px; text-align:center;"></i>
+                        <span style="font-weight: 500; font-size: 0.85rem; color: #333;">${data.nama_simpel}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-weight: 700; color: #333; font-size: 0.9rem;">-</span>
+                        <br>
+                        <span style="font-size: 0.7rem; color: #888;">${role}</span>
+                    </div>
+                `;
+                return;
+             }
+        }
+
+        if (idxDisplay < 0) return;
 
         const extractedData = utils.extractHourlyDataPoint(data.hourly, idxDisplay);
         const info = utils.getWeatherInfo(extractedData.weather_code, extractedData.is_day);
@@ -485,7 +549,7 @@ export const popupManager = {
         
         if (card && !card.classList.contains('province-mode') && !card.querySelector('.cluster-popup-content') && !card.classList.contains('gempa-popup-mode')) {
             const activeData = mapManager.getActiveLocationData();
-            if (activeData && activeData.tipadm !== 1 && activeData.hourly?.time) {
+            if (activeData && parseInt(activeData.tipadm, 10) > 1 && activeData.hourly?.time) {
                 try {
                     if (idxGlobal >= activeData.hourly.time.length) return; 
                     
