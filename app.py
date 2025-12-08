@@ -651,7 +651,7 @@ def get_sub_wilayah_cuaca():
         
         # [PERBAIKAN 1] Filter NULL di SQL
         if target_tipadm == 1:
-            query_text = 'SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_provinsi WHERE "WADMPR" IS NOT NULL'
+            query_text = 'SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude, longitude, "TIPADM" as tipadm FROM batas_provinsi WHERE "WADMPR" IS NOT NULL'
             params = {} 
         elif target_tipadm == 2:
             query_text = 'SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_kabupatenkota WHERE "KDPKAB" LIKE :parent_id_prefix'
