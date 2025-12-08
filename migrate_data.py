@@ -35,7 +35,8 @@ def migrate_geojson_to_postgis(filepath, table_name, engine):
         logging.info(f"Migrasi untuk tabel '{table_name}' berhasil. {len(gdf)} baris ditambahkan.")
     except Exception as e:
         logging.error(f"Gagal memigrasikan {filepath} ke tabel {table_name}: {e}")
-        raise
+        # Jangan raise error fatal agar proses lain tetap jalan (misal file tidak ada)
+        pass
 
 def migrate_csv_to_postgres(filepath, table_name, engine, dtype=None):
     """
@@ -52,12 +53,14 @@ def migrate_csv_to_postgres(filepath, table_name, engine, dtype=None):
         logging.info(f"Migrasi untuk tabel '{table_name}' berhasil. {len(df)} baris ditambahkan.")
     except Exception as e:
         logging.error(f"Gagal memigrasikan {filepath} ke tabel {table_name}: {e}")
-        raise
+        # Jangan raise error fatal agar proses lain tetap jalan (misal file tidak ada)
+        pass
 
 def main():
     """
     Fungsi utama untuk menjalankan semua proses migrasi.
     """
+    engine = None
     try:
         logging.info("Membuat koneksi ke database...")
         if DATABASE_URL is not None:
@@ -67,6 +70,7 @@ def main():
         
         # Daftar file GeoJSON dan nama tabel yang diinginkan
         geojson_files = {
+            "batas_negara.geojson": "batas_negara",
             "batas_provinsi.geojson": "batas_provinsi",
             "batas_kabupatenkota.geojson": "batas_kabupatenkota",
             "batas_kecamatandistrik.geojson": "batas_kecamatandistrik"
@@ -85,21 +89,11 @@ def main():
         # atau masalah mixed-type yang diidentifikasi oleh Pandas.
         csv_dtypes = {
             'OBJECTID': 'int64',
-            'KDBBPS': 'str',
-            'KDCBPS': 'str',
-            'KDCPUM': 'str',
-            'KDEBPS': 'str',     
-            'KDEPUM': 'str',
-            'KDPBPS': 'str',     
-            'KDPKAB': 'str',     
-            'KDPPUM': 'str',
-            'WIADKC': 'str',
-            'WIADKK': 'str',
-            'WIADPR': 'str',
-            'WIADKD': 'str',
-            'UUPP': 'str',
-            'layer': 'str',
-            'label': 'str'
+            'KDBBPS': 'str', 'KDCBPS': 'str', 'KDCPUM': 'str',
+            'KDEBPS': 'str', 'KDEPUM': 'str', 'KDPBPS': 'str',     
+            'KDPKAB': 'str', 'KDPPUM': 'str',
+            'WIADKC': 'str', 'WIADKK': 'str', 'WIADPR': 'str', 'WIADKD': 'str',
+            'UUPP': 'str', 'layer': 'str', 'label': 'str'
         }
 
         # Migrasi file CSV

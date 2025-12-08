@@ -158,7 +158,6 @@ ID_REGEX = re.compile(r"^[a-zA-Z0-9_.-]+$")
 SEARCH_REGEX = re.compile(r"^[a-zA-Z0-9\s.,'-]+$")
 MAX_SEARCH_LENGTH = 50
 
-# Peta WMO (Sama seperti sebelumnya)
 WMO_CODE_MAP = {
     0: ("Cerah", "wi-day-sunny", "wi-night-clear"),
     1: ("Sebagian Besar Cerah", "wi-day-sunny-overcast", "wi-night-alt-partly-cloudy"),
@@ -183,7 +182,7 @@ WMO_CODE_MAP = {
     99: ("Badai Petir dengan Hujan Es Lebat", "wi-day-hail", "wi-night-alt-hail"),
 }
 
-# ================== DUMMY GENERATORS (TETAP ADA) ==================
+# ================== DUMMY GENERATORS ==================
 
 def generate_dummy_api_response(wilayah_infos):
     """Menghasilkan data dummy untuk Open-Meteo."""
@@ -247,10 +246,6 @@ def generate_dummy_api_response(wilayah_infos):
         }
         dummy_list.append(location_dummy)
     return dummy_list
-
-# ... (Fungsi Helper Gempa: calculate_esteva_intensity, get_impact_level, generate_dummy_bmkg_data, generate_dummy_usgs_data)
-# SAYA PERTAHANKAN SEMUA LOGIKA GEMPA ANDA DISINI
-# Agar tidak memotong kode penting.
 
 def calculate_esteva_intensity(magnitude, depth_km):
     if not magnitude or not depth_km: return 0
@@ -346,7 +341,6 @@ def generate_dummy_bmkg_data():
             "Wilayah": f"{random.randint(10,50)} km TimurLaut LUWU-SULSEL",
             "Potensi": "Tidak berpotensi tsunami"
         })
-
     return {"Infogempa": {"gempa": gempa_list}}
 
 def generate_dummy_usgs_data():
@@ -438,11 +432,9 @@ def generate_dummy_usgs_data():
 def call_open_meteo_api(wilayah_infos):
     """Memanggil API OpenMeteo asli."""
     if not wilayah_infos: return None
-    
     base_url = "https://api.open-meteo.com/v1/forecast"
     latitudes = [str(info['lat']) for info in wilayah_infos]
     longitudes = [str(info['lon']) for info in wilayah_infos]
-
     params = {
         "latitude": ",".join(latitudes),
         "longitude": ",".join(longitudes),
@@ -452,7 +444,6 @@ def call_open_meteo_api(wilayah_infos):
         "forecast_days": 7,
         "past_days": 7
     }
-
     try:
         response = requests.get(base_url, params=params, timeout=15)
         response.raise_for_status()
@@ -488,6 +479,14 @@ def process_wilayah_data(wilayah_list):
     # 1. Cek Cache (Redis/Memory)
     for info in wilayah_list:
         wilayah_id = str(info["id"])
+        
+        # [ATURAN BARU] Skip fetch cuaca untuk Negara (0) dan Provinsi (1)
+        tipadm = int(info.get('tipadm', 99))
+        if tipadm <= 1:
+            # Langsung kembalikan data statis tanpa cuaca
+            final_data[wilayah_id] = {**info, 'hourly': {}, 'daily': {}}
+            continue
+
         data_to_store = {**info}
         data_to_store.pop('lat', None)
         data_to_store.pop('lon', None)
@@ -499,7 +498,7 @@ def process_wilayah_data(wilayah_list):
         else:
             ids_to_fetch_info.append(info) 
     
-    # 2. Fetch Data yang hilang
+    # 2. Fetch Data yang hilang (Hanya untuk Kab/Kota ke bawah)
     if ids_to_fetch_info:
         if USE_REAL_API:
             api_data_list = call_open_meteo_api(ids_to_fetch_info)
@@ -512,7 +511,6 @@ def process_wilayah_data(wilayah_list):
                 wilayah_id = str(info['id'])
                 if wilayah_id in new_weather_data_map:
                     weather_data = new_weather_data_map[wilayah_id]
-                    # Simpan ke Cache
                     set_cache(f"weather:{wilayah_id}", weather_data, CACHE_TTL_WEATHER)
                     final_data[wilayah_id] = {**info, **weather_data}
 
@@ -572,6 +570,8 @@ def cari_lokasi():
         # Query yang sama, tapi berjalan di atas PostGIS Supabase
         query = text("""
             SELECT * FROM (
+                SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, "WADMPR" as nama_label, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_negara WHERE "WADMPR" ILIKE :search_term
+                UNION ALL
                 SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, "WADMPR" as nama_label, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_provinsi WHERE "WADMPR" ILIKE :search_term
                 UNION ALL
                 SELECT k."KDPKAB" as id, k."WADMKK" as nama_simpel, CONCAT(k."WADMKK", ', ', p."WADMPR") as nama_label, k.latitude as lat, k.longitude as lon, k."TIPADM" as tipadm FROM batas_kabupatenkota k LEFT JOIN batas_provinsi p ON p."KDPPUM" = LEFT(k."KDPKAB", 2) WHERE k."WADMKK" ILIKE :search_term
@@ -602,6 +602,10 @@ def get_data_cuaca():
     
     session = Session()
     try:
+        # [NOTE] Kita tidak perlu menambahkan batas_negara di sini karena layer negara
+        # dirender manual oleh PMTiles dan Marker, bukan via BBox Fetching API ini.
+        # API ini khusus untuk memuat "banyak titik cuaca" di viewport.
+        # Negara & Provinsi ditangani terpisah.
         query = None
         if 8 <= zoom <= 10: # Kab/Kota
             query = text("""
@@ -645,7 +649,12 @@ def get_sub_wilayah_cuaca():
         query_text = ""
         params = {"parent_id_prefix": f"{parent_id}.%"}
         
-        if target_tipadm == 2:
+        # [UPDATE] Penanganan Negara (0) -> Provinsi (1)
+        if target_tipadm == 1:
+            # Mengambil semua provinsi (parent id negara '00' tidak perlu prefix karena kode provinsi 2 digit unik)
+            query_text = 'SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_provinsi'
+            params = {} # Tidak butuh filter prefix jika asumsi 1 negara
+        elif target_tipadm == 2:
             query_text = 'SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_kabupatenkota WHERE "KDPKAB" LIKE :parent_id_prefix'
         elif target_tipadm == 3:
             query_text = 'SELECT "KDCPUM" as id, "WADMKC" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm FROM batas_kecamatandistrik WHERE "KDCPUM" LIKE :parent_id_prefix'
@@ -660,7 +669,7 @@ def get_sub_wilayah_cuaca():
             if view_mode == 'simple':
                 return jsonify(sorted(sub_wilayah, key=lambda x: x.get('nama_simpel', '')))
             
-            # Full processing with weather
+            # Full processing (Weather fetching skipped inside process_wilayah_data for tipadm 0/1)
             data_lengkap = process_wilayah_data(sub_wilayah)
             return jsonify(sorted(data_lengkap.values(), key=lambda x: x.get('nama_simpel', '')))
         return jsonify([])
@@ -682,10 +691,12 @@ def get_data_by_ids():
     
     session = Session()
     try:
-        # Query kompleks gabungan (Sama seperti sebelumnya)
+        # [UPDATE] Menambahkan batas_negara ke Union Query
         query = text(f"""
             SELECT combined.id, combined.nama_simpel, COALESCE(wa.label, combined.nama_simpel) as nama_label, combined.lat, combined.lon, combined.tipadm
             FROM (
+                SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm, NULL as j_prov, NULL as j_kab, NULL as j_kec, NULL as j_kel FROM batas_negara WHERE "KDPPUM" IN {ids_tuple}
+                UNION ALL
                 SELECT "KDPPUM" as id, "WADMPR" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm, "KDPPUM" as j_prov, NULL as j_kab, NULL as j_kec, NULL as j_kel FROM batas_provinsi WHERE "KDPPUM" IN {ids_tuple}
                 UNION ALL
                 SELECT "KDPKAB" as id, "WADMKK" as nama_simpel, latitude as lat, longitude as lon, "TIPADM" as tipadm, NULL as j_prov, "KDPKAB" as j_kab, NULL as j_kec, NULL as j_kel FROM batas_kabupatenkota WHERE "KDPKAB" IN {ids_tuple}
@@ -710,26 +721,21 @@ def parse_bmkg_to_geojson(bmkg_data):
     features = []
     gempa_list = bmkg_data.get('Infogempa', {}).get('gempa', [])
     if not isinstance(gempa_list, list): gempa_list = [gempa_list]
-
     for g in gempa_list:
         try:
             # BMKG Coordinates field: "-3.56,101.23" (Lat, Lon) string
             lat_raw, lon_raw = g['Coordinates'].split(',')
             lat, lon = float(lat_raw), float(lon_raw)
             mag = float(g['Magnitude'])
-            
             # Parsing Kedalaman "119 km" -> 119.0
             depth_str = g['Kedalaman']
             depth_val = float(re.split(r'[^\d\.]', depth_str)[0])
-            
             # Deteksi Tsunami dari String
             potensi_text = g.get('Potensi', '').lower()
             is_tsunami = "berpotensi tsunami" in potensi_text and "tidak" not in potensi_text
-            
             # [LOGIKA PINTAR] Hitung MMI & Status
             estimated_mmi = calculate_esteva_intensity(mag, depth_val)
             impact = get_impact_level(estimated_mmi, is_tsunami)
-            
             feature = {
                 "type": "Feature",
                 "properties": {
@@ -782,7 +788,6 @@ def get_gempa_usgs():
     cache_key = "gempa:usgs"
     cached = get_cache(cache_key)
     if cached: return jsonify(cached)
-
     if not USE_REAL_API:
         dummy = generate_dummy_usgs_data() # Sudah format geojson
         # Post-process dummy untuk tambah atribut MMI dll (sama seperti real)
@@ -796,11 +801,10 @@ def get_gempa_usgs():
             props.update({"mmi": round(mmi,1), "status_label": impact['label'], "status_color": impact['color'], "pulse_mode": impact['pulse'], "status_desc": impact['description']})
         set_cache(cache_key, dummy, CACHE_TTL_GEMPA_USGS)
         return jsonify(dummy)
-    
     try:
         resp = requests.get("https://earthquake.usgs.gov/fdsnws/event/1/query", params={"format": "geojson", "minlatitude": "-15", "maxlatitude": "10", "minlongitude": "90", "maxlongitude": "145", "minmagnitude": "4.5", "orderby": "time", "limit": "50"}, timeout=15)
         data = resp.json()
-        
+
         # Post Processing USGS Real
         for feature in data.get('features', []):
             props = feature['properties']
@@ -810,7 +814,6 @@ def get_gempa_usgs():
             mmi = calculate_esteva_intensity(props['mag'], depth)
             impact = get_impact_level(mmi, is_tsunami)
             props.update({"mmi": round(mmi,1), "status_label": impact['label'], "status_color": impact['color'], "pulse_mode": impact['pulse'], "status_desc": impact['description']})
-            
         set_cache(cache_key, data, CACHE_TTL_GEMPA_USGS)
         return jsonify(data)
     except:

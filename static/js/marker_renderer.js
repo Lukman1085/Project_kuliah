@@ -1,7 +1,6 @@
 import { utils } from "./utilities.js";
 import { timeManager } from "./time_manager.js";
 import { cacheManager } from "./cache_manager.js";
-// [CONSTANTS] Import Constants untuk konsistensi
 import { CSS_CLASSES } from "./constants.js"; 
 
 /** * 🎨 MARKER RENDERER
@@ -12,11 +11,13 @@ export const MarkerRenderer = {
 
     /**
      * Membuat elemen HTML untuk marker tunggal (Non-cluster)
+     * [UPDATE] Menambahkan dukungan untuk Marker NEGARA (Tipadm 0)
      */
     createMarkerElement: function(id, props, handlers) {
         const safeId = String(id).replace(/[^a-zA-Z0-9-_]/g, '-');
         const tipadm = parseInt(props.tipadm, 10);
         const isProvince = (tipadm === 1);
+        const isCountry = (tipadm === 0); // [BARU] Cek Negara
         
         const container = document.createElement('div');
         container.className = 'marker-container'; 
@@ -31,7 +32,25 @@ export const MarkerRenderer = {
             });
         }
         
-        if (isProvince) {
+        // [BARU] Render Marker Negara
+        if (isCountry) {
+            const svgFlag = `
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+            `;
+            // Gaya Spesial untuk Negara (Hitam/Merah Putih atau Emas)
+            container.innerHTML = `
+                <div class="location-badge" style="background:#b71c1c; font-weight:800; border:1px solid rgba(255,255,255,0.3);">${props.nama_simpel.toUpperCase()}</div>
+                <div class="marker-capsule marker-theme-province" id="capsule-${safeId}" style="background: linear-gradient(135deg, #d32f2f 0%, #212121 100%); border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.4);">
+                    <div class="main-icon-wrapper" style="background:transparent; box-shadow:none;">
+                        ${svgFlag}
+                    </div>
+                    <div class="status-stack-province"><span style="font-size:10px; font-weight:bold; color:white;">NEGARA</span></div>
+                </div>
+                <div class="marker-anchor"></div>`;
+        } 
+        else if (isProvince) {
             const svgPin = `
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
                     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
@@ -45,6 +64,7 @@ export const MarkerRenderer = {
                 </div>
                 <div class="marker-anchor"></div><div class="marker-pulse"></div>`;
         } else {
+            // Marker Cuaca Standard
             container.innerHTML = `
                 <div class="location-badge">${props.nama_simpel}</div>
                 <div class="marker-capsule" id="capsule-${safeId}">
@@ -101,15 +121,12 @@ export const MarkerRenderer = {
     },
 
     /**
-     * [PERBAIKAN BUG #1 & #2]
      * Fungsi khusus untuk update visual state (dimmed/active) TANPA peduli tipe marker.
-     * Ini memastikan Provinsi dan Cluster juga kena efek toggle.
      */
     updateVisualStateOnly: function(markerInstance, isGempaActive) {
         if (!markerInstance) return;
         const el = markerInstance.getElement();
         
-        // Gunakan Konstanta CSS
         if (isGempaActive) {
             el.classList.add(CSS_CLASSES.MARKER_DIMMED);
             // Reset opacity manual jika ada sisa inline style
@@ -122,16 +139,16 @@ export const MarkerRenderer = {
 
     /**
      * Memperbarui konten DATA marker (Ikon, Suhu, dll).
-     * Tetap memfilter Provinsi karena Provinsi tidak punya data cuaca hourly.
+     * [UPDATE] Negara juga diskip dari update konten cuaca.
      */
     updateMarkerContent: function(markerInstance, id, isGempaActive) {
         if (!markerInstance) return;
         const el = markerInstance.getElement();
         
-        // [KONTEKS] Update Visual State juga dipanggil di sini untuk sinkronisasi saat render ulang
         this.updateVisualStateOnly(markerInstance, isGempaActive);
 
-        // [FILTER] Provinsi tidak perlu update konten cuaca
+        // [FILTER] Provinsi DAN Negara tidak perlu update konten cuaca
+        // Kita cek keberadaan class marker-theme-province yang juga dipakai negara
         if (el.querySelector(`.${CSS_CLASSES.MARKER_PROVINCE}`)) return; 
 
         const safeId = String(id).replace(/[^a-zA-Z0-9-_]/g, '-');
