@@ -48,7 +48,8 @@ export const MarkerRenderer = {
                     </div>
                     <div class="status-stack-province"><span style="font-size:10px; font-weight:bold; color:white;">NEGARA</span></div>
                 </div>
-                <div class="marker-anchor"></div>`;
+                <div class="marker-anchor"></div>
+                <div class="marker-pulse"></div>`;
         } 
         else if (isProvince) {
             const svgPin = `

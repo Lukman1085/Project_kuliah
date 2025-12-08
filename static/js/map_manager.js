@@ -230,8 +230,14 @@ export const mapManager = {
                 this._sidebarManager.renderSidebarContent();
             }
             
-            // Gunakan generator popup Provinsi (bisa diadaptasi untuk Negara juga karena isinya mirip)
-            const popupContent = popupManager.generateProvincePopupContent(props.nama_simpel, props.nama_label);
+            // [PERBAIKAN] Bedakan Generator Popup Negara vs Provinsi
+            let popupContent;
+            if (tipadm === 0) {
+                popupContent = popupManager.generateCountryPopupContent(props.nama_simpel);
+            } else {
+                popupContent = popupManager.generateProvincePopupContent(props.nama_simpel, props.nama_label);
+            }
+            
             popupManager.open(coordinates, popupContent);
             return;
         }
@@ -435,11 +441,14 @@ export const mapManager = {
                     if (cached) {
                          this._renderRichPopup(cached, coords);
                     } else if (data.type === 'provinsi' || data.type === 'negara') {
-                         const content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
+                         // [PERBAIKAN] Gunakan generator yang sesuai tipe
+                         let content;
+                         if (data.type === 'negara' || parseInt(data.tipadm, 10) === 0) {
+                             content = popupManager.generateCountryPopupContent(data.nama_simpel);
+                         } else {
+                             content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
+                         }
                          popupManager.open(coords, content);
-                    } else {
-                         const loadingContent = popupManager.generateLoadingPopupContent(data.nama_simpel);
-                         popupManager.open(coords, loadingContent);
                     }
                 }
             });
@@ -845,8 +854,15 @@ export const mapManager = {
 
     _renderRichPopup: function(data, coordinates) {
         // [UPDATE] Jika Negara/Provinsi, buka popup info simple
-        if (parseInt(data.tipadm, 10) <= 1) {
-             const content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
+        const tipadm = parseInt(data.tipadm, 10);
+        if (tipadm <= 1) {
+             // [PERBAIKAN] Bedakan Negara vs Provinsi
+             let content;
+             if (tipadm === 0) {
+                 content = popupManager.generateCountryPopupContent(data.nama_simpel);
+             } else {
+                 content = popupManager.generateProvincePopupContent(data.nama_simpel, data.nama_label);
+             }
              popupManager.open(coordinates, content);
              return;
         }
